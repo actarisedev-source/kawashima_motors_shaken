@@ -7,7 +7,7 @@ export default function Home() {
         </p>
         <div className="space-y-4">
           <h1 className="text-4xl font-bold text-zinc-950 sm:text-5xl">
-            車検予約システム
+            川島モータース車検予約
           </h1>
           <p className="max-w-2xl text-base leading-8 text-zinc-700">
             Next.js App Router、TypeScript、Tailwind CSS、Supabase client
