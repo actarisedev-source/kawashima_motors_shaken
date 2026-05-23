@@ -110,6 +110,13 @@ export function AdminDashboard() {
     setUpdatingId(null);
   }
 
+  async function handleLogout() {
+    await fetch("/api/admin/logout", {
+      method: "POST",
+    });
+    window.location.href = "/admin/login";
+  }
+
   useEffect(() => {
     void loadReservations();
   }, []);
@@ -136,13 +143,22 @@ export function AdminDashboard() {
                 予約管理
               </h1>
             </div>
-            <button
-              type="button"
-              onClick={() => void loadReservations()}
-              className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-            >
-              最新に更新
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => void loadReservations()}
+                className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              >
+                最新に更新
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleLogout()}
+                className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                ログアウト
+              </button>
+            </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-4">
             {summary.map((item) => (

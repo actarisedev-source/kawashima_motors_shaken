@@ -5,19 +5,23 @@ import {
   adminSessionCookieName,
   verifyAdminSessionValue,
 } from "@/lib/auth/admin-session";
-import { AdminDashboard } from "./admin-dashboard";
+import { AdminLoginForm } from "./login-form";
 
 export const metadata: Metadata = {
-  title: "予約管理 | Kawashima Motors Shaken",
+  title: "管理者ログイン | Kawashima Motors Shaken",
 };
 
-export default async function AdminPage() {
+export default async function AdminLoginPage() {
   const cookieStore = await cookies();
   const session = cookieStore.get(adminSessionCookieName)?.value;
 
-  if (!verifyAdminSessionValue(session)) {
-    redirect("/admin/login");
+  if (verifyAdminSessionValue(session)) {
+    redirect("/admin");
   }
 
-  return <AdminDashboard />;
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-5 py-10">
+      <AdminLoginForm />
+    </main>
+  );
 }

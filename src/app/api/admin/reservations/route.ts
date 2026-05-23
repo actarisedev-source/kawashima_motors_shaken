@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import {
+  adminSessionCookieName,
+  verifyAdminSessionValue,
+} from "@/lib/auth/admin-session";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -13,7 +18,20 @@ const isReservationStatus = (value: unknown): value is ReservationStatus =>
   typeof value === "string" &&
   reservationStatuses.includes(value as ReservationStatus);
 
-export async function GET() {
+const unauthorizedResponse = () =>
+  NextResponse.json(
+    { ok: false, message: "ログインが必要です。" },
+    { status: 401 },
+  );
+
+const isAuthenticated = (request: NextRequest) =>
+  verifyAdminSessionValue(request.cookies.get(adminSessionCookieName)?.value);
+
+export async function GET(request: NextRequest) {
+  if (!isAuthenticated(request)) {
+    return unauthorizedResponse();
+  }
+
   const { data: reservations, error: reservationsError } = await supabaseServer
     .from("reservations")
     .select("*")
@@ -81,7 +99,11 @@ export async function GET() {
   return NextResponse.json({ ok: true, items });
 }
 
-export async function PATCH(request: Request) {
+export async function PATCH(request: NextRequest) {
+  if (!isAuthenticated(request)) {
+    return unauthorizedResponse();
+  }
+
   const body = (await request.json()) as {
     reservationId?: unknown;
     status?: unknown;
