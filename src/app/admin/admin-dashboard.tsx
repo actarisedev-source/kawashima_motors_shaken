@@ -31,6 +31,14 @@ const formatDateTime = (value: string) =>
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
 
+const formatDate = (value: string) =>
+  new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Tokyo",
+  }).format(new Date(value));
+
 const statusClassName = (status: ReservationStatus) => {
   switch (status) {
     case "確定":
@@ -130,6 +138,19 @@ export function AdminDashboard() {
     [items],
   );
 
+  const dateSummary = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    for (const item of items) {
+      const date = formatDate(item.reservedAt);
+      counts.set(date, (counts.get(date) ?? 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+      .map(([date, count]) => ({ date, count }))
+      .slice(0, 8);
+  }, [items]);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <header className="border-b border-slate-200 bg-white">
@@ -172,6 +193,34 @@ export function AdminDashboard() {
                 </p>
               </div>
             ))}
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-950">
+                  日付別の予約件数
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  予約日時ベースで集計しています。
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {dateSummary.length ? (
+                  dateSummary.map((item) => (
+                    <span
+                      key={item.date}
+                      className="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700 ring-1 ring-blue-100"
+                    >
+                      {item.date} {item.count}件
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-sm text-slate-500">
+                    表示できる予約はありません。
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </header>

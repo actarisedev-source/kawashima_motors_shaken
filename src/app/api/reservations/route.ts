@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  getSlotEnd,
+  isReservationTimeSlot,
+  reservationSlotCapacity,
+} from "@/lib/reservations/slots";
 import { supabaseServer } from "@/lib/supabase/server";
 
 type ReservationRequest = {
@@ -45,6 +50,46 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { ok: false, message: "予約日時の形式が正しくありません。" },
       { status: 400 },
+    );
+  }
+
+  const time = new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Tokyo",
+  }).format(reservedDate);
+
+  if (!isReservationTimeSlot(time)) {
+    return NextResponse.json(
+      { ok: false, message: "選択できない予約時間です。" },
+      { status: 400 },
+    );
+  }
+
+  const { data: existingReservations, error: availabilityError } =
+    await supabaseServer
+      .from("reservations")
+      .select("id")
+      .neq("status", "キャンセル")
+      .gte("reserved_at", reservedDate.toISOString())
+      .lt("reserved_at", getSlotEnd(reservedDate).toISOString())
+      .limit(reservationSlotCapacity);
+
+  if (availabilityError) {
+    return NextResponse.json(
+      { ok: false, message: availabilityError.message },
+      { status: 500 },
+    );
+  }
+
+  if ((existingReservations?.length ?? 0) >= reservationSlotCapacity) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "選択した時間枠はすでに予約済みです。別の時間を選択してください。",
+      },
+      { status: 409 },
     );
   }
 
