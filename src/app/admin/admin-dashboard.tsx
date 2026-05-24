@@ -165,6 +165,12 @@ export function AdminDashboard() {
               </h1>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
+              <a
+                href="/admin/settings/holidays"
+                className="flex h-10 items-center justify-center rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
+              >
+                定休日管理
+              </a>
               <button
                 type="button"
                 onClick={() => void loadReservations()}

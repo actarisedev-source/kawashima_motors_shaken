@@ -18,6 +18,11 @@ type SlotAvailability = {
 type DayAvailability = {
   totalReserved: number;
   totalCapacity: number;
+  holiday: {
+    id: string;
+    type: "single" | "weekly";
+    label: string | null;
+  } | null;
   slots: Record<string, SlotAvailability>;
 };
 
@@ -271,12 +276,13 @@ export function ReservationForm() {
             const isSelected = dateKey === selectedDate;
             const isFull =
               day && day.totalReserved >= day.totalCapacity && day.totalCapacity > 0;
+            const isHoliday = Boolean(day?.holiday);
 
             return (
               <button
                 key={dateKey}
                 type="button"
-                disabled={!isCurrentMonth}
+                disabled={!isCurrentMonth || isHoliday}
                 onClick={() => {
                   setSelectedDate(dateKey);
                   setSelectedTime("");
@@ -286,12 +292,17 @@ export function ReservationForm() {
                   isSelected
                     ? "border-emerald-600 bg-emerald-50 text-emerald-800"
                     : "border-zinc-200 bg-white text-zinc-800",
-                  !isCurrentMonth ? "cursor-not-allowed opacity-35" : "",
-                  isFull && isCurrentMonth ? "bg-zinc-100 text-zinc-400" : "",
+                  !isCurrentMonth || isHoliday ? "cursor-not-allowed opacity-35" : "",
+                  (isFull || isHoliday) && isCurrentMonth
+                    ? "bg-zinc-100 text-zinc-400"
+                    : "",
                 ].join(" ")}
               >
                 <span className="font-semibold">{date.getDate()}</span>
-                {isCurrentMonth && day ? (
+                {isCurrentMonth && isHoliday ? (
+                  <span className="mt-1 block text-[11px]">休業</span>
+                ) : null}
+                {isCurrentMonth && day && !isHoliday ? (
                   <span className="mt-1 block text-[11px]">
                     {day.totalReserved}/{day.totalCapacity}
                   </span>

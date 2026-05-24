@@ -90,6 +90,26 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["line_profiles"]["Insert"]>;
         Relationships: [];
       };
+      holidays: {
+        Row: {
+          id: string;
+          type: "single" | "weekly";
+          date: string | null;
+          weekday: number | null;
+          label: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          type: "single" | "weekly";
+          date?: string | null;
+          weekday?: number | null;
+          label?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["holidays"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

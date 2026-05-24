@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchHolidays, findHolidayForDate } from "@/lib/holidays/holidays";
 import {
   getSlotEnd,
   isReservationTimeSlot,
@@ -64,6 +65,26 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { ok: false, message: "選択できない予約時間です。" },
       { status: 400 },
+    );
+  }
+
+  const { data: holidays, error: holidaysError } = await fetchHolidays();
+  const holidaysUnavailable = holidaysError?.code === "PGRST205";
+
+  if (holidaysError && !holidaysUnavailable) {
+    return NextResponse.json(
+      { ok: false, message: holidaysError.message },
+      { status: 500 },
+    );
+  }
+
+  if (!holidaysUnavailable && findHolidayForDate(reservedDate, holidays)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "選択した日は休業日のため予約できません。別の日を選択してください。",
+      },
+      { status: 409 },
     );
   }
 

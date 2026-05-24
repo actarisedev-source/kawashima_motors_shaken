@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchHolidays, findHolidayForDate } from "@/lib/holidays/holidays";
 import {
   getJstDateKey,
   getJstTimeKey,
@@ -42,6 +43,16 @@ export async function GET(request: Request) {
     );
   }
 
+  const { data: holidays, error: holidaysError } = await fetchHolidays();
+  const holidaysUnavailable = holidaysError?.code === "PGRST205";
+
+  if (holidaysError && !holidaysUnavailable) {
+    return NextResponse.json(
+      { ok: false, message: holidaysError.message },
+      { status: 500 },
+    );
+  }
+
   const countsByDateTime = new Map<string, number>();
 
   for (const reservation of data ?? []) {
@@ -56,7 +67,15 @@ export async function GET(request: Request) {
     {
       totalReserved: number;
       totalCapacity: number;
-      slots: Record<string, { reservedCount: number; capacity: number; available: boolean }>;
+      holiday: {
+        id: string;
+        type: "single" | "weekly";
+        label: string | null;
+      } | null;
+      slots: Record<
+        string,
+        { reservedCount: number; capacity: number; available: boolean }
+      >;
     }
   > = {};
 
@@ -69,10 +88,11 @@ export async function GET(request: Request) {
 
     for (const time of reservationTimeSlots) {
       const reservedCount = countsByDateTime.get(`${dateKey}T${time}`) ?? 0;
+      const holiday = holidaysUnavailable ? undefined : findHolidayForDate(date, holidays);
       slots[time] = {
         reservedCount,
         capacity: reservationSlotCapacity,
-        available: reservedCount < reservationSlotCapacity,
+        available: !holiday && reservedCount < reservationSlotCapacity,
       };
     }
 
@@ -84,6 +104,18 @@ export async function GET(request: Request) {
     days[dateKey] = {
       totalReserved,
       totalCapacity: reservationTimeSlots.length * reservationSlotCapacity,
+      holiday: holidaysUnavailable
+        ? null
+        : (() => {
+            const holiday = findHolidayForDate(date, holidays);
+            return holiday
+              ? {
+                  id: holiday.id,
+                  type: holiday.type,
+                  label: holiday.label,
+                }
+              : null;
+          })(),
       slots,
     };
   }
