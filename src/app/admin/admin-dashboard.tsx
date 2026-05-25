@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 const reservationStatuses = ["受付中", "確定", "完了", "キャンセル"] as const;
@@ -165,12 +166,18 @@ export function AdminDashboard() {
               </h1>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <a
+              <Link
+                href="/admin/customers"
+                className="flex h-10 items-center justify-center rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
+              >
+                顧客管理
+              </Link>
+              <Link
                 href="/admin/settings/holidays"
                 className="flex h-10 items-center justify-center rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
               >
                 定休日管理
-              </a>
+              </Link>
               <button
                 type="button"
                 onClick={() => void loadReservations()}
