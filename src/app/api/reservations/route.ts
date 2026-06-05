@@ -5,8 +5,13 @@ import { createReservationConfirmationToken } from "@/lib/reservations/confirmat
 import {
   getSlotEnd,
   isReservationTimeSlot,
-  reservationSlotCapacity,
 } from "@/lib/reservations/slots";
+import {
+  buildSpecialCapacityMap,
+  buildWeeklyCapacityMap,
+  fetchSlotSettings,
+  getSlotCapacity,
+} from "@/lib/reservations/slot-settings";
 import { supabaseServer } from "@/lib/supabase/server";
 import { normalizeDateInput } from "@/lib/vehicles/shaken-expiry";
 
@@ -109,6 +114,37 @@ export async function POST(request: Request) {
     );
   }
 
+  const {
+    weekly,
+    special,
+    error: slotSettingsError,
+  } = await fetchSlotSettings();
+  const slotSettingsUnavailable = slotSettingsError?.code === "PGRST205";
+
+  if (slotSettingsError && !slotSettingsUnavailable) {
+    return NextResponse.json(
+      { ok: false, message: slotSettingsError.message },
+      { status: 500 },
+    );
+  }
+
+  const slotCapacity = getSlotCapacity({
+    date: reservedDate,
+    time,
+    weekly: buildWeeklyCapacityMap(slotSettingsUnavailable ? [] : weekly),
+    special: buildSpecialCapacityMap(slotSettingsUnavailable ? [] : special),
+  });
+
+  if (slotCapacity <= 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "選択した時間枠は受付停止中です。別の時間を選択してください。",
+      },
+      { status: 409 },
+    );
+  }
+
   const { data: existingReservations, error: availabilityError } =
     await supabaseServer
       .from("reservations")
@@ -116,7 +152,7 @@ export async function POST(request: Request) {
       .neq("status", "キャンセル")
       .gte("reserved_at", reservedDate.toISOString())
       .lt("reserved_at", getSlotEnd(reservedDate).toISOString())
-      .limit(reservationSlotCapacity);
+      .limit(slotCapacity);
 
   if (availabilityError) {
     return NextResponse.json(
@@ -125,7 +161,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if ((existingReservations?.length ?? 0) >= reservationSlotCapacity) {
+  if ((existingReservations?.length ?? 0) >= slotCapacity) {
     return NextResponse.json(
       {
         ok: false,

@@ -72,6 +72,28 @@ create table reservations (
     on delete restrict
 );
 
+create table slot_settings (
+  id uuid primary key default gen_random_uuid(),
+  slot_type text not null default 'shaken',
+  weekday integer not null check (weekday between 0 and 6),
+  time text not null check (time in ('09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00')),
+  capacity integer not null default 1 check (capacity between 0 and 10),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint slot_settings_unique unique (slot_type, weekday, time)
+);
+
+create table special_slot_settings (
+  id uuid primary key default gen_random_uuid(),
+  slot_type text not null default 'shaken',
+  date date not null,
+  time text not null check (time in ('09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00')),
+  capacity integer not null default 1 check (capacity between 0 and 10),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint special_slot_settings_unique unique (slot_type, date, time)
+);
+
 create table line_profiles (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references tenants(id) on delete cascade,
@@ -169,6 +191,14 @@ create trigger reservations_set_updated_at
 before update on reservations
 for each row execute function set_updated_at();
 
+create trigger slot_settings_set_updated_at
+before update on slot_settings
+for each row execute function set_updated_at();
+
+create trigger special_slot_settings_set_updated_at
+before update on special_slot_settings
+for each row execute function set_updated_at();
+
 create trigger line_profiles_set_updated_at
 before update on line_profiles
 for each row execute function set_updated_at();
@@ -196,6 +226,9 @@ create index reservations_vehicle_id_idx on reservations(vehicle_id);
 create index reservations_status_idx on reservations(status);
 create unique index reservations_confirmation_token_idx on reservations(confirmation_token);
 
+create index slot_settings_slot_type_weekday_idx on slot_settings(slot_type, weekday);
+create index special_slot_settings_slot_type_date_idx on special_slot_settings(slot_type, date);
+
 create index line_profiles_tenant_id_idx on line_profiles(tenant_id);
 create index line_profiles_customer_id_idx on line_profiles(customer_id);
 create index line_profiles_line_user_id_idx on line_profiles(line_user_id);
@@ -208,6 +241,8 @@ alter table tenants enable row level security;
 alter table customers enable row level security;
 alter table vehicles enable row level security;
 alter table reservations enable row level security;
+alter table slot_settings enable row level security;
+alter table special_slot_settings enable row level security;
 alter table line_profiles enable row level security;
 alter table notification_templates enable row level security;
 alter table notification_logs enable row level security;
@@ -233,6 +268,16 @@ create policy "Allow service role full access to reservations"
 on reservations for all
 using (auth.role() = 'service_role')
 with check (auth.role() = 'service_role');
+
+create policy "Allow public slot_settings access"
+on slot_settings for all
+using (true)
+with check (true);
+
+create policy "Allow public special_slot_settings access"
+on special_slot_settings for all
+using (true)
+with check (true);
 
 create policy "Allow service role full access to line_profiles"
 on line_profiles for all

@@ -10,6 +10,7 @@ export const reservationTimeSlots = [
 
 export const reservationSlotCapacity = 1;
 export const reservationSlotMinutes = 60;
+export const defaultSlotType = "shaken";
 
 export type ReservationTimeSlot = (typeof reservationTimeSlots)[number];
 
@@ -67,3 +68,18 @@ export const getMonthRangeFromJstMonth = (month: string) => {
 
 export const getSlotEnd = (start: Date) =>
   new Date(start.getTime() + reservationSlotMinutes * 60 * 1000);
+
+export const getJstWeekday = (value: string | Date) => {
+  const dateKey = getJstDateKey(value);
+  return new Date(`${dateKey}T00:00:00+09:00`).getDay();
+};
+
+export const normalizeSlotCapacity = (value: unknown) => {
+  const capacity = Number(value);
+
+  if (!Number.isInteger(capacity) || capacity < 0 || capacity > 10) {
+    return null;
+  }
+
+  return capacity;
+};

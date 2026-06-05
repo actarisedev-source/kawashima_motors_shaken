@@ -4,9 +4,14 @@ import {
   getJstDateKey,
   getJstTimeKey,
   getMonthRangeFromJstMonth,
-  reservationSlotCapacity,
   reservationTimeSlots,
 } from "@/lib/reservations/slots";
+import {
+  buildSpecialCapacityMap,
+  buildWeeklyCapacityMap,
+  fetchSlotSettings,
+  getSlotCapacity,
+} from "@/lib/reservations/slot-settings";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -53,6 +58,28 @@ export async function GET(request: Request) {
     );
   }
 
+  const {
+    weekly,
+    special,
+    error: slotSettingsError,
+  } = await fetchSlotSettings();
+
+  const slotSettingsUnavailable = slotSettingsError?.code === "PGRST205";
+
+  if (slotSettingsError && !slotSettingsUnavailable) {
+    return NextResponse.json(
+      { ok: false, message: slotSettingsError.message },
+      { status: 500 },
+    );
+  }
+
+  const weeklyCapacity = buildWeeklyCapacityMap(
+    slotSettingsUnavailable ? [] : weekly,
+  );
+  const specialCapacity = buildSpecialCapacityMap(
+    slotSettingsUnavailable ? [] : special,
+  );
+
   const countsByDateTime = new Map<string, number>();
 
   for (const reservation of data ?? []) {
@@ -74,7 +101,7 @@ export async function GET(request: Request) {
       } | null;
       slots: Record<
         string,
-        { reservedCount: number; capacity: number; available: boolean }
+        { time: string; reservedCount: number; capacity: number; available: boolean }
       >;
     }
   > = {};
@@ -83,16 +110,25 @@ export async function GET(request: Request) {
     const dateKey = getJstDateKey(date);
     const slots: Record<
       string,
-      { reservedCount: number; capacity: number; available: boolean }
+      { time: string; reservedCount: number; capacity: number; available: boolean }
     > = {};
 
     for (const time of reservationTimeSlots) {
       const reservedCount = countsByDateTime.get(`${dateKey}T${time}`) ?? 0;
       const holiday = holidaysUnavailable ? undefined : findHolidayForDate(date, holidays);
+      const capacity = holiday
+        ? 0
+        : getSlotCapacity({
+            date,
+            time,
+            weekly: weeklyCapacity,
+            special: specialCapacity,
+          });
       slots[time] = {
+        time,
         reservedCount,
-        capacity: reservationSlotCapacity,
-        available: !holiday && reservedCount < reservationSlotCapacity,
+        capacity,
+        available: capacity > 0 && reservedCount < capacity,
       };
     }
 
@@ -103,7 +139,10 @@ export async function GET(request: Request) {
 
     days[dateKey] = {
       totalReserved,
-      totalCapacity: reservationTimeSlots.length * reservationSlotCapacity,
+      totalCapacity: Object.values(slots).reduce(
+        (sum, slot) => sum + slot.capacity,
+        0,
+      ),
       holiday: holidaysUnavailable
         ? null
         : (() => {
@@ -123,7 +162,6 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     month,
-    slotCapacity: reservationSlotCapacity,
     timeSlots: reservationTimeSlots,
     days,
   });

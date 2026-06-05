@@ -118,6 +118,52 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["holidays"]["Insert"]>;
         Relationships: [];
       };
+      slot_settings: {
+        Row: {
+          id: string;
+          slot_type: string;
+          weekday: number;
+          time: string;
+          capacity: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          slot_type?: string;
+          weekday: number;
+          time: string;
+          capacity: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["slot_settings"]["Insert"]>;
+        Relationships: [];
+      };
+      special_slot_settings: {
+        Row: {
+          id: string;
+          slot_type: string;
+          date: string;
+          time: string;
+          capacity: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          slot_type?: string;
+          date: string;
+          time: string;
+          capacity: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["special_slot_settings"]["Insert"]
+        >;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
