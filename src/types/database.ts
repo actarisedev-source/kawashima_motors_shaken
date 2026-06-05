@@ -48,6 +48,7 @@ export type Database = {
           customer_id: string;
           vehicle_id: string;
           reserved_at: string;
+          confirmation_token: string;
           status: Database["public"]["Enums"]["reservation_status"];
           created_at: string;
           updated_at: string;
@@ -57,6 +58,7 @@ export type Database = {
           customer_id: string;
           vehicle_id: string;
           reserved_at: string;
+          confirmation_token?: string;
           status?: Database["public"]["Enums"]["reservation_status"];
           created_at?: string;
           updated_at?: string;

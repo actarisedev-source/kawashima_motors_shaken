@@ -26,8 +26,8 @@ export default function Home() {
             <p className="mt-2">API から主要テーブルの状態を確認できます。</p>
           </div>
           <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-            <p className="font-semibold text-zinc-950">LINE連携</p>
-            <p className="mt-2">Webhook 受信口と環境変数を準備済みです。</p>
+            <p className="font-semibold text-zinc-950">確認・キャンセル</p>
+            <p className="mt-2">発行されたURLから予約内容を確認できます。</p>
           </div>
         </div>
       </section>

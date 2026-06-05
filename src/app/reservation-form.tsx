@@ -6,7 +6,7 @@ import { reservationTimeSlots } from "@/lib/reservations/slots";
 type SubmitState =
   | { status: "idle"; message: "" }
   | { status: "submitting"; message: "送信中です。" }
-  | { status: "success"; message: string }
+  | { status: "success"; message: string; confirmationUrl: string }
   | { status: "error"; message: string };
 
 type SlotAvailability = {
@@ -159,6 +159,7 @@ export function ReservationForm() {
       ok: boolean;
       message?: string;
       reservationId?: string;
+      confirmationUrl?: string;
     };
 
     if (!response.ok || !result.ok) {
@@ -169,12 +170,21 @@ export function ReservationForm() {
       return;
     }
 
+    if (!result.reservationId || !result.confirmationUrl) {
+      setSubmitState({
+        status: "error",
+        message: "予約確認URLの発行に失敗しました。",
+      });
+      return;
+    }
+
     event.currentTarget.reset();
     setSelectedDate("");
     setSelectedTime("");
     setSubmitState({
       status: "success",
       message: `予約を受け付けました。受付番号: ${result.reservationId}`,
+      confirmationUrl: result.confirmationUrl,
     });
 
     const refreshed = await fetch(`/api/reservations/availability?month=${month}`, {
@@ -368,15 +378,23 @@ export function ReservationForm() {
         予約を送信
       </button>
       {submitState.message ? (
-        <p
+        <div
           className={
             submitState.status === "error"
-              ? "text-sm font-medium text-red-700"
-              : "text-sm font-medium text-emerald-700"
+              ? "rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+              : "rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700"
           }
         >
-          {submitState.message}
-        </p>
+          <p>{submitState.message}</p>
+          {submitState.status === "success" ? (
+            <a
+              href={submitState.confirmationUrl}
+              className="mt-2 block break-all font-semibold underline underline-offset-4"
+            >
+              予約確認・キャンセルページを開く
+            </a>
+          ) : null}
+        </div>
       ) : null}
     </form>
   );

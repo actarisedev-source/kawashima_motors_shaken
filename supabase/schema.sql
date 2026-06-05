@@ -53,6 +53,7 @@ create table reservations (
   customer_id uuid not null,
   vehicle_id uuid not null,
   reserved_at timestamptz not null,
+  confirmation_token text not null default encode(gen_random_bytes(32), 'hex'),
   status reservation_status not null default '受付中',
   note text,
   created_at timestamptz not null default now(),
@@ -171,6 +172,7 @@ create index reservations_tenant_reserved_at_idx on reservations(tenant_id, rese
 create index reservations_customer_id_idx on reservations(customer_id);
 create index reservations_vehicle_id_idx on reservations(vehicle_id);
 create index reservations_status_idx on reservations(status);
+create unique index reservations_confirmation_token_idx on reservations(confirmation_token);
 
 create index line_profiles_tenant_id_idx on line_profiles(tenant_id);
 create index line_profiles_customer_id_idx on line_profiles(customer_id);

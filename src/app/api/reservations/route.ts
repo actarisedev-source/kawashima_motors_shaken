@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchHolidays, findHolidayForDate } from "@/lib/holidays/holidays";
+import { createReservationConfirmationToken } from "@/lib/reservations/confirmation-token";
 import {
   getSlotEnd,
   isReservationTimeSlot,
@@ -152,9 +153,10 @@ export async function POST(request: Request) {
       customer_id: customer.id,
       vehicle_id: vehicle.id,
       reserved_at: reservedDate.toISOString(),
+      confirmation_token: createReservationConfirmationToken(),
       status: "受付中",
     })
-    .select("id,status")
+    .select("id,status,confirmation_token")
     .single();
 
   if (reservationError) {
@@ -168,5 +170,9 @@ export async function POST(request: Request) {
     ok: true,
     reservationId: reservation.id,
     status: reservation.status,
+    confirmationUrl: new URL(
+      `/reservations/confirm/${reservation.confirmation_token}`,
+      request.url,
+    ).toString(),
   });
 }
