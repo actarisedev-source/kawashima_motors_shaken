@@ -8,6 +8,14 @@ export const normalizeDateInput = (value: string | null) => {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
 };
 
+const getTodayJstDateKey = () =>
+  new Intl.DateTimeFormat("sv-SE", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Tokyo",
+  }).format(new Date());
+
 export const getShakenExpiryStatus = (
   value: string | null,
 ): ShakenExpiryStatus => {
@@ -15,12 +23,7 @@ export const getShakenExpiryStatus = (
     return "unknown";
   }
 
-  const today = new Date();
-  const todayStart = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  );
+  const todayStart = new Date(`${getTodayJstDateKey()}T00:00:00+09:00`);
   const expiryDate = new Date(`${value}T00:00:00+09:00`);
   const daysUntilExpiry = Math.ceil(
     (expiryDate.getTime() - todayStart.getTime()) / (24 * 60 * 60 * 1000),

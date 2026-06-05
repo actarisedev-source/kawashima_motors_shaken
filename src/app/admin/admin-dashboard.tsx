@@ -40,6 +40,37 @@ type AvailabilityResponse = {
   days?: Record<string, DayAvailability>;
 };
 
+type DashboardVehicleItem = {
+  id: string;
+  customerId: string;
+  customerName: string;
+  phone: string;
+  modelName: string;
+  shakenExpiryDate: string | null;
+  shakenExpiryStatus: "expired" | "soon" | "active" | "unknown";
+  shakenExpiryLabel: string;
+};
+
+type DashboardSummary = {
+  kpis: {
+    totalCustomers: number;
+    totalVehicles: number;
+    currentMonthReservations: number;
+    expiringSoonVehicles: number;
+    expiredVehicles: number;
+  };
+  expiringSoonVehicles: DashboardVehicleItem[];
+  expiredVehicles: DashboardVehicleItem[];
+};
+
+type DashboardResponse = {
+  ok: boolean;
+  message?: string;
+  kpis?: DashboardSummary["kpis"];
+  expiringSoonVehicles?: DashboardVehicleItem[];
+  expiredVehicles?: DashboardVehicleItem[];
+};
+
 type LoadState =
   | { status: "loading"; message: "読み込み中です。" }
   | { status: "ready"; message: "" }
@@ -62,6 +93,14 @@ const formatDateTime = (value: string) =>
     minute: "2-digit",
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
+
+const formatDate = (value: string) =>
+  new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Tokyo",
+  }).format(new Date(`${value}T00:00:00+09:00`));
 
 const formatSelectedDate = (dateKey: string) =>
   new Intl.DateTimeFormat("ja-JP", {
@@ -110,8 +149,155 @@ const statusCalendarClassName = (status: ReservationStatus) => {
   }
 };
 
+function VehicleExpiryList({
+  title,
+  description,
+  emptyMessage,
+  items,
+  tone,
+}: {
+  title: string;
+  description: string;
+  emptyMessage: string;
+  items: DashboardVehicleItem[];
+  tone: "soon" | "expired";
+}) {
+  const badgeClassName =
+    tone === "expired"
+      ? "bg-red-50 text-red-700 ring-red-200"
+      : "bg-amber-50 text-amber-700 ring-amber-200";
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-4 sm:px-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">{title}</h2>
+            <p className="mt-1 text-sm text-slate-500">{description}</p>
+          </div>
+          <span
+            className={`rounded-full px-3 py-1 text-sm font-semibold ring-1 ${badgeClassName}`}
+          >
+            {items.length}件
+          </span>
+        </div>
+      </div>
+      {items.length ? (
+        <>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[620px] border-collapse text-left text-sm">
+              <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                <tr>
+                  <th className="px-5 py-3">顧客名</th>
+                  <th className="px-5 py-3">電話番号</th>
+                  <th className="px-5 py-3">車種</th>
+                  <th className="px-5 py-3">車検満了日</th>
+                  <th className="px-5 py-3">詳細</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {items.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50">
+                    <td className="px-5 py-4 font-semibold text-slate-950">
+                      {item.customerName}
+                    </td>
+                    <td className="px-5 py-4 text-slate-600">
+                      {item.phone || "未登録"}
+                    </td>
+                    <td className="px-5 py-4 text-slate-600">
+                      {item.modelName}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="grid gap-1">
+                        <span className="font-semibold text-slate-950">
+                          {item.shakenExpiryDate
+                            ? formatDate(item.shakenExpiryDate)
+                            : "未登録"}
+                        </span>
+                        <span
+                          className={`w-fit rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${badgeClassName}`}
+                        >
+                          {item.shakenExpiryLabel}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <Link
+                        href={`/admin/customers/${item.customerId}`}
+                        className="text-sm font-semibold text-blue-700 transition hover:text-blue-900"
+                      >
+                        顧客詳細
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="divide-y divide-slate-100 md:hidden">
+            {items.map((item) => (
+              <Link
+                key={item.id}
+                href={`/admin/customers/${item.customerId}`}
+                className="block p-4 transition hover:bg-slate-50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-950">
+                      {item.customerName}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {item.phone || "電話番号未登録"}
+                    </p>
+                  </div>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${badgeClassName}`}
+                  >
+                    {item.shakenExpiryLabel}
+                  </span>
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <dt className="text-slate-500">車種</dt>
+                    <dd className="mt-1 font-semibold text-slate-950">
+                      {item.modelName}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">車検満了日</dt>
+                    <dd className="mt-1 font-semibold text-slate-950">
+                      {item.shakenExpiryDate
+                        ? formatDate(item.shakenExpiryDate)
+                        : "未登録"}
+                    </dd>
+                  </div>
+                </dl>
+              </Link>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="px-5 py-10 text-center text-sm text-slate-500">
+          {emptyMessage}
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function AdminDashboard() {
   const [items, setItems] = useState<ReservationItem[]>([]);
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary>({
+    kpis: {
+      totalCustomers: 0,
+      totalVehicles: 0,
+      currentMonthReservations: 0,
+      expiringSoonVehicles: 0,
+      expiredVehicles: 0,
+    },
+    expiringSoonVehicles: [],
+    expiredVehicles: [],
+  });
   const [availability, setAvailability] = useState<
     Record<string, DayAvailability>
   >({});
@@ -180,8 +366,35 @@ export function AdminDashboard() {
     setAvailability(result.days);
   }
 
+  async function loadDashboard() {
+    const response = await fetch("/api/admin/dashboard", {
+      cache: "no-store",
+    });
+    const result = (await response.json()) as DashboardResponse;
+
+    if (
+      !response.ok ||
+      !result.ok ||
+      !result.kpis ||
+      !result.expiringSoonVehicles ||
+      !result.expiredVehicles
+    ) {
+      setLoadState({
+        status: "error",
+        message: result.message ?? "ダッシュボード集計の取得に失敗しました。",
+      });
+      return;
+    }
+
+    setDashboardSummary({
+      kpis: result.kpis,
+      expiringSoonVehicles: result.expiringSoonVehicles,
+      expiredVehicles: result.expiredVehicles,
+    });
+  }
+
   async function refreshAll() {
-    await Promise.all([loadReservations(), loadAvailability()]);
+    await Promise.all([loadReservations(), loadAvailability(), loadDashboard()]);
   }
 
   async function updateStatus(id: string, status: ReservationStatus) {
@@ -333,6 +546,38 @@ export function AdminDashboard() {
               </button>
             </div>
           </div>
+          <div className="grid gap-3 sm:grid-cols-5">
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <p className="text-sm text-slate-500">総顧客数</p>
+              <p className="mt-2 text-2xl font-bold text-slate-950">
+                {dashboardSummary.kpis.totalCustomers}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <p className="text-sm text-slate-500">総車両数</p>
+              <p className="mt-2 text-2xl font-bold text-slate-950">
+                {dashboardSummary.kpis.totalVehicles}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <p className="text-sm text-slate-500">今月予約数</p>
+              <p className="mt-2 text-2xl font-bold text-slate-950">
+                {dashboardSummary.kpis.currentMonthReservations}
+              </p>
+            </div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm text-amber-700">車検30日以内</p>
+              <p className="mt-2 text-2xl font-bold text-amber-900">
+                {dashboardSummary.kpis.expiringSoonVehicles}
+              </p>
+            </div>
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+              <p className="text-sm text-red-700">車検期限切れ</p>
+              <p className="mt-2 text-2xl font-bold text-red-900">
+                {dashboardSummary.kpis.expiredVehicles}
+              </p>
+            </div>
+          </div>
           <div className="grid gap-3 sm:grid-cols-4">
             {summary.map((item) => (
               <div
@@ -361,6 +606,23 @@ export function AdminDashboard() {
             {loadState.message}
           </div>
         ) : null}
+
+        <section className="grid gap-6 lg:grid-cols-2">
+          <VehicleExpiryList
+            title="車検30日以内"
+            description="満了日が近い車両です。早めの案内対象として確認できます。"
+            emptyMessage="30日以内の車検満了車両はありません。"
+            items={dashboardSummary.expiringSoonVehicles}
+            tone="soon"
+          />
+          <VehicleExpiryList
+            title="車検期限切れ"
+            description="満了日を過ぎている車両です。優先して確認してください。"
+            emptyMessage="期限切れの車両はありません。"
+            items={dashboardSummary.expiredVehicles}
+            tone="expired"
+          />
+        </section>
 
         <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
