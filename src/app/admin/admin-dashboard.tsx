@@ -2,13 +2,20 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import {
+  getJstDateKey,
+  getJstTimeKey,
+  reservationTimeSlots,
+} from "@/lib/reservations/slots";
 
 const reservationStatuses = ["受付中", "確定", "完了", "キャンセル"] as const;
+const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
 
 type ReservationStatus = (typeof reservationStatuses)[number];
 
 type ReservationItem = {
   id: string;
+  customerId: string;
   reservedAt: string;
   customerName: string;
   phone: string;
@@ -17,10 +24,34 @@ type ReservationItem = {
   createdAt: string;
 };
 
+type DayAvailability = {
+  totalReserved: number;
+  totalCapacity: number;
+  holiday: {
+    id: string;
+    type: "single" | "weekly";
+    label: string | null;
+  } | null;
+};
+
+type AvailabilityResponse = {
+  ok: boolean;
+  message?: string;
+  days?: Record<string, DayAvailability>;
+};
+
 type LoadState =
   | { status: "loading"; message: "読み込み中です。" }
   | { status: "ready"; message: "" }
   | { status: "error"; message: string };
+
+const formatMonth = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+
+const formatDateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
 
 const formatDateTime = (value: string) =>
   new Intl.DateTimeFormat("ja-JP", {
@@ -32,13 +63,26 @@ const formatDateTime = (value: string) =>
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
 
-const formatDate = (value: string) =>
+const formatSelectedDate = (dateKey: string) =>
   new Intl.DateTimeFormat("ja-JP", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    weekday: "short",
     timeZone: "Asia/Tokyo",
-  }).format(new Date(value));
+  }).format(new Date(`${dateKey}T00:00:00+09:00`));
+
+const getCalendarDates = (monthDate: Date) => {
+  const firstDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const startDate = new Date(firstDate);
+  startDate.setDate(firstDate.getDate() - firstDate.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + index);
+    return date;
+  });
+};
 
 const statusClassName = (status: ReservationStatus) => {
   switch (status) {
@@ -53,13 +97,41 @@ const statusClassName = (status: ReservationStatus) => {
   }
 };
 
+const statusCalendarClassName = (status: ReservationStatus) => {
+  switch (status) {
+    case "確定":
+      return "border-blue-200 bg-blue-50 text-blue-700";
+    case "完了":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "キャンセル":
+      return "border-zinc-200 bg-zinc-100 text-zinc-500";
+    default:
+      return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+};
+
 export function AdminDashboard() {
   const [items, setItems] = useState<ReservationItem[]>([]);
+  const [availability, setAvailability] = useState<
+    Record<string, DayAvailability>
+  >({});
   const [loadState, setLoadState] = useState<LoadState>({
     status: "loading",
     message: "読み込み中です。",
   });
+  const [monthDate, setMonthDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [selectedDate, setSelectedDate] = useState(() =>
+    getJstDateKey(new Date()),
+  );
+  const [selectedReservation, setSelectedReservation] =
+    useState<ReservationItem | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  const month = formatMonth(monthDate);
+  const calendarDates = useMemo(() => getCalendarDates(monthDate), [monthDate]);
 
   async function loadReservations() {
     setLoadState({ status: "loading", message: "読み込み中です。" });
@@ -82,7 +154,34 @@ export function AdminDashboard() {
     }
 
     setItems(result.items);
+    setSelectedReservation((current) =>
+      current
+        ? (result.items?.find((item) => item.id === current.id) ?? null)
+        : current,
+    );
     setLoadState({ status: "ready", message: "" });
+  }
+
+  async function loadAvailability() {
+    const response = await fetch(`/api/reservations/availability?month=${month}`, {
+      cache: "no-store",
+    });
+    const result = (await response.json()) as AvailabilityResponse;
+
+    if (!response.ok || !result.ok || !result.days) {
+      setAvailability({});
+      setLoadState({
+        status: "error",
+        message: result.message ?? "休業日情報の取得に失敗しました。",
+      });
+      return;
+    }
+
+    setAvailability(result.days);
+  }
+
+  async function refreshAll() {
+    await Promise.all([loadReservations(), loadAvailability()]);
   }
 
   async function updateStatus(id: string, status: ReservationStatus) {
@@ -115,6 +214,9 @@ export function AdminDashboard() {
     setItems((currentItems) =>
       currentItems.map((item) => (item.id === id ? { ...item, status } : item)),
     );
+    setSelectedReservation((current) =>
+      current?.id === id ? { ...current, status } : current,
+    );
     setLoadState({ status: "ready", message: "" });
     setUpdatingId(null);
   }
@@ -126,9 +228,21 @@ export function AdminDashboard() {
     window.location.href = "/admin/login";
   }
 
+  function moveMonth(amount: number) {
+    const nextMonth = new Date(
+      monthDate.getFullYear(),
+      monthDate.getMonth() + amount,
+      1,
+    );
+    setMonthDate(nextMonth);
+    setSelectedDate(formatDateKey(nextMonth));
+    setSelectedReservation(null);
+  }
+
   useEffect(() => {
-    void loadReservations();
-  }, []);
+    void refreshAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month]);
 
   const summary = useMemo(
     () =>
@@ -139,24 +253,49 @@ export function AdminDashboard() {
     [items],
   );
 
-  const dateSummary = useMemo(() => {
-    const counts = new Map<string, number>();
+  const itemsByDate = useMemo(() => {
+    const map = new Map<string, ReservationItem[]>();
 
     for (const item of items) {
-      const date = formatDate(item.reservedAt);
-      counts.set(date, (counts.get(date) ?? 0) + 1);
+      const dateKey = getJstDateKey(item.reservedAt);
+      map.set(dateKey, [...(map.get(dateKey) ?? []), item]);
     }
 
-    return Array.from(counts.entries())
-      .map(([date, count]) => ({ date, count }))
-      .slice(0, 8);
+    for (const [dateKey, dateItems] of map.entries()) {
+      map.set(
+        dateKey,
+        [...dateItems].sort(
+          (a, b) =>
+            new Date(a.reservedAt).getTime() - new Date(b.reservedAt).getTime(),
+        ),
+      );
+    }
+
+    return map;
   }, [items]);
+
+  const selectedDateItems = useMemo(
+    () => itemsByDate.get(selectedDate) ?? [],
+    [itemsByDate, selectedDate],
+  );
+  const selectedHoliday = availability[selectedDate]?.holiday ?? null;
+
+  const selectedItemsByTime = useMemo(() => {
+    const map = new Map<string, ReservationItem[]>();
+
+    for (const item of selectedDateItems) {
+      const time = getJstTimeKey(item.reservedAt);
+      map.set(time, [...(map.get(time) ?? []), item]);
+    }
+
+    return map;
+  }, [selectedDateItems]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-sm font-semibold text-blue-700">
                 Kawashima Motors
@@ -180,7 +319,7 @@ export function AdminDashboard() {
               </Link>
               <button
                 type="button"
-                onClick={() => void loadReservations()}
+                onClick={() => void refreshAll()}
                 className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
               >
                 最新に更新
@@ -207,161 +346,264 @@ export function AdminDashboard() {
               </div>
             ))}
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-slate-950">
-                  日付別の予約件数
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  予約日時ベースで集計しています。
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {dateSummary.length ? (
-                  dateSummary.map((item) => (
-                    <span
-                      key={item.date}
-                      className="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700 ring-1 ring-blue-100"
-                    >
-                      {item.date} {item.count}件
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-sm text-slate-500">
-                    表示できる予約はありません。
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-5 py-6 sm:px-6 lg:px-8">
+
+      <main className="mx-auto grid max-w-7xl gap-6 px-5 py-6 sm:px-6 lg:px-8">
         {loadState.message ? (
           <div
             className={
               loadState.status === "error"
-                ? "mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
-                : "mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700"
+                ? "rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+                : "rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700"
             }
           >
             {loadState.message}
           </div>
         ) : null}
-        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-4 py-4 sm:px-5">
-            <h2 className="text-base font-semibold">予約一覧</h2>
-          </div>
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[880px] border-collapse text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
-                <tr>
-                  <th className="px-5 py-3">予約日時</th>
-                  <th className="px-5 py-3">顧客名</th>
-                  <th className="px-5 py-3">電話番号</th>
-                  <th className="px-5 py-3">車種</th>
-                  <th className="px-5 py-3">ステータス</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {items.map((item) => (
-                  <tr key={item.id} className="align-middle">
-                    <td className="px-5 py-4 font-medium text-slate-950">
-                      {formatDateTime(item.reservedAt)}
-                    </td>
-                    <td className="px-5 py-4">{item.customerName}</td>
-                    <td className="px-5 py-4 text-slate-600">{item.phone}</td>
-                    <td className="px-5 py-4">{item.vehicleModel}</td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(item.status)}`}
-                        >
-                          {item.status}
-                        </span>
-                        <select
-                          value={item.status}
-                          disabled={updatingId === item.id}
-                          onChange={(event) =>
-                            void updateStatus(
-                              item.id,
-                              event.target.value as ReservationStatus,
-                            )
-                          }
-                          className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm outline-none focus:border-blue-600"
-                        >
-                          {reservationStatuses.map((status) => (
-                            <option key={status} value={status}>
-                              {status}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="grid gap-3 p-4 md:hidden">
-            {items.map((item) => (
-              <article
-                key={item.id}
-                className="rounded-lg border border-slate-200 p-4"
+
+        <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div>
+              <h2 className="text-base font-semibold">予約カレンダー</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                日付を選択すると時間枠ごとの予約を確認できます。
+              </p>
+            </div>
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => moveMonth(-1)}
+                className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950">
-                      {formatDateTime(item.reservedAt)}
-                    </p>
-                    <p className="mt-2 text-base font-semibold">
-                      {item.customerName}
-                    </p>
+                前月
+              </button>
+              <p className="min-w-28 text-center text-base font-bold">
+                {monthDate.getFullYear()}年 {monthDate.getMonth() + 1}月
+              </p>
+              <button
+                type="button"
+                onClick={() => moveMonth(1)}
+                className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                次月
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center text-xs font-semibold text-slate-500">
+            {weekdayLabels.map((label) => (
+              <div key={label} className="px-1 py-2">
+                {label}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7">
+            {calendarDates.map((date) => {
+              const dateKey = formatDateKey(date);
+              const dateItems = itemsByDate.get(dateKey) ?? [];
+              const isCurrentMonth = date.getMonth() === monthDate.getMonth();
+              const isSelected = dateKey === selectedDate;
+              const holiday = availability[dateKey]?.holiday;
+
+              return (
+                <button
+                  key={dateKey}
+                  type="button"
+                  onClick={() => {
+                    setSelectedDate(dateKey);
+                    setSelectedReservation(null);
+                  }}
+                  className={[
+                    "min-h-24 border-b border-r border-slate-100 p-2 text-left transition sm:min-h-32",
+                    isSelected ? "bg-blue-50 ring-2 ring-inset ring-blue-500" : "",
+                    holiday ? "bg-slate-100 text-slate-400" : "bg-white",
+                    !isCurrentMonth ? "text-slate-300" : "",
+                    !holiday && !isSelected ? "hover:bg-blue-50/60" : "",
+                  ].join(" ")}
+                >
+                  <div className="flex items-start justify-between gap-1">
+                    <span className="text-sm font-bold">{date.getDate()}</span>
+                    {isCurrentMonth && dateItems.length ? (
+                      <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-bold text-white">
+                        {dateItems.length}件
+                      </span>
+                    ) : null}
                   </div>
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(item.status)}`}
+                  {isCurrentMonth && holiday ? (
+                    <span className="mt-2 block text-[11px] font-semibold">
+                      休業
+                    </span>
+                  ) : null}
+                  <div className="mt-2 hidden gap-1 sm:grid">
+                    {dateItems.slice(0, 3).map((item) => (
+                      <span
+                        key={item.id}
+                        className={`truncate rounded border px-1.5 py-0.5 text-[11px] font-semibold ${statusCalendarClassName(
+                          item.status,
+                        )}`}
+                      >
+                        {getJstTimeKey(item.reservedAt)} {item.customerName}
+                      </span>
+                    ))}
+                    {dateItems.length > 3 ? (
+                      <span className="text-[11px] font-semibold text-slate-500">
+                        +{dateItems.length - 3}件
+                      </span>
+                    ) : null}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div>
+                <h2 className="text-base font-semibold">
+                  {formatSelectedDate(selectedDate)} の予約
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {selectedHoliday
+                    ? `休業日${selectedHoliday.label ? `: ${selectedHoliday.label}` : ""}`
+                    : `${selectedDateItems.length}件の予約があります。`}
+                </p>
+              </div>
+              {selectedDateItems.length ? (
+                <span className="w-fit rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700 ring-1 ring-blue-100">
+                  {selectedDateItems.length}件
+                </span>
+              ) : null}
+            </div>
+            <div className="grid gap-3 p-4 sm:p-5">
+              {reservationTimeSlots.map((time) => {
+                const timeItems = selectedItemsByTime.get(time) ?? [];
+
+                return (
+                  <div
+                    key={time}
+                    className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[72px_1fr]"
                   >
-                    {item.status}
-                  </span>
-                </div>
-                <dl className="mt-4 grid gap-2 text-sm text-slate-600">
-                  <div className="flex justify-between gap-4">
-                    <dt>電話番号</dt>
-                    <dd className="font-medium text-slate-900">{item.phone}</dd>
+                    <div className="text-sm font-bold text-slate-950">{time}</div>
+                    <div className="grid gap-2">
+                      {timeItems.length ? (
+                        timeItems.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setSelectedReservation(item)}
+                            className={[
+                              "rounded-lg border bg-white p-3 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50/40",
+                              selectedReservation?.id === item.id
+                                ? "border-blue-500 ring-2 ring-blue-100"
+                                : "border-slate-200",
+                            ].join(" ")}
+                          >
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <p className="font-semibold text-slate-950">
+                                  {item.customerName}
+                                </p>
+                                <p className="mt-1 text-sm text-slate-500">
+                                  {item.vehicleModel} / {item.phone || "電話番号未登録"}
+                                </p>
+                              </div>
+                              <span
+                                className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
+                                  item.status,
+                                )}`}
+                              >
+                                {item.status}
+                              </span>
+                            </div>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="rounded-md border border-dashed border-slate-200 bg-white px-3 py-2 text-sm text-slate-400">
+                          予約なし
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex justify-between gap-4">
-                    <dt>車種</dt>
-                    <dd className="font-medium text-slate-900">
-                      {item.vehicleModel}
+                );
+              })}
+            </div>
+          </div>
+
+          <aside className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-200 px-4 py-4 sm:px-5">
+              <h2 className="text-base font-semibold">予約詳細</h2>
+            </div>
+            {selectedReservation ? (
+              <div className="grid gap-5 p-4 sm:p-5">
+                <div>
+                  <p className="text-sm text-slate-500">予約日時</p>
+                  <p className="mt-1 text-lg font-bold text-slate-950">
+                    {formatDateTime(selectedReservation.reservedAt)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">顧客名</p>
+                  <p className="mt-1 font-semibold text-slate-950">
+                    {selectedReservation.customerName}
+                  </p>
+                  <Link
+                    href={`/admin/customers/${selectedReservation.customerId}`}
+                    className="mt-2 inline-flex text-sm font-semibold text-blue-700 transition hover:text-blue-900"
+                  >
+                    顧客詳細を見る
+                  </Link>
+                </div>
+                <dl className="grid gap-4 text-sm">
+                  <div>
+                    <dt className="text-slate-500">電話番号</dt>
+                    <dd className="mt-1 font-semibold text-slate-950">
+                      {selectedReservation.phone || "未登録"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">車種</dt>
+                    <dd className="mt-1 font-semibold text-slate-950">
+                      {selectedReservation.vehicleModel}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">受付番号</dt>
+                    <dd className="mt-1 break-all font-semibold text-slate-950">
+                      {selectedReservation.id}
                     </dd>
                   </div>
                 </dl>
-                <select
-                  value={item.status}
-                  disabled={updatingId === item.id}
-                  onChange={(event) =>
-                    void updateStatus(
-                      item.id,
-                      event.target.value as ReservationStatus,
-                    )
-                  }
-                  className="mt-4 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-600"
-                >
-                  {reservationStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </article>
-            ))}
-          </div>
-          {loadState.status === "ready" && items.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-slate-500">
-              予約はまだありません。
-            </p>
-          ) : null}
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">
+                    ステータス
+                    <select
+                      value={selectedReservation.status}
+                      disabled={updatingId === selectedReservation.id}
+                      onChange={(event) =>
+                        void updateStatus(
+                          selectedReservation.id,
+                          event.target.value as ReservationStatus,
+                        )
+                      }
+                      className="mt-2 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-600"
+                    >
+                      {reservationStatuses.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <div className="px-5 py-12 text-center text-sm text-slate-500">
+                予約カードを選択すると詳細を表示します。
+              </div>
+            )}
+          </aside>
         </section>
       </main>
     </div>

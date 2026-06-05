@@ -87,6 +87,7 @@ export async function GET(request: NextRequest) {
 
     return {
       id: reservation.id,
+      customerId: reservation.customer_id,
       reservedAt: reservation.reserved_at,
       status: reservation.status,
       customerName: customer?.name ?? "未登録",
