@@ -11,6 +11,9 @@ type CustomerItem = {
   vehicleCount: number;
   reservationCount: number;
   latestReservedAt: string | null;
+  nearestShakenExpiryDate: string | null;
+  shakenExpiryStatus: "expired" | "soon" | "active" | "unknown";
+  shakenExpiryLabel: string;
 };
 
 type LoadState =
@@ -38,29 +41,20 @@ const formatDateTime = (value: string) =>
 
 export function CustomersDashboard() {
   const [items, setItems] = useState<CustomerItem[]>([]);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [query, setQuery] = useState("");
   const [loadState, setLoadState] = useState<LoadState>({
     status: "loading",
     message: "読み込み中です。",
   });
 
-  const loadCustomers = useCallback(async (filters?: {
-    name?: string;
-    phone?: string;
-  }) => {
+  const loadCustomers = useCallback(async (filters?: { query?: string }) => {
     setLoadState({ status: "loading", message: "読み込み中です。" });
 
     const params = new URLSearchParams();
-    const nameFilter = filters?.name?.trim();
-    const phoneFilter = filters?.phone?.trim();
+    const queryFilter = filters?.query?.trim();
 
-    if (nameFilter) {
-      params.set("name", nameFilter);
-    }
-
-    if (phoneFilter) {
-      params.set("phone", phoneFilter);
+    if (queryFilter) {
+      params.set("q", queryFilter);
     }
 
     const response = await fetch(
@@ -94,12 +88,11 @@ export function CustomersDashboard() {
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void loadCustomers({ name, phone });
+    void loadCustomers({ query });
   }
 
   function handleReset() {
-    setName("");
-    setPhone("");
+    setQuery("");
     void loadCustomers();
   }
 
@@ -135,7 +128,7 @@ export function CustomersDashboard() {
               </Link>
               <button
                 type="button"
-                onClick={() => void loadCustomers({ name, phone })}
+                onClick={() => void loadCustomers({ query })}
                 className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
               >
                 最新に更新
@@ -151,27 +144,16 @@ export function CustomersDashboard() {
           </div>
           <form
             onSubmit={handleSearch}
-            className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto_auto]"
+            className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_auto_auto]"
           >
             <label className="block">
               <span className="text-sm font-semibold text-slate-700">
-                名前検索
+                名前・電話番号検索
               </span>
               <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="例: 川島"
-                className="mt-2 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-slate-700">
-                電話番号検索
-              </span>
-              <input
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="例: 090"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="例: 川島 / 09012345678"
                 className="mt-2 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </label>
@@ -218,6 +200,7 @@ export function CustomersDashboard() {
                   <th className="px-5 py-3">顧客名</th>
                   <th className="px-5 py-3">電話番号</th>
                   <th className="px-5 py-3">車両</th>
+                  <th className="px-5 py-3">車検満了日</th>
                   <th className="px-5 py-3">予約</th>
                   <th className="px-5 py-3">最新予約日</th>
                   <th className="px-5 py-3">詳細</th>
@@ -237,6 +220,34 @@ export function CustomersDashboard() {
                     </td>
                     <td className="px-5 py-4 text-slate-600">
                       {item.vehicleCount}台
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="grid gap-1">
+                        <span className="text-slate-600">
+                          {item.nearestShakenExpiryDate
+                            ? formatDate(item.nearestShakenExpiryDate)
+                            : "未登録"}
+                        </span>
+                        <span
+                          className={[
+                            "w-fit rounded-full px-2 py-0.5 text-xs font-semibold ring-1",
+                            item.shakenExpiryStatus === "expired"
+                              ? "bg-red-50 text-red-700 ring-red-200"
+                              : "",
+                            item.shakenExpiryStatus === "soon"
+                              ? "bg-amber-50 text-amber-700 ring-amber-200"
+                              : "",
+                            item.shakenExpiryStatus === "active"
+                              ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                              : "",
+                            item.shakenExpiryStatus === "unknown"
+                              ? "bg-slate-100 text-slate-600 ring-slate-200"
+                              : "",
+                          ].join(" ")}
+                        >
+                          {item.shakenExpiryLabel}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-5 py-4 text-slate-600">
                       {item.reservationCount}件
@@ -302,6 +313,20 @@ export function CustomersDashboard() {
                     <dt className="text-slate-500">予約</dt>
                     <dd className="mt-1 font-semibold text-slate-950">
                       {item.reservationCount}件
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">車検満了日</dt>
+                    <dd className="mt-1 font-semibold text-slate-950">
+                      {item.nearestShakenExpiryDate
+                        ? formatDate(item.nearestShakenExpiryDate)
+                        : "未登録"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">車検ステータス</dt>
+                    <dd className="mt-1 font-semibold text-slate-950">
+                      {item.shakenExpiryLabel}
                     </dd>
                   </div>
                 </dl>

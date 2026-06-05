@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { getShakenExpiryLabel } from "@/lib/vehicles/shaken-expiry";
 
 type ReservationStatus = "受付中" | "確定" | "完了" | "キャンセル";
 
@@ -14,6 +15,8 @@ type CustomerDetailItem = {
   vehicles: {
     id: string;
     modelName: string;
+    plateNumber: string;
+    shakenExpiryDate: string | null;
     createdAt: string;
   }[];
   reservations: {
@@ -67,6 +70,10 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
     status: "loading",
     message: "読み込み中です。",
   });
+  const [updatingVehicleId, setUpdatingVehicleId] = useState<string | null>(
+    null,
+  );
+  const [updateMessage, setUpdateMessage] = useState("");
 
   const loadCustomer = useCallback(async () => {
     setLoadState({ status: "loading", message: "読み込み中です。" });
@@ -97,6 +104,61 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
       method: "POST",
     });
     window.location.href = "/admin/login";
+  }
+
+  async function updateShakenExpiryDate(
+    event: FormEvent<HTMLFormElement>,
+    vehicleId: string,
+  ) {
+    event.preventDefault();
+    setUpdatingVehicleId(vehicleId);
+    setUpdateMessage("");
+
+    const formData = new FormData(event.currentTarget);
+    const shakenExpiryDate = formData.get("shakenExpiryDate");
+
+    const response = await fetch(`/api/admin/customers/${customerId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        vehicleId,
+        shakenExpiryDate,
+      }),
+    });
+    const result = (await response.json()) as {
+      ok: boolean;
+      vehicle?: {
+        id: string;
+        shakenExpiryDate: string | null;
+      };
+      message?: string;
+    };
+
+    if (!response.ok || !result.ok || !result.vehicle) {
+      setUpdateMessage(result.message ?? "車検満了日の更新に失敗しました。");
+      setUpdatingVehicleId(null);
+      return;
+    }
+
+    setCustomer((current) =>
+      current
+        ? {
+            ...current,
+            vehicles: current.vehicles.map((vehicle) =>
+              vehicle.id === result.vehicle?.id
+                ? {
+                    ...vehicle,
+                    shakenExpiryDate: result.vehicle.shakenExpiryDate,
+                  }
+                : vehicle,
+            ),
+          }
+        : current,
+    );
+    setUpdateMessage("車検満了日を更新しました。");
+    setUpdatingVehicleId(null);
   }
 
   useEffect(() => {
@@ -206,6 +268,17 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
               </div>
             </aside>
             <div className="grid gap-6">
+              {updateMessage ? (
+                <div
+                  className={
+                    updateMessage.includes("失敗")
+                      ? "rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+                      : "rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700"
+                  }
+                >
+                  {updateMessage}
+                </div>
+              ) : null}
               <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-200 px-5 py-4">
                   <h2 className="text-base font-semibold">車両一覧</h2>
@@ -214,14 +287,53 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                   {customer.vehicles.map((vehicle) => (
                     <div
                       key={vehicle.id}
-                      className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                      className="grid gap-4 px-5 py-4 lg:grid-cols-[1fr_280px]"
                     >
-                      <p className="font-semibold text-slate-950">
-                        {vehicle.modelName}
-                      </p>
-                      <p className="text-sm text-slate-500">
-                        登録日 {formatDate(vehicle.createdAt)}
-                      </p>
+                      <div className="grid gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-950">
+                            {vehicle.modelName}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            ナンバー {vehicle.plateNumber || "未登録"} / 登録日{" "}
+                            {formatDate(vehicle.createdAt)}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                            車検満了日{" "}
+                            {vehicle.shakenExpiryDate
+                              ? formatDate(vehicle.shakenExpiryDate)
+                              : "未登録"}
+                          </span>
+                          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-100">
+                            {getShakenExpiryLabel(vehicle.shakenExpiryDate)}
+                          </span>
+                        </div>
+                      </div>
+                      <form
+                        onSubmit={(event) =>
+                          void updateShakenExpiryDate(event, vehicle.id)
+                        }
+                        className="grid gap-2"
+                      >
+                        <label className="text-sm font-semibold text-slate-700">
+                          車検満了日
+                          <input
+                            name="shakenExpiryDate"
+                            type="date"
+                            defaultValue={vehicle.shakenExpiryDate ?? ""}
+                            className="mt-2 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-600"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={updatingVehicleId === vehicle.id}
+                          className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                        >
+                          保存
+                        </button>
+                      </form>
                     </div>
                   ))}
                   {!customer.vehicles.length ? (

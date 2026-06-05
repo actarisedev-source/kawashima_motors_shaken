@@ -11,6 +11,7 @@ export type Database = {
           id: string;
           name: string;
           phone: string | null;
+          normalized_phone: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -18,6 +19,7 @@ export type Database = {
           id?: string;
           name: string;
           phone?: string | null;
+          normalized_phone?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -29,6 +31,8 @@ export type Database = {
           id: string;
           customer_id: string;
           model_name: string;
+          plate_number: string | null;
+          shaken_expiry_date: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -36,6 +40,8 @@ export type Database = {
           id?: string;
           customer_id: string;
           model_name: string;
+          plate_number?: string | null;
+          shaken_expiry_date?: string | null;
           created_at?: string;
           updated_at?: string;
         };

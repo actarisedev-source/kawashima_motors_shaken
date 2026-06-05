@@ -4,7 +4,12 @@ import {
   adminSessionCookieName,
   verifyAdminSessionValue,
 } from "@/lib/auth/admin-session";
+import { normalizePhone } from "@/lib/customers/phone";
 import { supabaseServer } from "@/lib/supabase/server";
+import {
+  getShakenExpiryLabel,
+  getShakenExpiryStatus,
+} from "@/lib/vehicles/shaken-expiry";
 import type { Database } from "@/types/database";
 
 type CustomerRow = Database["public"]["Tables"]["customers"]["Row"];
@@ -38,6 +43,7 @@ export async function GET(request: NextRequest) {
   }
 
   const searchParams = request.nextUrl.searchParams;
+  const query = searchParams.get("q")?.trim();
   const name = searchParams.get("name")?.trim();
   const phone = searchParams.get("phone")?.trim();
 
@@ -46,12 +52,28 @@ export async function GET(request: NextRequest) {
     .select("*")
     .order("created_at", { ascending: false });
 
+  if (query) {
+    const normalizedQuery = normalizePhone(query);
+    const filters = [`name.ilike.%${query}%`, `phone.ilike.%${query}%`];
+
+    if (normalizedQuery) {
+      filters.push(`normalized_phone.ilike.%${normalizedQuery}%`);
+    }
+
+    customersQuery = customersQuery.or(filters.join(","));
+  }
+
   if (name) {
     customersQuery = customersQuery.ilike("name", `%${name}%`);
   }
 
   if (phone) {
-    customersQuery = customersQuery.ilike("phone", `%${phone}%`);
+    const normalizedPhone = normalizePhone(phone);
+    customersQuery = normalizedPhone
+      ? customersQuery.or(
+          `phone.ilike.%${phone}%,normalized_phone.ilike.%${normalizedPhone}%`,
+        )
+      : customersQuery.ilike("phone", `%${phone}%`);
   }
 
   const { data: customers, error: customersError } = await customersQuery;
@@ -114,6 +136,15 @@ export async function GET(request: NextRequest) {
   const items = customers.map((customer: CustomerRow) => {
     const vehicles = vehiclesByCustomerId.get(customer.id) ?? [];
     const reservations = reservationsByCustomerId.get(customer.id) ?? [];
+    const sortedExpiryDates = vehicles
+      .map((vehicle) => vehicle.shaken_expiry_date)
+      .filter((value): value is string => Boolean(value))
+      .sort(
+        (a, b) =>
+          new Date(`${a}T00:00:00+09:00`).getTime() -
+          new Date(`${b}T00:00:00+09:00`).getTime(),
+      );
+    const nearestShakenExpiryDate = sortedExpiryDates[0] ?? null;
 
     return {
       id: customer.id,
@@ -123,6 +154,9 @@ export async function GET(request: NextRequest) {
       vehicleCount: vehicles.length,
       reservationCount: reservations.length,
       latestReservedAt: getLatestReservedAt(reservations),
+      nearestShakenExpiryDate,
+      shakenExpiryStatus: getShakenExpiryStatus(nearestShakenExpiryDate),
+      shakenExpiryLabel: getShakenExpiryLabel(nearestShakenExpiryDate),
     };
   });
 

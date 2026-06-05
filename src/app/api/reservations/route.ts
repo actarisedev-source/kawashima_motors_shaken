@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchHolidays, findHolidayForDate } from "@/lib/holidays/holidays";
+import { isValidNormalizedPhone, normalizePhone } from "@/lib/customers/phone";
 import { createReservationConfirmationToken } from "@/lib/reservations/confirmation-token";
 import {
   getSlotEnd,
@@ -7,6 +8,7 @@ import {
   reservationSlotCapacity,
 } from "@/lib/reservations/slots";
 import { supabaseServer } from "@/lib/supabase/server";
+import { normalizeDateInput } from "@/lib/vehicles/shaken-expiry";
 
 type ReservationRequest = {
   customerName?: string;
@@ -33,15 +35,33 @@ export async function POST(request: Request) {
 
   const customerName = normalizeOptional(body.customerName);
   const phone = normalizeOptional(body.phone);
+  const normalizedPhone = phone ? normalizePhone(phone) : "";
   const vehicleModel = normalizeOptional(body.vehicleModel);
+  const licensePlate = normalizeOptional(body.licensePlate);
+  const shakenExpiryDate = normalizeDateInput(
+    normalizeOptional(body.inspectionExpiresOn),
+  );
   const reservedAt = normalizeOptional(body.reservedAt);
 
-  if (!customerName || !phone || !vehicleModel || !reservedAt) {
+  if (
+    !customerName ||
+    !phone ||
+    !isValidNormalizedPhone(normalizedPhone) ||
+    !vehicleModel ||
+    !reservedAt
+  ) {
     return NextResponse.json(
       {
         ok: false,
         message: "お名前、電話番号、車種、予約日時を入力してください。",
       },
+      { status: 400 },
+    );
+  }
+
+  if (body.inspectionExpiresOn && !shakenExpiryDate) {
+    return NextResponse.json(
+      { ok: false, message: "車検満了日の形式が正しくありません。" },
       { status: 400 },
     );
   }
@@ -115,27 +135,79 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: customer, error: customerError } = await supabaseServer
-    .from("customers")
-    .insert({
-      name: customerName,
-      phone,
-    })
-    .select("id")
-    .single();
+  const { data: existingCustomer, error: existingCustomerError } =
+    await supabaseServer
+      .from("customers")
+      .select("id")
+      .eq("normalized_phone", normalizedPhone)
+      .maybeSingle();
 
-  if (customerError) {
+  if (existingCustomerError) {
     return NextResponse.json(
-      { ok: false, message: customerError.message },
+      { ok: false, message: existingCustomerError.message },
       { status: 500 },
     );
   }
 
-  const { data: vehicle, error: vehicleError } = await supabaseServer
+  let customer = existingCustomer;
+
+  if (!customer) {
+    const { data: createdCustomer, error: customerError } = await supabaseServer
+      .from("customers")
+      .insert({
+        name: customerName,
+        phone,
+        normalized_phone: normalizedPhone,
+      })
+      .select("id")
+      .single();
+
+    if (customerError) {
+      return NextResponse.json(
+        { ok: false, message: customerError.message },
+        { status: 500 },
+      );
+    }
+
+    customer = createdCustomer;
+  }
+
+  let vehicleQuery = supabaseServer
+    .from("vehicles")
+    .select("id")
+    .eq("customer_id", customer.id)
+    .eq("model_name", vehicleModel);
+
+  vehicleQuery = licensePlate
+    ? vehicleQuery.eq("plate_number", licensePlate)
+    : vehicleQuery.is("plate_number", null);
+
+  const { data: existingVehicle, error: existingVehicleError } =
+    await vehicleQuery.maybeSingle();
+
+  if (existingVehicleError) {
+    return NextResponse.json(
+      { ok: false, message: existingVehicleError.message },
+      { status: 500 },
+    );
+  }
+
+  const { data: vehicle, error: vehicleError } = existingVehicle
+    ? shakenExpiryDate
+      ? await supabaseServer
+          .from("vehicles")
+          .update({ shaken_expiry_date: shakenExpiryDate })
+          .eq("id", existingVehicle.id)
+          .select("id")
+          .single()
+      : { data: existingVehicle, error: null }
+    : await supabaseServer
     .from("vehicles")
     .insert({
       customer_id: customer.id,
       model_name: vehicleModel,
+      plate_number: licensePlate,
+      shaken_expiry_date: shakenExpiryDate,
     })
     .select("id")
     .single();

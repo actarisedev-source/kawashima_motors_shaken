@@ -21,6 +21,7 @@ create table customers (
   name text not null,
   name_kana text,
   phone text,
+  normalized_phone text,
   line_user_id text,
   line_display_name text,
   memo text,
@@ -35,7 +36,9 @@ create table vehicles (
   tenant_id uuid not null references tenants(id) on delete cascade,
   customer_id uuid not null,
   model_name text not null,
+  plate_number text,
   license_plate text,
+  shaken_expiry_date date,
   inspection_expires_on date,
   memo text,
   created_at timestamptz not null default now(),
@@ -144,6 +147,20 @@ create trigger customers_set_updated_at
 before update on customers
 for each row execute function set_updated_at();
 
+create or replace function set_customer_normalized_phone()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.normalized_phone = nullif(regexp_replace(coalesce(new.phone, ''), '\D', '', 'g'), '');
+  return new;
+end;
+$$;
+
+create trigger customers_set_normalized_phone
+before insert or update of phone on customers
+for each row execute function set_customer_normalized_phone();
+
 create trigger vehicles_set_updated_at
 before update on vehicles
 for each row execute function set_updated_at();
@@ -162,10 +179,15 @@ for each row execute function set_updated_at();
 
 create index customers_tenant_id_idx on customers(tenant_id);
 create index customers_phone_idx on customers(phone);
+create unique index customers_normalized_phone_unique_idx
+on customers(normalized_phone)
+where normalized_phone is not null and normalized_phone <> '';
 create index customers_line_user_id_idx on customers(line_user_id);
 
 create index vehicles_tenant_id_idx on vehicles(tenant_id);
 create index vehicles_customer_id_idx on vehicles(customer_id);
+create index vehicles_customer_model_plate_idx on vehicles(customer_id, model_name, plate_number);
+create index vehicles_shaken_expiry_date_idx on vehicles(shaken_expiry_date);
 create index vehicles_inspection_expires_on_idx on vehicles(inspection_expires_on);
 
 create index reservations_tenant_reserved_at_idx on reservations(tenant_id, reserved_at);
