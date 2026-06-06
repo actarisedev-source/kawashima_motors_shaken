@@ -5,6 +5,11 @@
   --foreground: #1f2a24;
 }
 
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
 body {
   min-height: 100vh;
   background: var(--background);

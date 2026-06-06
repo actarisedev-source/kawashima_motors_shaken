@@ -26,7 +26,7 @@ export function AdminHeader({
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6 sm:px-6 lg:px-8">
-        <div className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_auto] lg:items-center">
+        <div className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_auto] lg:items-start">
           <div>
             <p className="text-sm font-semibold text-blue-700">
               Kawashima Motors
