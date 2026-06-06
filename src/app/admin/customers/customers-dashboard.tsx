@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { AdminHeader } from "../admin-header";
 
 type CustomerItem = {
   id: string;
@@ -79,13 +80,6 @@ export function CustomersDashboard() {
     setLoadState({ status: "ready", message: "" });
   }, []);
 
-  async function handleLogout() {
-    await fetch("/api/admin/logout", {
-      method: "POST",
-    });
-    window.location.href = "/admin/login";
-  }
-
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void loadCustomers({ query });
@@ -102,46 +96,7 @@ export function CustomersDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-blue-700">
-                Kawashima Motors
-              </p>
-              <h1 className="mt-1 text-2xl font-bold tracking-normal sm:text-3xl">
-                顧客管理
-              </h1>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Link
-                href="/admin"
-                className="flex h-10 items-center justify-center rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
-              >
-                予約管理
-              </Link>
-              <Link
-                href="/admin/settings/holidays"
-                className="flex h-10 items-center justify-center rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
-              >
-                定休日管理
-              </Link>
-              <button
-                type="button"
-                onClick={() => void loadCustomers({ query })}
-                className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-              >
-                最新に更新
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleLogout()}
-                className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-              >
-                ログアウト
-              </button>
-            </div>
-          </div>
+      <AdminHeader title="顧客管理" onRefresh={() => loadCustomers({ query })}>
           <form
             onSubmit={handleSearch}
             className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_auto_auto]"
@@ -171,8 +126,7 @@ export function CustomersDashboard() {
               クリア
             </button>
           </form>
-        </div>
-      </header>
+      </AdminHeader>
       <main className="mx-auto max-w-7xl px-5 py-6 sm:px-6 lg:px-8">
         {loadState.message ? (
           <div

@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { getShakenExpiryLabel } from "@/lib/vehicles/shaken-expiry";
+import { AdminHeader } from "../../admin-header";
 
 type ReservationStatus = "受付中" | "確定" | "完了" | "キャンセル";
 
@@ -99,13 +99,6 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
     setLoadState({ status: "ready", message: "" });
   }, [customerId]);
 
-  async function handleLogout() {
-    await fetch("/api/admin/logout", {
-      method: "POST",
-    });
-    window.location.href = "/admin/login";
-  }
-
   async function updateShakenExpiryDate(
     event: FormEvent<HTMLFormElement>,
     vehicleId: string,
@@ -167,48 +160,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-blue-700">
-                Kawashima Motors
-              </p>
-              <h1 className="mt-1 text-2xl font-bold tracking-normal sm:text-3xl">
-                顧客詳細
-              </h1>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Link
-                href="/admin/customers"
-                className="flex h-10 items-center justify-center rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
-              >
-                顧客一覧
-              </Link>
-              <Link
-                href="/admin"
-                className="flex h-10 items-center justify-center rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
-              >
-                予約管理
-              </Link>
-              <button
-                type="button"
-                onClick={() => void loadCustomer()}
-                className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-              >
-                最新に更新
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleLogout()}
-                className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-              >
-                ログアウト
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <AdminHeader title="顧客詳細" onRefresh={loadCustomer} />
       <main className="mx-auto max-w-7xl px-5 py-6 sm:px-6 lg:px-8">
         {loadState.message ? (
           <div
