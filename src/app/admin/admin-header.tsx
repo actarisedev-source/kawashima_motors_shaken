@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 type AdminHeaderProps = {
@@ -10,12 +11,41 @@ type AdminHeaderProps = {
   children?: ReactNode;
 };
 
+const navItems = [
+  { href: "/admin", label: "予約管理", match: (path: string) => path === "/admin" },
+  {
+    href: "/admin/customers",
+    label: "顧客管理",
+    match: (path: string) => path.startsWith("/admin/customers"),
+  },
+  {
+    href: "/admin/settings/holidays",
+    label: "定休日管理",
+    match: (path: string) => path.startsWith("/admin/settings/holidays"),
+  },
+  {
+    href: "/admin/settings/slots",
+    label: "予約枠管理",
+    match: (path: string) => path.startsWith("/admin/settings/slots"),
+  },
+];
+
+const navButtonClassName = (active: boolean) =>
+  [
+    "flex h-10 items-center justify-center rounded-md border px-4 text-sm font-semibold shadow-sm transition",
+    active
+      ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+      : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50",
+  ].join(" ");
+
 export function AdminHeader({
   title,
   description,
   onRefresh,
   children,
 }: AdminHeaderProps) {
+  const pathname = usePathname();
+
   async function handleLogout() {
     await fetch("/api/admin/logout", {
       method: "POST",
@@ -31,45 +61,32 @@ export function AdminHeader({
             <p className="text-sm font-semibold text-blue-700">
               Kawashima Motors
             </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-normal sm:text-3xl">
-              {title}
-            </h1>
+            <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <h1 className="text-2xl font-bold tracking-normal sm:text-3xl">
+                {title}
+              </h1>
+              <button
+                type="button"
+                onClick={() => void onRefresh()}
+                className="h-10 w-fit rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              >
+                最新に更新
+              </button>
+            </div>
             {description ? (
               <p className="mt-1 text-sm text-slate-500">{description}</p>
             ) : null}
           </div>
           <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
-            <Link
-              href="/admin"
-              className="flex h-10 items-center justify-center rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
-            >
-              予約管理
-            </Link>
-            <Link
-              href="/admin/customers"
-              className="flex h-10 items-center justify-center rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
-            >
-              顧客管理
-            </Link>
-            <Link
-              href="/admin/settings/holidays"
-              className="flex h-10 items-center justify-center rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
-            >
-              定休日管理
-            </Link>
-            <Link
-              href="/admin/settings/slots"
-              className="flex h-10 items-center justify-center rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
-            >
-              予約枠管理
-            </Link>
-            <button
-              type="button"
-              onClick={() => void onRefresh()}
-              className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-            >
-              最新に更新
-            </button>
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={navButtonClassName(item.match(pathname))}
+              >
+                {item.label}
+              </Link>
+            ))}
             <button
               type="button"
               onClick={() => void handleLogout()}
