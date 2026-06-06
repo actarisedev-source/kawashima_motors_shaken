@@ -68,7 +68,7 @@ export function AdminHeader({
               <button
                 type="button"
                 onClick={() => void onRefresh()}
-                className="h-10 w-fit rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                className="h-9 w-fit rounded-md bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
               >
                 最新に更新
               </button>
