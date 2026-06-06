@@ -40,6 +40,12 @@ export function AdminHeader({
           </div>
           <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
             <Link
+              href="/admin"
+              className="flex h-10 items-center justify-center rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
+            >
+              予約管理
+            </Link>
+            <Link
               href="/admin/customers"
               className="flex h-10 items-center justify-center rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
             >
