@@ -42,20 +42,26 @@ const formatDateTime = (value: string) =>
 
 export function CustomersDashboard() {
   const [items, setItems] = useState<CustomerItem[]>([]);
-  const [query, setQuery] = useState("");
+  const [nameQuery, setNameQuery] = useState("");
+  const [phoneQuery, setPhoneQuery] = useState("");
   const [loadState, setLoadState] = useState<LoadState>({
     status: "loading",
     message: "読み込み中です。",
   });
 
-  const loadCustomers = useCallback(async (filters?: { query?: string }) => {
+  const loadCustomers = useCallback(async (filters?: { name?: string; phone?: string }) => {
     setLoadState({ status: "loading", message: "読み込み中です。" });
 
     const params = new URLSearchParams();
-    const queryFilter = filters?.query?.trim();
+    const nameFilter = filters?.name?.trim();
+    const phoneFilter = filters?.phone?.trim();
 
-    if (queryFilter) {
-      params.set("q", queryFilter);
+    if (nameFilter) {
+      params.set("name", nameFilter);
+    }
+
+    if (phoneFilter) {
+      params.set("phone", phoneFilter);
     }
 
     const response = await fetch(
@@ -82,11 +88,12 @@ export function CustomersDashboard() {
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void loadCustomers({ query });
+    void loadCustomers({ name: nameQuery, phone: phoneQuery });
   }
 
   function handleReset() {
-    setQuery("");
+    setNameQuery("");
+    setPhoneQuery("");
     void loadCustomers();
   }
 
@@ -96,19 +103,33 @@ export function CustomersDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
-      <AdminHeader title="顧客管理" onRefresh={() => loadCustomers({ query })}>
+      <AdminHeader
+        title="顧客管理"
+        onRefresh={() => loadCustomers({ name: nameQuery, phone: phoneQuery })}
+      >
           <form
             onSubmit={handleSearch}
-            className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_auto_auto]"
+            className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto_auto]"
           >
             <label className="block">
               <span className="text-sm font-semibold text-slate-700">
-                名前・電話番号検索
+                名前検索
               </span>
               <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="例: 川島 / 09012345678"
+                value={nameQuery}
+                onChange={(event) => setNameQuery(event.target.value)}
+                placeholder="例: 川島"
+                className="mt-2 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">
+                電話番号検索
+              </span>
+              <input
+                value={phoneQuery}
+                onChange={(event) => setPhoneQuery(event.target.value)}
+                placeholder="例: 09012345678"
                 className="mt-2 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </label>
