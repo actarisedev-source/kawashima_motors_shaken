@@ -5,6 +5,7 @@ import {
   verifyAdminSessionValue,
 } from "@/lib/auth/admin-session";
 import { normalizeBirthDateInput } from "@/lib/customers/birth-date";
+import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { isValidNormalizedPhone, normalizePhone } from "@/lib/customers/phone";
 import { supabaseServer } from "@/lib/supabase/server";
 import { normalizeDateInput } from "@/lib/vehicles/shaken-expiry";
@@ -150,6 +151,13 @@ export async function PATCH(
     if (!name) {
       return NextResponse.json(
         { ok: false, message: "氏名を入力してください。" },
+        { status: 400 },
+      );
+    }
+
+    if (nameKana && !isValidHiragana(nameKana)) {
+      return NextResponse.json(
+        { ok: false, message: kanaErrorMessage },
         { status: 400 },
       );
     }

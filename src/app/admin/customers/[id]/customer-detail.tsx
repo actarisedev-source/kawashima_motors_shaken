@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { getAgeFromBirthDate } from "@/lib/customers/birth-date";
+import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { getShakenExpiryLabel } from "@/lib/vehicles/shaken-expiry";
 import { AdminHeader } from "../../admin-header";
 
@@ -82,6 +83,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
   const [isEditingCustomer, setIsEditingCustomer] = useState(false);
   const [isConfirmingEdit, setIsConfirmingEdit] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
+  const [customerKanaError, setCustomerKanaError] = useState("");
 
   const loadCustomer = useCallback(async () => {
     setLoadState({ status: "loading", message: "読み込み中です。" });
@@ -113,6 +115,15 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
     setUpdateMessage("");
 
     const formData = new FormData(event.currentTarget);
+    const nameKana = String(formData.get("nameKana") ?? "");
+
+    if (!isValidHiragana(nameKana)) {
+      setCustomerKanaError(kanaErrorMessage);
+      setUpdateMessage(kanaErrorMessage);
+      setUpdatingCustomer(false);
+      return;
+    }
+
     const response = await fetch(`/api/admin/customers/${customerId}`, {
       method: "PATCH",
       headers: {
@@ -120,7 +131,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
       },
       body: JSON.stringify({
         name: formData.get("name"),
-        nameKana: formData.get("nameKana"),
+        nameKana,
         phone: formData.get("phone"),
         birthDate: formData.get("birthDate"),
         memo: formData.get("memo"),
@@ -229,11 +240,13 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
   function confirmCustomerEdit() {
     setIsConfirmingEdit(false);
     setIsEditingCustomer(true);
+    setCustomerKanaError("");
   }
 
   function cancelCustomerEdit() {
     setIsEditingCustomer(false);
     setUpdateMessage("");
+    setCustomerKanaError("");
   }
 
   return (
@@ -451,8 +464,28 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                       <input
                         name="nameKana"
                         defaultValue={customer.nameKana}
-                        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        onChange={(event) => {
+                          const nextValue = event.target.value;
+                          setCustomerKanaError(
+                            isValidHiragana(nextValue) ? "" : kanaErrorMessage,
+                          );
+                        }}
+                        aria-invalid={customerKanaError ? "true" : "false"}
+                        aria-describedby="customer-name-kana-error"
+                        className={
+                          customerKanaError
+                            ? "h-11 rounded-md border border-red-400 bg-white px-3 text-base font-normal outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                            : "h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        }
                       />
+                      {customerKanaError ? (
+                        <span
+                          id="customer-name-kana-error"
+                          className="text-xs font-semibold text-red-600"
+                        >
+                          {customerKanaError}
+                        </span>
+                      ) : null}
                     </label>
                     <label className="grid gap-2 text-sm font-medium text-slate-800">
                       電話番号
@@ -491,7 +524,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                     <div className="flex flex-col gap-3 md:col-span-2 sm:flex-row">
                       <button
                         type="submit"
-                        disabled={updatingCustomer}
+                        disabled={updatingCustomer || Boolean(customerKanaError)}
                         className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
                       >
                         {updatingCustomer ? "保存中..." : "保存"}

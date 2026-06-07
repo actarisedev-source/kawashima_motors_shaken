@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchHolidays, findHolidayForDate } from "@/lib/holidays/holidays";
+import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { isValidNormalizedPhone, normalizePhone } from "@/lib/customers/phone";
 import { createReservationConfirmationToken } from "@/lib/reservations/confirmation-token";
 import {
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
   const body = (await request.json()) as ReservationRequest;
 
   const customerName = normalizeOptional(body.customerName);
+  const customerKana = normalizeOptional(body.customerKana);
   const phone = normalizeOptional(body.phone);
   const normalizedPhone = phone ? normalizePhone(phone) : "";
   const vehicleModel = normalizeOptional(body.vehicleModel);
@@ -60,6 +62,13 @@ export async function POST(request: Request) {
         ok: false,
         message: "お名前、電話番号、車種、予約日時を入力してください。",
       },
+      { status: 400 },
+    );
+  }
+
+  if (customerKana && !isValidHiragana(customerKana)) {
+    return NextResponse.json(
+      { ok: false, message: kanaErrorMessage },
       { status: 400 },
     );
   }
@@ -192,6 +201,7 @@ export async function POST(request: Request) {
       .from("customers")
       .insert({
         name: customerName,
+        name_kana: customerKana,
         phone,
         normalized_phone: normalizedPhone,
       })
@@ -206,6 +216,18 @@ export async function POST(request: Request) {
     }
 
     customer = createdCustomer;
+  } else if (customerKana) {
+    const { error: customerKanaError } = await supabaseServer
+      .from("customers")
+      .update({ name_kana: customerKana })
+      .eq("id", customer.id);
+
+    if (customerKanaError) {
+      return NextResponse.json(
+        { ok: false, message: customerKanaError.message },
+        { status: 500 },
+      );
+    }
   }
 
   let vehicleQuery = supabaseServer

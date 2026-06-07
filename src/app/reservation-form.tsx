@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { reservationTimeSlots } from "@/lib/reservations/slots";
 
 type SubmitState =
@@ -65,6 +66,8 @@ export function ReservationForm() {
   });
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
+  const [customerKana, setCustomerKana] = useState("");
+  const [customerKanaError, setCustomerKanaError] = useState("");
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>(
     {},
   );
@@ -125,6 +128,15 @@ export function ReservationForm() {
       return;
     }
 
+    if (!isValidHiragana(customerKana)) {
+      setCustomerKanaError(kanaErrorMessage);
+      setSubmitState({
+        status: "error",
+        message: kanaErrorMessage,
+      });
+      return;
+    }
+
     const selectedSlot = availability[selectedDate]?.slots[selectedTime];
 
     if (!selectedSlot?.available) {
@@ -181,6 +193,8 @@ export function ReservationForm() {
     event.currentTarget.reset();
     setSelectedDate("");
     setSelectedTime("");
+    setCustomerKana("");
+    setCustomerKanaError("");
     setSubmitState({
       status: "success",
       message: `予約を受け付けました。受付番号: ${result.reservationId}`,
@@ -211,11 +225,30 @@ export function ReservationForm() {
           />
         </label>
         <label className="grid gap-2 text-sm font-medium text-zinc-800">
-          フリガナ
+          ふりがな
           <input
             name="customerKana"
-            className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+            value={customerKana}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setCustomerKana(nextValue);
+              setCustomerKanaError(
+                isValidHiragana(nextValue) ? "" : kanaErrorMessage,
+              );
+            }}
+            aria-invalid={customerKanaError ? "true" : "false"}
+            aria-describedby="customer-kana-error"
+            className={
+              customerKanaError
+                ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
+                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+            }
           />
+          {customerKanaError ? (
+            <span id="customer-kana-error" className="text-xs font-semibold text-red-600">
+              {customerKanaError}
+            </span>
+          ) : null}
         </label>
         <label className="grid gap-2 text-sm font-medium text-zinc-800">
           電話番号
@@ -372,7 +405,7 @@ export function ReservationForm() {
       </label>
       <button
         type="submit"
-        disabled={submitState.status === "submitting"}
+        disabled={submitState.status === "submitting" || Boolean(customerKanaError)}
         className="h-11 rounded-md bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
       >
         予約を送信
