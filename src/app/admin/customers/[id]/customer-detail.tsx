@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { getAgeFromBirthDate } from "@/lib/customers/birth-date";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { AdminHeader } from "../../admin-header";
@@ -90,6 +91,14 @@ const statusClassName = (status: ReservationStatus) => {
       return "bg-amber-50 text-amber-700 ring-amber-200";
   }
 };
+
+const readonlyValueClassName =
+  "mt-2 min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 font-bold text-slate-950";
+
+const readonlyLabelClassName = "text-sm font-semibold text-slate-500";
+
+const inputClassName =
+  "h-11 rounded-lg border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
 export function CustomerDetail({ customerId }: { customerId: string }) {
   const [customer, setCustomer] = useState<CustomerDetailItem | null>(null);
@@ -262,8 +271,18 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
-      <AdminHeader title="顧客詳細" onRefresh={loadCustomer} />
-      <main className="mx-auto max-w-6xl px-5 py-6 sm:px-6 lg:px-8">
+      <AdminHeader title="顧客詳細" onRefresh={loadCustomer}>
+        <Link
+          href="/admin/customers"
+          className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-blue-700 transition hover:text-blue-800"
+        >
+          <span aria-hidden="true" className="text-lg leading-none">
+            ←
+          </span>
+          顧客一覧に戻る
+        </Link>
+      </AdminHeader>
+      <main className="mx-auto max-w-7xl px-5 py-6 sm:px-6 lg:px-8">
         {loadState.message ? (
           <div
             className={
@@ -284,7 +303,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                 aria-modal="true"
                 aria-labelledby="customer-edit-confirm-title"
               >
-                <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
+                <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
                   <h2
                     id="customer-edit-confirm-title"
                     className="text-lg font-bold text-slate-950"
@@ -298,7 +317,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                     <button
                       type="button"
                       onClick={() => setIsConfirmingEdit(false)}
-                      className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                      className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                     >
                       いいえ
                     </button>
@@ -306,7 +325,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                       type="button"
                       autoFocus
                       onClick={confirmCustomerEdit}
-                      className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
+                      className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
                     >
                       はい
                     </button>
@@ -329,8 +348,8 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
               </div>
             ) : null}
 
-            <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-              <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-col gap-3 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-lg font-bold">
                   {isEditingCustomer ? "顧客詳細（編集中）" : "顧客詳細"}
                 </h2>
@@ -340,7 +359,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                       type="button"
                       onClick={cancelCustomerEdit}
                       disabled={updatingCustomer}
-                      className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                      className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                     >
                       キャンセル
                     </button>
@@ -348,7 +367,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                       type="submit"
                       form="customer-detail-form"
                       disabled={updatingCustomer || Boolean(customerKanaError)}
-                      className="h-10 rounded-md bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                      className="h-10 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
                     >
                       {updatingCustomer ? "保存中..." : "保存"}
                     </button>
@@ -357,7 +376,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                   <button
                     type="button"
                     onClick={startCustomerEdit}
-                    className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                    className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
                   >
                     修正
                   </button>
@@ -369,33 +388,18 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                   id="customer-detail-form"
                   key={`${customer.id}-${customer.name}-${customer.nameKana}-${customer.phone}-${customer.birthDate ?? ""}-${customer.memo}`}
                   onSubmit={(event) => void updateCustomer(event)}
-                  className="grid gap-8 p-5 sm:p-7"
+                  className="grid gap-8 p-6 sm:p-8"
                 >
                   <section className="grid gap-4">
                     <h3 className="text-base font-bold">顧客情報</h3>
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                       <label className="grid gap-2 text-sm font-medium text-slate-800">
                         氏名
                         <input
                           required
                           name="name"
                           defaultValue={customer.name}
-                          className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm font-medium text-slate-800">
-                        生年月日
-                        <input
-                          name="birthDate"
-                          type="date"
-                          defaultValue={customer.birthDate ?? ""}
-                          max={new Intl.DateTimeFormat("sv-SE", {
-                            year: "numeric",
-                            month: "2-digit",
-                            day: "2-digit",
-                            timeZone: "Asia/Tokyo",
-                          }).format(new Date())}
-                          className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          className={inputClassName}
                         />
                       </label>
                       <label className="grid gap-2 text-sm font-medium text-slate-800">
@@ -413,8 +417,8 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                           aria-describedby="customer-name-kana-error"
                           className={
                             customerKanaError
-                              ? "h-11 rounded-md border border-red-400 bg-white px-3 text-base font-normal outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                              : "h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                              ? "h-11 rounded-lg border border-red-400 bg-white px-3 text-base font-normal outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                              : inputClassName
                           }
                         />
                         {customerKanaError ? (
@@ -427,13 +431,28 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                         ) : null}
                       </label>
                       <label className="grid gap-2 text-sm font-medium text-slate-800">
-                        登録日
+                        生年月日
                         <input
-                          value={formatDate(customer.createdAt)}
-                          disabled
-                          className="h-11 rounded-md border border-slate-200 bg-slate-50 px-3 text-base font-normal text-slate-500"
+                          name="birthDate"
+                          type="date"
+                          defaultValue={customer.birthDate ?? ""}
+                          max={new Intl.DateTimeFormat("sv-SE", {
+                            year: "numeric",
+                            month: "2-digit",
+                            day: "2-digit",
+                            timeZone: "Asia/Tokyo",
+                          }).format(new Date())}
+                          className={inputClassName}
                         />
                       </label>
+                      <div className="grid gap-2 text-sm font-medium text-slate-800">
+                        年齢
+                        <div className="flex h-11 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-base font-semibold text-slate-500">
+                          {getAgeFromBirthDate(customer.birthDate) !== null
+                            ? `${getAgeFromBirthDate(customer.birthDate)}歳`
+                            : "未登録"}
+                        </div>
+                      </div>
                       <label className="grid gap-2 text-sm font-medium text-slate-800">
                         電話番号
                         <input
@@ -441,16 +460,22 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                           name="phone"
                           inputMode="tel"
                           defaultValue={customer.phone}
-                          className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          className={inputClassName}
                         />
                       </label>
-                      <label className="grid gap-2 text-sm font-medium text-slate-800 md:row-span-2">
+                      <div className="grid gap-2 text-sm font-medium text-slate-800">
+                        登録日
+                        <div className="flex h-11 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-base font-semibold text-slate-500">
+                          {formatDate(customer.createdAt)}
+                        </div>
+                      </div>
+                      <label className="grid gap-2 text-sm font-medium text-slate-800 md:col-span-2 lg:col-span-4">
                         顧客メモ
                         <textarea
                           name="memo"
                           rows={4}
                           defaultValue={customer.memo}
-                          className="min-h-28 rounded-md border border-slate-300 bg-white px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          className="min-h-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                         />
                       </label>
                     </div>
@@ -472,7 +497,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                             emptyVehicleDraft(),
                           ])
                         }
-                        className="h-10 rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                        className="h-10 rounded-lg border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
                       >
                         車両追加
                       </button>
@@ -502,7 +527,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                                       event.target.value,
                                     )
                                   }
-                                  className="h-10 w-full rounded-md border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                  className="h-10 w-full rounded-lg border border-slate-300 px-3 outline-none focus:border-blue-500"
                                 />
                               </td>
                               <td className="px-4 py-3">
@@ -515,7 +540,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                                       event.target.value,
                                     )
                                   }
-                                  className="h-10 w-full rounded-md border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                  className="h-10 w-full rounded-lg border border-slate-300 px-3 outline-none focus:border-blue-500"
                                 />
                               </td>
                               <td className="px-4 py-3">
@@ -529,7 +554,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                                       event.target.value,
                                     )
                                   }
-                                  className="h-10 w-full rounded-md border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                  className="h-10 w-full rounded-lg border border-slate-300 px-3 outline-none focus:border-blue-500"
                                 />
                               </td>
                               <td className="px-4 py-3">
@@ -542,14 +567,14 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                                       event.target.value,
                                     )
                                   }
-                                  className="h-10 w-full rounded-md border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                  className="h-10 w-full rounded-lg border border-slate-300 px-3 outline-none focus:border-blue-500"
                                 />
                               </td>
                               <td className="px-4 py-3 text-right">
                                 <button
                                   type="button"
                                   onClick={() => removeVehicleDraft(vehicle.clientId)}
-                                  className="h-9 rounded-md border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                                  className="h-9 rounded-lg border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
                                 >
                                   削除
                                 </button>
@@ -567,53 +592,53 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                   </section>
                 </form>
               ) : (
-                <div className="grid gap-8 p-5 sm:p-7">
+                <div className="grid gap-8 p-6 sm:p-8">
                   <section className="grid gap-4">
                     <h3 className="text-base font-bold">顧客情報</h3>
-                    <dl className="grid gap-x-16 gap-y-4 text-sm md:grid-cols-2">
+                    <dl className="grid gap-4 text-sm md:grid-cols-2 lg:grid-cols-4">
                       <div>
-                        <dt className="text-slate-500">氏名</dt>
-                        <dd className="mt-1 whitespace-pre-wrap font-semibold text-slate-950">
+                        <dt className={readonlyLabelClassName}>氏名</dt>
+                        <dd className={readonlyValueClassName}>
                           {customer.name || "未登録"}
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-slate-500">生年月日</dt>
-                        <dd className="mt-1 font-semibold text-slate-950">
+                        <dt className={readonlyLabelClassName}>ふりがな</dt>
+                        <dd className={readonlyValueClassName}>
+                          {customer.nameKana || "未登録"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className={readonlyLabelClassName}>生年月日</dt>
+                        <dd className={readonlyValueClassName}>
                           {customer.birthDate
                             ? formatDate(customer.birthDate)
                             : "未登録"}
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-slate-500">ふりがな</dt>
-                        <dd className="mt-1 whitespace-pre-wrap font-semibold text-slate-950">
-                          {customer.nameKana || "未登録"}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-slate-500">年齢</dt>
-                        <dd className="mt-1 font-semibold text-slate-950">
+                        <dt className={readonlyLabelClassName}>年齢</dt>
+                        <dd className={readonlyValueClassName}>
                           {getAgeFromBirthDate(customer.birthDate) !== null
                             ? `${getAgeFromBirthDate(customer.birthDate)}歳`
                             : "未登録"}
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-slate-500">電話番号</dt>
-                        <dd className="mt-1 font-semibold text-slate-950">
+                        <dt className={readonlyLabelClassName}>電話番号</dt>
+                        <dd className={readonlyValueClassName}>
                           {customer.phone || "未登録"}
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-slate-500">登録日</dt>
-                        <dd className="mt-1 font-semibold text-slate-950">
+                        <dt className={readonlyLabelClassName}>登録日</dt>
+                        <dd className={readonlyValueClassName}>
                           {formatDate(customer.createdAt)}
                         </dd>
                       </div>
-                      <div className="md:col-span-2">
-                        <dt className="text-slate-500">顧客メモ</dt>
-                        <dd className="mt-1 min-h-12 whitespace-pre-wrap rounded-md bg-slate-50 px-3 py-2 font-semibold text-slate-950 ring-1 ring-slate-100">
+                      <div className="md:col-span-2 lg:col-span-4">
+                        <dt className={readonlyLabelClassName}>顧客メモ</dt>
+                        <dd className={readonlyValueClassName}>
                           {customer.memo || "未登録"}
                         </dd>
                       </div>
@@ -669,7 +694,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
               )}
             </section>
 
-            <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="border-b border-slate-200 px-5 py-4">
                 <h2 className="text-base font-semibold">予約履歴</h2>
               </div>
