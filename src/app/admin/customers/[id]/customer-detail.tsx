@@ -383,7 +383,55 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                   {updateMessage}
                 </div>
               ) : null}
-              {isEditingCustomer ? (
+              {!isEditingCustomer ? (
+                <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+                  <div className="border-b border-slate-200 px-5 py-4">
+                    <h2 className="text-base font-semibold">顧客情報</h2>
+                  </div>
+                  <dl className="grid gap-4 p-5 text-sm md:grid-cols-2">
+                    <div>
+                      <dt className="text-slate-500">氏名</dt>
+                      <dd className="mt-1 whitespace-pre-wrap font-semibold text-slate-950">
+                        {customer.name || "未登録"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">ふりがな</dt>
+                      <dd className="mt-1 whitespace-pre-wrap font-semibold text-slate-950">
+                        {customer.nameKana || "未登録"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">電話番号</dt>
+                      <dd className="mt-1 font-semibold text-slate-950">
+                        {customer.phone || "未登録"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">生年月日</dt>
+                      <dd className="mt-1 font-semibold text-slate-950">
+                        {customer.birthDate
+                          ? formatDate(customer.birthDate)
+                          : "未登録"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">年齢</dt>
+                      <dd className="mt-1 font-semibold text-slate-950">
+                        {getAgeFromBirthDate(customer.birthDate) !== null
+                          ? `${getAgeFromBirthDate(customer.birthDate)}歳`
+                          : "未登録"}
+                      </dd>
+                    </div>
+                    <div className="md:col-span-2">
+                      <dt className="text-slate-500">顧客メモ</dt>
+                      <dd className="mt-1 min-h-12 whitespace-pre-wrap rounded-md bg-slate-50 px-3 py-2 font-semibold text-slate-950 ring-1 ring-slate-100">
+                        {customer.memo || "未登録"}
+                      </dd>
+                    </div>
+                  </dl>
+                </section>
+              ) : (
                 <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
                   <div className="border-b border-slate-200 px-5 py-4">
                     <h2 className="text-base font-semibold">顧客情報編集</h2>
@@ -463,7 +511,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                     </div>
                   </form>
                 </section>
-              ) : null}
+              )}
               <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-200 px-5 py-4">
                   <h2 className="text-base font-semibold">車両一覧</h2>
