@@ -655,39 +655,44 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                         車両数：{customer.vehicles.length}台
                       </p>
                     </div>
-                    <div className="overflow-x-auto rounded-[5px] border border-slate-200">
-                      <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-                        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-                          <tr>
-                            <th className="px-4 py-3">車名</th>
-                            <th className="px-4 py-3">ナンバー</th>
-                            <th className="px-4 py-3">車検満了日</th>
-                            <th className="px-4 py-3">車両メモ</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {customer.vehicles.map((vehicle) => (
-                            <tr key={vehicle.id}>
-                              <td className="px-4 py-4 font-semibold text-slate-950">
-                                {vehicle.modelName}
-                              </td>
-                              <td className="px-4 py-4 text-slate-700">
+                    <div className="grid gap-4">
+                      {customer.vehicles.map((vehicle) => (
+                        <div
+                          key={vehicle.id}
+                          className="border-t border-slate-200 pt-4 first:border-t-0 first:pt-0"
+                        >
+                          <dl className="grid gap-4 text-sm md:grid-cols-2 lg:grid-cols-4">
+                            <div>
+                              <dt className={readonlyLabelClassName}>車名</dt>
+                              <dd className={readonlyValueClassName}>
+                                {vehicle.modelName || "未登録"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className={readonlyLabelClassName}>ナンバー</dt>
+                              <dd className={readonlyValueClassName}>
                                 {vehicle.plateNumber || "未登録"}
-                              </td>
-                              <td className="px-4 py-4 font-semibold text-slate-950">
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className={readonlyLabelClassName}>車検満了日</dt>
+                              <dd className={readonlyValueClassName}>
                                 {vehicle.shakenExpiryDate
                                   ? formatDate(vehicle.shakenExpiryDate)
                                   : "未登録"}
-                              </td>
-                              <td className="px-4 py-4 text-slate-700">
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className={readonlyLabelClassName}>車両メモ</dt>
+                              <dd className={readonlyValueClassName}>
                                 {vehicle.memo || "メモなし"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                              </dd>
+                            </div>
+                          </dl>
+                        </div>
+                      ))}
                       {!customer.vehicles.length ? (
-                        <div className="px-5 py-8 text-center text-sm text-slate-500">
+                        <div className="rounded-[5px] border border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
                           登録車両はありません。
                         </div>
                       ) : null}
