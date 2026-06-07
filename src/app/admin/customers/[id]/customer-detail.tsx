@@ -93,7 +93,7 @@ const statusClassName = (status: ReservationStatus) => {
 };
 
 const readonlyValueClassName =
-  "mt-2 min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 font-bold text-slate-950";
+  "mt-2 min-h-11 rounded-xl border border-[#E2E8F0] bg-[#F5F7FA] px-4 py-2.5 font-bold text-slate-950";
 
 const readonlyLabelClassName = "text-sm font-semibold text-slate-500";
 
