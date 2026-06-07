@@ -278,7 +278,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
         >
           <span
             aria-hidden="true"
-            className="flex h-9 w-9 items-center justify-center rounded-[5px] bg-blue-50 text-lg leading-none text-blue-700 transition group-hover:bg-blue-100"
+            className="flex h-9 w-9 items-center justify-center rounded-[5px] border border-blue-100 bg-blue-50 text-lg leading-none text-blue-700 transition group-hover:border-blue-200 group-hover:bg-blue-100"
           >
             ←
           </span>
