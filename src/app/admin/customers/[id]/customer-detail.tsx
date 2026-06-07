@@ -93,12 +93,12 @@ const statusClassName = (status: ReservationStatus) => {
 };
 
 const readonlyValueClassName =
-  "mt-2 min-h-11 rounded-xl border border-[#D6DEE8] bg-[#E9EEF5] px-4 py-2.5 font-bold text-slate-950";
+  "mt-2 min-h-11 rounded-[5px] border border-[#D6DEE8] bg-[#E9EEF5] px-4 py-2.5 font-bold text-slate-950";
 
 const readonlyLabelClassName = "text-sm font-semibold text-slate-500";
 
 const inputClassName =
-  "h-11 rounded-lg border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
+  "h-11 rounded-[5px] border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
 export function CustomerDetail({ customerId }: { customerId: string }) {
   const [customer, setCustomer] = useState<CustomerDetailItem | null>(null);
@@ -278,7 +278,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
         >
           <span
             aria-hidden="true"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-lg leading-none text-blue-700 transition group-hover:bg-blue-100"
+            className="flex h-9 w-9 items-center justify-center rounded-[5px] bg-blue-50 text-lg leading-none text-blue-700 transition group-hover:bg-blue-100"
           >
             ←
           </span>
@@ -290,8 +290,8 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
           <div
             className={
               loadState.status === "error"
-                ? "mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
-                : "mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700"
+                ? "mb-4 rounded-[5px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+                : "mb-4 rounded-[5px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700"
             }
           >
             {loadState.message}
@@ -306,7 +306,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                 aria-modal="true"
                 aria-labelledby="customer-edit-confirm-title"
               >
-                <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
+                <div className="w-full max-w-md rounded-[5px] border border-slate-200 bg-white p-5 shadow-xl">
                   <h2
                     id="customer-edit-confirm-title"
                     className="text-lg font-bold text-slate-950"
@@ -320,7 +320,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                     <button
                       type="button"
                       onClick={() => setIsConfirmingEdit(false)}
-                      className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                      className="h-10 rounded-[5px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                     >
                       いいえ
                     </button>
@@ -328,7 +328,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                       type="button"
                       autoFocus
                       onClick={confirmCustomerEdit}
-                      className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
+                      className="h-10 rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
                     >
                       はい
                     </button>
@@ -343,15 +343,15 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                   updateMessage.includes("失敗") ||
                   updateMessage.includes("入力") ||
                   updateMessage.includes("重複")
-                    ? "rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
-                    : "rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700"
+                    ? "rounded-[5px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+                    : "rounded-[5px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700"
                 }
               >
                 {updateMessage}
               </div>
             ) : null}
 
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <section className="overflow-hidden rounded-[5px] border border-slate-200 bg-white shadow-sm">
               <div className="flex flex-col gap-3 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-lg font-bold">
                   {isEditingCustomer ? "顧客詳細（編集中）" : "顧客詳細"}
@@ -362,7 +362,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                       type="button"
                       onClick={cancelCustomerEdit}
                       disabled={updatingCustomer}
-                      className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                      className="h-10 rounded-[5px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                     >
                       キャンセル
                     </button>
@@ -370,7 +370,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                       type="submit"
                       form="customer-detail-form"
                       disabled={updatingCustomer || Boolean(customerKanaError)}
-                      className="h-10 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                      className="h-10 rounded-[5px] bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
                     >
                       {updatingCustomer ? "保存中..." : "保存"}
                     </button>
@@ -379,7 +379,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                   <button
                     type="button"
                     onClick={startCustomerEdit}
-                    className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                    className="h-10 rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
                   >
                     修正
                   </button>
@@ -420,7 +420,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                           aria-describedby="customer-name-kana-error"
                           className={
                             customerKanaError
-                              ? "h-11 rounded-lg border border-red-400 bg-white px-3 text-base font-normal outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                              ? "h-11 rounded-[5px] border border-red-400 bg-white px-3 text-base font-normal outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
                               : inputClassName
                           }
                         />
@@ -450,7 +450,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                       </label>
                       <div className="grid gap-2 text-sm font-medium text-slate-800">
                         年齢
-                        <div className="flex h-11 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-base font-semibold text-slate-500">
+                        <div className="flex h-11 items-center rounded-[5px] border border-slate-200 bg-slate-50 px-3 text-base font-semibold text-slate-500">
                           {getAgeFromBirthDate(customer.birthDate) !== null
                             ? `${getAgeFromBirthDate(customer.birthDate)}歳`
                             : "未登録"}
@@ -468,7 +468,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                       </label>
                       <div className="grid gap-2 text-sm font-medium text-slate-800">
                         登録日
-                        <div className="flex h-11 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-base font-semibold text-slate-500">
+                        <div className="flex h-11 items-center rounded-[5px] border border-slate-200 bg-slate-50 px-3 text-base font-semibold text-slate-500">
                           {formatDate(customer.createdAt)}
                         </div>
                       </div>
@@ -478,7 +478,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                           name="memo"
                           rows={4}
                           defaultValue={customer.memo}
-                          className="min-h-28 rounded-lg border border-slate-300 bg-white px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          className="min-h-28 rounded-[5px] border border-slate-300 bg-white px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                         />
                       </label>
                     </div>
@@ -500,12 +500,12 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                             emptyVehicleDraft(),
                           ])
                         }
-                        className="h-10 rounded-lg border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                        className="h-10 rounded-[5px] border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
                       >
                         車両追加
                       </button>
                     </div>
-                    <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <div className="overflow-x-auto rounded-[5px] border border-slate-200">
                       <table className="w-full min-w-[860px] border-collapse text-left text-sm">
                         <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                           <tr>
@@ -530,7 +530,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                                       event.target.value,
                                     )
                                   }
-                                  className="h-10 w-full rounded-lg border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                  className="h-10 w-full rounded-[5px] border border-slate-300 px-3 outline-none focus:border-blue-500"
                                 />
                               </td>
                               <td className="px-4 py-3">
@@ -543,7 +543,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                                       event.target.value,
                                     )
                                   }
-                                  className="h-10 w-full rounded-lg border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                  className="h-10 w-full rounded-[5px] border border-slate-300 px-3 outline-none focus:border-blue-500"
                                 />
                               </td>
                               <td className="px-4 py-3">
@@ -557,7 +557,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                                       event.target.value,
                                     )
                                   }
-                                  className="h-10 w-full rounded-lg border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                  className="h-10 w-full rounded-[5px] border border-slate-300 px-3 outline-none focus:border-blue-500"
                                 />
                               </td>
                               <td className="px-4 py-3">
@@ -570,14 +570,14 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                                       event.target.value,
                                     )
                                   }
-                                  className="h-10 w-full rounded-lg border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                  className="h-10 w-full rounded-[5px] border border-slate-300 px-3 outline-none focus:border-blue-500"
                                 />
                               </td>
                               <td className="px-4 py-3 text-right">
                                 <button
                                   type="button"
                                   onClick={() => removeVehicleDraft(vehicle.clientId)}
-                                  className="h-9 rounded-lg border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                                  className="h-9 rounded-[5px] border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
                                 >
                                   削除
                                 </button>
@@ -655,7 +655,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                         車両数：{customer.vehicles.length}台
                       </p>
                     </div>
-                    <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <div className="overflow-x-auto rounded-[5px] border border-slate-200">
                       <table className="w-full min-w-[720px] border-collapse text-left text-sm">
                         <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                           <tr>
@@ -697,7 +697,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
               )}
             </section>
 
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <section className="overflow-hidden rounded-[5px] border border-slate-200 bg-white shadow-sm">
               <div className="border-b border-slate-200 px-5 py-4">
                 <h2 className="text-base font-semibold">予約履歴</h2>
               </div>
@@ -722,7 +722,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                         </td>
                         <td className="px-5 py-4">
                           <span
-                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
+                            className={`inline-flex rounded-[5px] px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
                               reservation.status,
                             )}`}
                           >
@@ -750,7 +750,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                         </p>
                       </div>
                       <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
+                        className={`rounded-[5px] px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
                           reservation.status,
                         )}`}
                       >
