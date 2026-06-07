@@ -13,6 +13,14 @@ import type { Database } from "@/types/database";
 
 type VehicleRow = Database["public"]["Tables"]["vehicles"]["Row"];
 
+type VehicleInput = {
+  id?: unknown;
+  modelName?: unknown;
+  plateNumber?: unknown;
+  shakenExpiryDate?: unknown;
+  memo?: unknown;
+};
+
 const unauthorizedResponse = () =>
   NextResponse.json(
     { ok: false, message: "ログインが必要です。" },
@@ -135,6 +143,7 @@ export async function PATCH(
     phone?: unknown;
     birthDate?: unknown;
     memo?: unknown;
+    vehicles?: unknown;
   };
 
   if (typeof body.vehicleId !== "string" || !body.vehicleId) {
@@ -147,6 +156,9 @@ export async function PATCH(
         ? normalizeBirthDateInput(body.birthDate)
         : null;
     const memo = normalizeOptional(body.memo);
+    const vehicleInputs: VehicleInput[] = Array.isArray(body.vehicles)
+      ? body.vehicles
+      : [];
 
     if (!name) {
       return NextResponse.json(
@@ -174,6 +186,52 @@ export async function PATCH(
         { ok: false, message: "生年月日は今日以前の日付を入力してください。" },
         { status: 400 },
       );
+    }
+
+    const normalizedVehicles = vehicleInputs.map((vehicle) => ({
+      id: typeof vehicle.id === "string" ? vehicle.id : null,
+      modelName: normalizeOptional(vehicle.modelName),
+      plateNumber: normalizeOptional(vehicle.plateNumber),
+      shakenExpiryDate:
+        typeof vehicle.shakenExpiryDate === "string"
+          ? normalizeDateInput(vehicle.shakenExpiryDate)
+          : null,
+      memo: normalizeOptional(vehicle.memo),
+      rawShakenExpiryDate: vehicle.shakenExpiryDate,
+    }));
+
+    const invalidVehicle = normalizedVehicles.find(
+      (vehicle) =>
+        !vehicle.modelName ||
+        (vehicle.rawShakenExpiryDate && !vehicle.shakenExpiryDate),
+    );
+
+    if (invalidVehicle) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: !invalidVehicle.modelName
+            ? "車名を入力してください。"
+            : "車検満了日の形式が正しくありません。",
+        },
+        { status: 400 },
+      );
+    }
+
+    const vehicleKeys = new Set<string>();
+    for (const vehicle of normalizedVehicles) {
+      const key = `${vehicle.modelName}::${vehicle.plateNumber ?? ""}`;
+      if (vehicleKeys.has(key)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            message:
+              "同じ車名とナンバーの車両が重複しています。内容を確認してください。",
+          },
+          { status: 409 },
+        );
+      }
+      vehicleKeys.add(key);
     }
 
     const { data: existingCustomer, error: existingCustomerError } =
@@ -225,6 +283,105 @@ export async function PATCH(
       );
     }
 
+    let vehicles: VehicleRow[] | null = null;
+
+    if (Array.isArray(body.vehicles)) {
+      const { data: currentVehicles, error: currentVehiclesError } =
+        await supabaseServer
+          .from("vehicles")
+          .select("*")
+          .eq("customer_id", id);
+
+      if (currentVehiclesError) {
+        return NextResponse.json(
+          { ok: false, message: currentVehiclesError.message },
+          { status: 500 },
+        );
+      }
+
+      const currentVehicleIds = new Set(
+        (currentVehicles ?? []).map((vehicle) => vehicle.id),
+      );
+      const submittedExistingIds = new Set(
+        normalizedVehicles
+          .map((vehicle) => vehicle.id)
+          .filter((vehicleId): vehicleId is string => Boolean(vehicleId)),
+      );
+      const deleteIds = [...currentVehicleIds].filter(
+        (vehicleId) => !submittedExistingIds.has(vehicleId),
+      );
+
+      if (deleteIds.length > 0) {
+        const { error: deleteError } = await supabaseServer
+          .from("vehicles")
+          .delete()
+          .eq("customer_id", id)
+          .in("id", deleteIds);
+
+        if (deleteError) {
+          return NextResponse.json(
+            { ok: false, message: deleteError.message },
+            { status: 500 },
+          );
+        }
+      }
+
+      for (const vehicle of normalizedVehicles) {
+        if (vehicle.id) {
+          const { error: vehicleUpdateError } = await supabaseServer
+            .from("vehicles")
+            .update({
+              model_name: vehicle.modelName ?? "",
+              plate_number: vehicle.plateNumber,
+              shaken_expiry_date: vehicle.shakenExpiryDate,
+              memo: vehicle.memo,
+            })
+            .eq("id", vehicle.id)
+            .eq("customer_id", id);
+
+          if (vehicleUpdateError) {
+            return NextResponse.json(
+              { ok: false, message: vehicleUpdateError.message },
+              { status: 500 },
+            );
+          }
+        } else {
+          const { error: vehicleInsertError } = await supabaseServer
+            .from("vehicles")
+            .insert({
+              customer_id: id,
+              model_name: vehicle.modelName ?? "",
+              plate_number: vehicle.plateNumber,
+              shaken_expiry_date: vehicle.shakenExpiryDate,
+              memo: vehicle.memo,
+            });
+
+          if (vehicleInsertError) {
+            return NextResponse.json(
+              { ok: false, message: vehicleInsertError.message },
+              { status: 500 },
+            );
+          }
+        }
+      }
+
+      const { data: updatedVehicles, error: updatedVehiclesError } =
+        await supabaseServer
+          .from("vehicles")
+          .select("*")
+          .eq("customer_id", id)
+          .order("created_at", { ascending: false });
+
+      if (updatedVehiclesError) {
+        return NextResponse.json(
+          { ok: false, message: updatedVehiclesError.message },
+          { status: 500 },
+        );
+      }
+
+      vehicles = updatedVehicles ?? [];
+    }
+
     return NextResponse.json({
       ok: true,
       customer: {
@@ -234,6 +391,14 @@ export async function PATCH(
         phone: customer.phone ?? "",
         birthDate: customer.birth_date,
         memo: customer.memo ?? "",
+        vehicles: vehicles?.map((vehicle) => ({
+          id: vehicle.id,
+          modelName: vehicle.model_name,
+          plateNumber: vehicle.plate_number ?? "",
+          shakenExpiryDate: vehicle.shaken_expiry_date,
+          memo: vehicle.memo ?? "",
+          createdAt: vehicle.created_at,
+        })),
       },
     });
   }

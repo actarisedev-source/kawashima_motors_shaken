@@ -3,10 +3,22 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { getAgeFromBirthDate } from "@/lib/customers/birth-date";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
-import { getShakenExpiryLabel } from "@/lib/vehicles/shaken-expiry";
 import { AdminHeader } from "../../admin-header";
 
 type ReservationStatus = "受付中" | "確定" | "完了" | "キャンセル";
+
+type VehicleItem = {
+  id: string;
+  modelName: string;
+  plateNumber: string;
+  shakenExpiryDate: string | null;
+  memo: string;
+  createdAt: string;
+};
+
+type VehicleDraft = VehicleItem & {
+  clientId: string;
+};
 
 type CustomerDetailItem = {
   id: string;
@@ -17,14 +29,7 @@ type CustomerDetailItem = {
   memo: string;
   createdAt: string;
   latestReservedAt: string | null;
-  vehicles: {
-    id: string;
-    modelName: string;
-    plateNumber: string;
-    shakenExpiryDate: string | null;
-    memo: string;
-    createdAt: string;
-  }[];
+  vehicles: VehicleItem[];
   reservations: {
     id: string;
     reservedAt: string;
@@ -38,6 +43,22 @@ type LoadState =
   | { status: "loading"; message: "読み込み中です。" }
   | { status: "ready"; message: "" }
   | { status: "error"; message: string };
+
+const emptyVehicleDraft = (): VehicleDraft => ({
+  id: "",
+  clientId: crypto.randomUUID(),
+  modelName: "",
+  plateNumber: "",
+  shakenExpiryDate: null,
+  memo: "",
+  createdAt: new Date().toISOString(),
+});
+
+const toVehicleDrafts = (vehicles: VehicleItem[]): VehicleDraft[] =>
+  vehicles.map((vehicle) => ({
+    ...vehicle,
+    clientId: vehicle.id,
+  }));
 
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("ja-JP", {
@@ -72,13 +93,11 @@ const statusClassName = (status: ReservationStatus) => {
 
 export function CustomerDetail({ customerId }: { customerId: string }) {
   const [customer, setCustomer] = useState<CustomerDetailItem | null>(null);
+  const [vehicleDrafts, setVehicleDrafts] = useState<VehicleDraft[]>([]);
   const [loadState, setLoadState] = useState<LoadState>({
     status: "loading",
     message: "読み込み中です。",
   });
-  const [updatingVehicleId, setUpdatingVehicleId] = useState<string | null>(
-    null,
-  );
   const [updatingCustomer, setUpdatingCustomer] = useState(false);
   const [isEditingCustomer, setIsEditingCustomer] = useState(false);
   const [isConfirmingEdit, setIsConfirmingEdit] = useState(false);
@@ -106,6 +125,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
     }
 
     setCustomer(result.customer);
+    setVehicleDrafts(toVehicleDrafts(result.customer.vehicles));
     setLoadState({ status: "ready", message: "" });
   }, [customerId]);
 
@@ -135,6 +155,13 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
         phone: formData.get("phone"),
         birthDate: formData.get("birthDate"),
         memo: formData.get("memo"),
+        vehicles: vehicleDrafts.map((vehicle) => ({
+          id: vehicle.id || undefined,
+          modelName: vehicle.modelName,
+          plateNumber: vehicle.plateNumber,
+          shakenExpiryDate: vehicle.shakenExpiryDate,
+          memo: vehicle.memo,
+        })),
       }),
     });
     const result = (await response.json()) as {
@@ -146,6 +173,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
         phone: string;
         birthDate: string | null;
         memo: string;
+        vehicles?: VehicleItem[];
       };
       message?: string;
     };
@@ -165,67 +193,14 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
             phone: result.customer?.phone ?? current.phone,
             birthDate: result.customer?.birthDate ?? null,
             memo: result.customer?.memo ?? current.memo,
+            vehicles: result.customer?.vehicles ?? current.vehicles,
           }
         : current,
     );
+    setVehicleDrafts(toVehicleDrafts(result.customer.vehicles ?? []));
     setUpdateMessage("顧客情報を更新しました。");
     setIsEditingCustomer(false);
     setUpdatingCustomer(false);
-  }
-
-  async function updateShakenExpiryDate(
-    event: FormEvent<HTMLFormElement>,
-    vehicleId: string,
-  ) {
-    event.preventDefault();
-    setUpdatingVehicleId(vehicleId);
-    setUpdateMessage("");
-
-    const formData = new FormData(event.currentTarget);
-    const shakenExpiryDate = formData.get("shakenExpiryDate");
-
-    const response = await fetch(`/api/admin/customers/${customerId}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        vehicleId,
-        shakenExpiryDate,
-      }),
-    });
-    const result = (await response.json()) as {
-      ok: boolean;
-      vehicle?: {
-        id: string;
-        shakenExpiryDate: string | null;
-      };
-      message?: string;
-    };
-
-    if (!response.ok || !result.ok || !result.vehicle) {
-      setUpdateMessage(result.message ?? "車検満了日の更新に失敗しました。");
-      setUpdatingVehicleId(null);
-      return;
-    }
-
-    setCustomer((current) =>
-      current
-        ? {
-            ...current,
-            vehicles: current.vehicles.map((vehicle) =>
-              vehicle.id === result.vehicle?.id
-                ? {
-                    ...vehicle,
-                    shakenExpiryDate: result.vehicle.shakenExpiryDate,
-                  }
-                : vehicle,
-            ),
-          }
-        : current,
-    );
-    setUpdateMessage("車検満了日を更新しました。");
-    setUpdatingVehicleId(null);
   }
 
   useEffect(() => {
@@ -238,21 +213,57 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
   }
 
   function confirmCustomerEdit() {
+    if (customer) {
+      setVehicleDrafts(toVehicleDrafts(customer.vehicles));
+    }
     setIsConfirmingEdit(false);
     setIsEditingCustomer(true);
     setCustomerKanaError("");
   }
 
   function cancelCustomerEdit() {
+    if (customer) {
+      setVehicleDrafts(toVehicleDrafts(customer.vehicles));
+    }
     setIsEditingCustomer(false);
     setUpdateMessage("");
     setCustomerKanaError("");
   }
 
+  function updateVehicleDraft(
+    clientId: string,
+    field: keyof Pick<
+      VehicleDraft,
+      "modelName" | "plateNumber" | "shakenExpiryDate" | "memo"
+    >,
+    value: string,
+  ) {
+    setVehicleDrafts((current) =>
+      current.map((vehicle) =>
+        vehicle.clientId === clientId
+          ? {
+              ...vehicle,
+              [field]: field === "shakenExpiryDate" ? value || null : value,
+            }
+          : vehicle,
+      ),
+    );
+  }
+
+  function removeVehicleDraft(clientId: string) {
+    if (!window.confirm("この車両を削除しますか？")) {
+      return;
+    }
+
+    setVehicleDrafts((current) =>
+      current.filter((vehicle) => vehicle.clientId !== clientId),
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <AdminHeader title="顧客詳細" onRefresh={loadCustomer} />
-      <main className="mx-auto max-w-7xl px-5 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-6xl px-5 py-6 sm:px-6 lg:px-8">
         {loadState.message ? (
           <div
             className={
@@ -265,7 +276,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
           </div>
         ) : null}
         {customer ? (
-          <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+          <div className="grid gap-6">
             {isConfirmingEdit ? (
               <div
                 className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 px-5"
@@ -281,7 +292,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                     顧客情報修正
                   </h2>
                   <p className="mt-3 text-sm leading-6 text-slate-600">
-                    顧客情報を修正しますがよろしいですか？
+                    顧客情報および車両情報を修正しますがよろしいですか？
                   </p>
                   <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                     <button
@@ -303,386 +314,433 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                 </div>
               </div>
             ) : null}
-            <aside className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-sm font-semibold text-blue-700">
-                Customer Profile
-              </p>
-              <h2 className="mt-2 text-2xl font-bold tracking-normal">
-                {customer.name}
-              </h2>
-              <dl className="mt-6 grid gap-4 text-sm">
-                <div>
-                  <dt className="text-slate-500">ふりがな</dt>
-                  <dd className="mt-1 font-semibold text-slate-950">
-                    {customer.nameKana || "未登録"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">電話番号</dt>
-                  <dd className="mt-1 font-semibold text-slate-950">
-                    {customer.phone || "未登録"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">登録日</dt>
-                  <dd className="mt-1 font-semibold text-slate-950">
-                    {formatDate(customer.createdAt)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">生年月日</dt>
-                  <dd className="mt-1 font-semibold text-slate-950">
-                    {customer.birthDate ? formatDate(customer.birthDate) : "未登録"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">年齢</dt>
-                  <dd className="mt-1 font-semibold text-slate-950">
-                    {getAgeFromBirthDate(customer.birthDate) !== null
-                      ? `${getAgeFromBirthDate(customer.birthDate)}歳`
-                      : "未登録"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">最新予約日</dt>
-                  <dd className="mt-1 font-semibold text-slate-950">
-                    {customer.latestReservedAt
-                      ? formatDateTime(customer.latestReservedAt)
-                      : "なし"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">メモ</dt>
-                  <dd className="mt-1 whitespace-pre-wrap font-semibold text-slate-950">
-                    {customer.memo || "未登録"}
-                  </dd>
-                </div>
-              </dl>
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm text-slate-500">車両</p>
-                  <p className="mt-2 text-2xl font-bold">
-                    {customer.vehicles.length}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm text-slate-500">予約</p>
-                  <p className="mt-2 text-2xl font-bold">
-                    {customer.reservations.length}
-                  </p>
-                </div>
+
+            {updateMessage ? (
+              <div
+                className={
+                  updateMessage.includes("失敗") ||
+                  updateMessage.includes("入力") ||
+                  updateMessage.includes("重複")
+                    ? "rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+                    : "rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700"
+                }
+              >
+                {updateMessage}
               </div>
-            </aside>
-            <div className="grid gap-6">
-              {updateMessage ? (
-                <div
-                  className={
-                    updateMessage.includes("失敗")
-                      ? "rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
-                      : "rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700"
-                  }
-                >
-                  {updateMessage}
-                </div>
-              ) : null}
-              {!isEditingCustomer ? (
-                <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                  <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
-                    <h2 className="text-base font-semibold">顧客情報</h2>
+            ) : null}
+
+            <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-lg font-bold">
+                  {isEditingCustomer ? "顧客詳細（編集中）" : "顧客詳細"}
+                </h2>
+                {isEditingCustomer ? (
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <button
                       type="button"
-                      onClick={startCustomerEdit}
-                      className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                      onClick={cancelCustomerEdit}
+                      disabled={updatingCustomer}
+                      className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                     >
-                      修正
+                      キャンセル
+                    </button>
+                    <button
+                      type="submit"
+                      form="customer-detail-form"
+                      disabled={updatingCustomer || Boolean(customerKanaError)}
+                      className="h-10 rounded-md bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                    >
+                      {updatingCustomer ? "保存中..." : "保存"}
                     </button>
                   </div>
-                  <dl className="grid gap-4 p-5 text-sm md:grid-cols-2">
-                    <div>
-                      <dt className="text-slate-500">氏名</dt>
-                      <dd className="mt-1 whitespace-pre-wrap font-semibold text-slate-950">
-                        {customer.name || "未登録"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">ふりがな</dt>
-                      <dd className="mt-1 whitespace-pre-wrap font-semibold text-slate-950">
-                        {customer.nameKana || "未登録"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">電話番号</dt>
-                      <dd className="mt-1 font-semibold text-slate-950">
-                        {customer.phone || "未登録"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">生年月日</dt>
-                      <dd className="mt-1 font-semibold text-slate-950">
-                        {customer.birthDate
-                          ? formatDate(customer.birthDate)
-                          : "未登録"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">年齢</dt>
-                      <dd className="mt-1 font-semibold text-slate-950">
-                        {getAgeFromBirthDate(customer.birthDate) !== null
-                          ? `${getAgeFromBirthDate(customer.birthDate)}歳`
-                          : "未登録"}
-                      </dd>
-                    </div>
-                    <div className="md:col-span-2">
-                      <dt className="text-slate-500">顧客メモ</dt>
-                      <dd className="mt-1 min-h-12 whitespace-pre-wrap rounded-md bg-slate-50 px-3 py-2 font-semibold text-slate-950 ring-1 ring-slate-100">
-                        {customer.memo || "未登録"}
-                      </dd>
-                    </div>
-                  </dl>
-                </section>
-              ) : (
-                <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                  <div className="border-b border-slate-200 px-5 py-4">
-                    <h2 className="text-base font-semibold">顧客情報詳細</h2>
-                  </div>
-                  <form
-                    key={`${customer.id}-${customer.name}-${customer.nameKana}-${customer.phone}-${customer.birthDate ?? ""}-${customer.memo}`}
-                    onSubmit={(event) => void updateCustomer(event)}
-                    className="grid gap-4 p-5 md:grid-cols-2"
+                ) : (
+                  <button
+                    type="button"
+                    onClick={startCustomerEdit}
+                    className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
                   >
-                    <label className="grid gap-2 text-sm font-medium text-slate-800">
-                      氏名
-                      <input
-                        required
-                        name="name"
-                        defaultValue={customer.name}
-                        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      />
-                    </label>
-                    <label className="grid gap-2 text-sm font-medium text-slate-800">
-                      ふりがな
-                      <input
-                        name="nameKana"
-                        defaultValue={customer.nameKana}
-                        onChange={(event) => {
-                          const nextValue = event.target.value;
-                          setCustomerKanaError(
-                            isValidHiragana(nextValue) ? "" : kanaErrorMessage,
-                          );
-                        }}
-                        aria-invalid={customerKanaError ? "true" : "false"}
-                        aria-describedby="customer-name-kana-error"
-                        className={
-                          customerKanaError
-                            ? "h-11 rounded-md border border-red-400 bg-white px-3 text-base font-normal outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
-                            : "h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                        }
-                      />
-                      {customerKanaError ? (
-                        <span
-                          id="customer-name-kana-error"
-                          className="text-xs font-semibold text-red-600"
-                        >
-                          {customerKanaError}
-                        </span>
-                      ) : null}
-                    </label>
-                    <label className="grid gap-2 text-sm font-medium text-slate-800">
-                      電話番号
-                      <input
-                        required
-                        name="phone"
-                        inputMode="tel"
-                        defaultValue={customer.phone}
-                        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      />
-                    </label>
-                    <label className="grid gap-2 text-sm font-medium text-slate-800">
-                      生年月日
-                      <input
-                        name="birthDate"
-                        type="date"
-                        defaultValue={customer.birthDate ?? ""}
-                        max={new Intl.DateTimeFormat("sv-SE", {
-                          year: "numeric",
-                          month: "2-digit",
-                          day: "2-digit",
-                          timeZone: "Asia/Tokyo",
-                        }).format(new Date())}
-                        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      />
-                    </label>
-                    <label className="grid gap-2 text-sm font-medium text-slate-800 md:col-span-2">
-                      顧客メモ
-                      <textarea
-                        name="memo"
-                        rows={4}
-                        defaultValue={customer.memo}
-                        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      />
-                    </label>
-                    <div className="flex flex-col gap-3 md:col-span-2 sm:flex-row">
-                      <button
-                        type="submit"
-                        disabled={updatingCustomer || Boolean(customerKanaError)}
-                        className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-                      >
-                        {updatingCustomer ? "保存中..." : "保存"}
-                      </button>
+                    修正
+                  </button>
+                )}
+              </div>
+
+              {isEditingCustomer ? (
+                <form
+                  id="customer-detail-form"
+                  key={`${customer.id}-${customer.name}-${customer.nameKana}-${customer.phone}-${customer.birthDate ?? ""}-${customer.memo}`}
+                  onSubmit={(event) => void updateCustomer(event)}
+                  className="grid gap-8 p-5 sm:p-7"
+                >
+                  <section className="grid gap-4">
+                    <h3 className="text-base font-bold">顧客情報</h3>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="grid gap-2 text-sm font-medium text-slate-800">
+                        氏名
+                        <input
+                          required
+                          name="name"
+                          defaultValue={customer.name}
+                          className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm font-medium text-slate-800">
+                        生年月日
+                        <input
+                          name="birthDate"
+                          type="date"
+                          defaultValue={customer.birthDate ?? ""}
+                          max={new Intl.DateTimeFormat("sv-SE", {
+                            year: "numeric",
+                            month: "2-digit",
+                            day: "2-digit",
+                            timeZone: "Asia/Tokyo",
+                          }).format(new Date())}
+                          className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm font-medium text-slate-800">
+                        ふりがな
+                        <input
+                          name="nameKana"
+                          defaultValue={customer.nameKana}
+                          onChange={(event) => {
+                            const nextValue = event.target.value;
+                            setCustomerKanaError(
+                              isValidHiragana(nextValue) ? "" : kanaErrorMessage,
+                            );
+                          }}
+                          aria-invalid={customerKanaError ? "true" : "false"}
+                          aria-describedby="customer-name-kana-error"
+                          className={
+                            customerKanaError
+                              ? "h-11 rounded-md border border-red-400 bg-white px-3 text-base font-normal outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                              : "h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          }
+                        />
+                        {customerKanaError ? (
+                          <span
+                            id="customer-name-kana-error"
+                            className="text-xs font-semibold text-red-600"
+                          >
+                            {customerKanaError}
+                          </span>
+                        ) : null}
+                      </label>
+                      <label className="grid gap-2 text-sm font-medium text-slate-800">
+                        登録日
+                        <input
+                          value={formatDate(customer.createdAt)}
+                          disabled
+                          className="h-11 rounded-md border border-slate-200 bg-slate-50 px-3 text-base font-normal text-slate-500"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm font-medium text-slate-800">
+                        電話番号
+                        <input
+                          required
+                          name="phone"
+                          inputMode="tel"
+                          defaultValue={customer.phone}
+                          className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm font-medium text-slate-800 md:row-span-2">
+                        顧客メモ
+                        <textarea
+                          name="memo"
+                          rows={4}
+                          defaultValue={customer.memo}
+                          className="min-h-28 rounded-md border border-slate-300 bg-white px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                    </div>
+                  </section>
+
+                  <section className="grid gap-4 border-t border-slate-200 pt-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-base font-bold">車両情報</h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                          車両数：{vehicleDrafts.length}台
+                        </p>
+                      </div>
                       <button
                         type="button"
-                        onClick={cancelCustomerEdit}
-                        disabled={updatingCustomer}
-                        className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        onClick={() =>
+                          setVehicleDrafts((current) => [
+                            ...current,
+                            emptyVehicleDraft(),
+                          ])
+                        }
+                        className="h-10 rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
                       >
-                        キャンセル
+                        車両追加
                       </button>
                     </div>
-                  </form>
-                </section>
-              )}
-              <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-200 px-5 py-4">
-                  <h2 className="text-base font-semibold">車両一覧</h2>
-                </div>
-                <div className="divide-y divide-slate-100">
-                  {customer.vehicles.map((vehicle) => (
-                    <div
-                      key={vehicle.id}
-                      className="grid gap-4 px-5 py-4 lg:grid-cols-[1fr_280px]"
-                    >
-                      <div className="grid gap-3">
-                        <div>
-                          <p className="font-semibold text-slate-950">
-                            {vehicle.modelName}
-                          </p>
-                          <p className="mt-1 text-sm text-slate-500">
-                            ナンバー {vehicle.plateNumber || "未登録"} / 登録日{" "}
-                            {formatDate(vehicle.createdAt)}
-                          </p>
-                          {vehicle.memo ? (
-                            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
-                              {vehicle.memo}
-                            </p>
-                          ) : null}
+                    <div className="overflow-x-auto rounded-lg border border-slate-200">
+                      <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+                        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                          <tr>
+                            <th className="px-4 py-3">車名</th>
+                            <th className="px-4 py-3">ナンバー</th>
+                            <th className="px-4 py-3">車検満了日</th>
+                            <th className="px-4 py-3">車両メモ</th>
+                            <th className="px-4 py-3 text-right">削除</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {vehicleDrafts.map((vehicle) => (
+                            <tr key={vehicle.clientId}>
+                              <td className="px-4 py-3">
+                                <input
+                                  required
+                                  value={vehicle.modelName}
+                                  onChange={(event) =>
+                                    updateVehicleDraft(
+                                      vehicle.clientId,
+                                      "modelName",
+                                      event.target.value,
+                                    )
+                                  }
+                                  className="h-10 w-full rounded-md border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                />
+                              </td>
+                              <td className="px-4 py-3">
+                                <input
+                                  value={vehicle.plateNumber}
+                                  onChange={(event) =>
+                                    updateVehicleDraft(
+                                      vehicle.clientId,
+                                      "plateNumber",
+                                      event.target.value,
+                                    )
+                                  }
+                                  className="h-10 w-full rounded-md border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                />
+                              </td>
+                              <td className="px-4 py-3">
+                                <input
+                                  type="date"
+                                  value={vehicle.shakenExpiryDate ?? ""}
+                                  onChange={(event) =>
+                                    updateVehicleDraft(
+                                      vehicle.clientId,
+                                      "shakenExpiryDate",
+                                      event.target.value,
+                                    )
+                                  }
+                                  className="h-10 w-full rounded-md border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                />
+                              </td>
+                              <td className="px-4 py-3">
+                                <input
+                                  value={vehicle.memo}
+                                  onChange={(event) =>
+                                    updateVehicleDraft(
+                                      vehicle.clientId,
+                                      "memo",
+                                      event.target.value,
+                                    )
+                                  }
+                                  className="h-10 w-full rounded-md border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                />
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => removeVehicleDraft(vehicle.clientId)}
+                                  className="h-9 rounded-md border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                                >
+                                  削除
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {!vehicleDrafts.length ? (
+                        <div className="px-5 py-8 text-center text-sm text-slate-500">
+                          登録車両はありません。
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
-                            車検満了日{" "}
-                            {vehicle.shakenExpiryDate
-                              ? formatDate(vehicle.shakenExpiryDate)
-                              : "未登録"}
-                          </span>
-                          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-100">
-                            {getShakenExpiryLabel(vehicle.shakenExpiryDate)}
-                          </span>
-                        </div>
-                      </div>
-                      <form
-                        onSubmit={(event) =>
-                          void updateShakenExpiryDate(event, vehicle.id)
-                        }
-                        className="grid gap-2"
-                      >
-                        <label className="text-sm font-semibold text-slate-700">
-                          車検満了日
-                          <input
-                            name="shakenExpiryDate"
-                            type="date"
-                            defaultValue={vehicle.shakenExpiryDate ?? ""}
-                            className="mt-2 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-600"
-                          />
-                        </label>
-                        <button
-                          type="submit"
-                          disabled={updatingVehicleId === vehicle.id}
-                          className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-                        >
-                          保存
-                        </button>
-                      </form>
+                      ) : null}
                     </div>
-                  ))}
-                  {!customer.vehicles.length ? (
-                    <div className="px-5 py-8 text-center text-sm text-slate-500">
-                      登録車両はありません。
-                    </div>
-                  ) : null}
-                </div>
-              </section>
-              <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-200 px-5 py-4">
-                  <h2 className="text-base font-semibold">予約履歴</h2>
-                </div>
-                <div className="hidden overflow-x-auto md:block">
-                  <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-                    <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
-                      <tr>
-                        <th className="px-5 py-3">予約日時</th>
-                        <th className="px-5 py-3">車種</th>
-                        <th className="px-5 py-3">ステータス</th>
-                        <th className="px-5 py-3">登録日</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {customer.reservations.map((reservation) => (
-                        <tr key={reservation.id} className="hover:bg-slate-50">
-                          <td className="px-5 py-4 font-semibold text-slate-950">
-                            {formatDateTime(reservation.reservedAt)}
-                          </td>
-                          <td className="px-5 py-4 text-slate-600">
-                            {reservation.vehicleModel}
-                          </td>
-                          <td className="px-5 py-4">
-                            <span
-                              className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
-                                reservation.status,
-                              )}`}
-                            >
-                              {reservation.status}
-                            </span>
-                          </td>
-                          <td className="px-5 py-4 text-slate-600">
-                            {formatDate(reservation.createdAt)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="divide-y divide-slate-100 md:hidden">
-                  {customer.reservations.map((reservation) => (
-                    <div key={reservation.id} className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-slate-950">
-                            {formatDateTime(reservation.reservedAt)}
-                          </p>
-                          <p className="mt-1 text-sm text-slate-500">
-                            {reservation.vehicleModel}
-                          </p>
-                        </div>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
-                            reservation.status,
-                          )}`}
-                        >
-                          {reservation.status}
-                        </span>
+                  </section>
+                </form>
+              ) : (
+                <div className="grid gap-8 p-5 sm:p-7">
+                  <section className="grid gap-4">
+                    <h3 className="text-base font-bold">顧客情報</h3>
+                    <dl className="grid gap-x-16 gap-y-4 text-sm md:grid-cols-2">
+                      <div>
+                        <dt className="text-slate-500">氏名</dt>
+                        <dd className="mt-1 whitespace-pre-wrap font-semibold text-slate-950">
+                          {customer.name || "未登録"}
+                        </dd>
                       </div>
-                      <p className="mt-3 text-sm text-slate-500">
-                        登録日 {formatDate(reservation.createdAt)}
+                      <div>
+                        <dt className="text-slate-500">生年月日</dt>
+                        <dd className="mt-1 font-semibold text-slate-950">
+                          {customer.birthDate
+                            ? formatDate(customer.birthDate)
+                            : "未登録"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-500">ふりがな</dt>
+                        <dd className="mt-1 whitespace-pre-wrap font-semibold text-slate-950">
+                          {customer.nameKana || "未登録"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-500">年齢</dt>
+                        <dd className="mt-1 font-semibold text-slate-950">
+                          {getAgeFromBirthDate(customer.birthDate) !== null
+                            ? `${getAgeFromBirthDate(customer.birthDate)}歳`
+                            : "未登録"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-500">電話番号</dt>
+                        <dd className="mt-1 font-semibold text-slate-950">
+                          {customer.phone || "未登録"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-500">登録日</dt>
+                        <dd className="mt-1 font-semibold text-slate-950">
+                          {formatDate(customer.createdAt)}
+                        </dd>
+                      </div>
+                      <div className="md:col-span-2">
+                        <dt className="text-slate-500">顧客メモ</dt>
+                        <dd className="mt-1 min-h-12 whitespace-pre-wrap rounded-md bg-slate-50 px-3 py-2 font-semibold text-slate-950 ring-1 ring-slate-100">
+                          {customer.memo || "未登録"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </section>
+
+                  <section className="grid gap-4 border-t border-slate-200 pt-6">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                      <h3 className="text-base font-bold">車両情報</h3>
+                      <p className="text-sm font-semibold text-slate-500">
+                        車両数：{customer.vehicles.length}台
                       </p>
                     </div>
-                  ))}
+                    <div className="overflow-x-auto rounded-lg border border-slate-200">
+                      <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                          <tr>
+                            <th className="px-4 py-3">車名</th>
+                            <th className="px-4 py-3">ナンバー</th>
+                            <th className="px-4 py-3">車検満了日</th>
+                            <th className="px-4 py-3">車両メモ</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {customer.vehicles.map((vehicle) => (
+                            <tr key={vehicle.id}>
+                              <td className="px-4 py-4 font-semibold text-slate-950">
+                                {vehicle.modelName}
+                              </td>
+                              <td className="px-4 py-4 text-slate-700">
+                                {vehicle.plateNumber || "未登録"}
+                              </td>
+                              <td className="px-4 py-4 font-semibold text-slate-950">
+                                {vehicle.shakenExpiryDate
+                                  ? formatDate(vehicle.shakenExpiryDate)
+                                  : "未登録"}
+                              </td>
+                              <td className="px-4 py-4 text-slate-700">
+                                {vehicle.memo || "メモなし"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {!customer.vehicles.length ? (
+                        <div className="px-5 py-8 text-center text-sm text-slate-500">
+                          登録車両はありません。
+                        </div>
+                      ) : null}
+                    </div>
+                  </section>
                 </div>
-                {!customer.reservations.length ? (
-                  <div className="px-5 py-12 text-center text-sm text-slate-500">
-                    予約履歴はありません。
+              )}
+            </section>
+
+            <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <h2 className="text-base font-semibold">予約履歴</h2>
+              </div>
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                  <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                    <tr>
+                      <th className="px-5 py-3">予約日時</th>
+                      <th className="px-5 py-3">車種</th>
+                      <th className="px-5 py-3">ステータス</th>
+                      <th className="px-5 py-3">登録日</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {customer.reservations.map((reservation) => (
+                      <tr key={reservation.id} className="hover:bg-slate-50">
+                        <td className="px-5 py-4 font-semibold text-slate-950">
+                          {formatDateTime(reservation.reservedAt)}
+                        </td>
+                        <td className="px-5 py-4 text-slate-600">
+                          {reservation.vehicleModel}
+                        </td>
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
+                              reservation.status,
+                            )}`}
+                          >
+                            {reservation.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-slate-600">
+                          {formatDate(reservation.createdAt)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="divide-y divide-slate-100 md:hidden">
+                {customer.reservations.map((reservation) => (
+                  <div key={reservation.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-950">
+                          {formatDateTime(reservation.reservedAt)}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {reservation.vehicleModel}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
+                          reservation.status,
+                        )}`}
+                      >
+                        {reservation.status}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm text-slate-500">
+                      登録日 {formatDate(reservation.createdAt)}
+                    </p>
                   </div>
-                ) : null}
-              </section>
-            </div>
+                ))}
+              </div>
+              {!customer.reservations.length ? (
+                <div className="px-5 py-12 text-center text-sm text-slate-500">
+                  予約履歴はありません。
+                </div>
+              ) : null}
+            </section>
           </div>
         ) : null}
       </main>
