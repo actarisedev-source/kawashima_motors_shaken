@@ -79,6 +79,8 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
     null,
   );
   const [updatingCustomer, setUpdatingCustomer] = useState(false);
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+  const [isConfirmingEdit, setIsConfirmingEdit] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
 
   const loadCustomer = useCallback(async () => {
@@ -156,6 +158,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
         : current,
     );
     setUpdateMessage("顧客情報を更新しました。");
+    setIsEditingCustomer(false);
     setUpdatingCustomer(false);
   }
 
@@ -218,6 +221,21 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
     void loadCustomer();
   }, [loadCustomer]);
 
+  function startCustomerEdit() {
+    setUpdateMessage("");
+    setIsConfirmingEdit(true);
+  }
+
+  function confirmCustomerEdit() {
+    setIsConfirmingEdit(false);
+    setIsEditingCustomer(true);
+  }
+
+  function cancelCustomerEdit() {
+    setIsEditingCustomer(false);
+    setUpdateMessage("");
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <AdminHeader title="顧客詳細" onRefresh={loadCustomer} />
@@ -235,6 +253,43 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
         ) : null}
         {customer ? (
           <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+            {isConfirmingEdit ? (
+              <div
+                className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 px-5"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="customer-edit-confirm-title"
+              >
+                <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
+                  <h2
+                    id="customer-edit-confirm-title"
+                    className="text-lg font-bold text-slate-950"
+                  >
+                    顧客情報修正
+                  </h2>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    顧客情報を修正しますがよろしいですか？
+                  </p>
+                  <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setIsConfirmingEdit(false)}
+                      className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      いいえ
+                    </button>
+                    <button
+                      type="button"
+                      autoFocus
+                      onClick={confirmCustomerEdit}
+                      className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
+                    >
+                      はい
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <aside className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-sm font-semibold text-blue-700">
                 Customer Profile
@@ -306,6 +361,17 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
               </div>
             </aside>
             <div className="grid gap-6">
+              {!isEditingCustomer ? (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={startCustomerEdit}
+                    className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                  >
+                    修正
+                  </button>
+                </div>
+              ) : null}
               {updateMessage ? (
                 <div
                   className={
@@ -317,77 +383,87 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                   {updateMessage}
                 </div>
               ) : null}
-              <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-200 px-5 py-4">
-                  <h2 className="text-base font-semibold">顧客情報編集</h2>
-                </div>
-                <form
-                  key={`${customer.id}-${customer.name}-${customer.nameKana}-${customer.phone}-${customer.birthDate ?? ""}-${customer.memo}`}
-                  onSubmit={(event) => void updateCustomer(event)}
-                  className="grid gap-4 p-5 md:grid-cols-2"
-                >
-                  <label className="grid gap-2 text-sm font-medium text-slate-800">
-                    氏名
-                    <input
-                      required
-                      name="name"
-                      defaultValue={customer.name}
-                      className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    />
-                  </label>
-                  <label className="grid gap-2 text-sm font-medium text-slate-800">
-                    ふりがな
-                    <input
-                      name="nameKana"
-                      defaultValue={customer.nameKana}
-                      className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    />
-                  </label>
-                  <label className="grid gap-2 text-sm font-medium text-slate-800">
-                    電話番号
-                    <input
-                      required
-                      name="phone"
-                      inputMode="tel"
-                      defaultValue={customer.phone}
-                      className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    />
-                  </label>
-                  <label className="grid gap-2 text-sm font-medium text-slate-800">
-                    生年月日
-                    <input
-                      name="birthDate"
-                      type="date"
-                      defaultValue={customer.birthDate ?? ""}
-                      max={new Intl.DateTimeFormat("sv-SE", {
-                        year: "numeric",
-                        month: "2-digit",
-                        day: "2-digit",
-                        timeZone: "Asia/Tokyo",
-                      }).format(new Date())}
-                      className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    />
-                  </label>
-                  <label className="grid gap-2 text-sm font-medium text-slate-800 md:col-span-2">
-                    顧客メモ
-                    <textarea
-                      name="memo"
-                      rows={4}
-                      defaultValue={customer.memo}
-                      className="rounded-md border border-slate-300 bg-white px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    />
-                  </label>
-                  <div className="md:col-span-2">
-                    <button
-                      type="submit"
-                      disabled={updatingCustomer}
-                      className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-                    >
-                      {updatingCustomer ? "保存中..." : "顧客情報を保存"}
-                    </button>
+              {isEditingCustomer ? (
+                <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+                  <div className="border-b border-slate-200 px-5 py-4">
+                    <h2 className="text-base font-semibold">顧客情報編集</h2>
                   </div>
-                </form>
-              </section>
+                  <form
+                    key={`${customer.id}-${customer.name}-${customer.nameKana}-${customer.phone}-${customer.birthDate ?? ""}-${customer.memo}`}
+                    onSubmit={(event) => void updateCustomer(event)}
+                    className="grid gap-4 p-5 md:grid-cols-2"
+                  >
+                    <label className="grid gap-2 text-sm font-medium text-slate-800">
+                      氏名
+                      <input
+                        required
+                        name="name"
+                        defaultValue={customer.name}
+                        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+                    <label className="grid gap-2 text-sm font-medium text-slate-800">
+                      ふりがな
+                      <input
+                        name="nameKana"
+                        defaultValue={customer.nameKana}
+                        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+                    <label className="grid gap-2 text-sm font-medium text-slate-800">
+                      電話番号
+                      <input
+                        required
+                        name="phone"
+                        inputMode="tel"
+                        defaultValue={customer.phone}
+                        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+                    <label className="grid gap-2 text-sm font-medium text-slate-800">
+                      生年月日
+                      <input
+                        name="birthDate"
+                        type="date"
+                        defaultValue={customer.birthDate ?? ""}
+                        max={new Intl.DateTimeFormat("sv-SE", {
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
+                          timeZone: "Asia/Tokyo",
+                        }).format(new Date())}
+                        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+                    <label className="grid gap-2 text-sm font-medium text-slate-800 md:col-span-2">
+                      顧客メモ
+                      <textarea
+                        name="memo"
+                        rows={4}
+                        defaultValue={customer.memo}
+                        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+                    <div className="flex flex-col gap-3 md:col-span-2 sm:flex-row">
+                      <button
+                        type="submit"
+                        disabled={updatingCustomer}
+                        className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                      >
+                        {updatingCustomer ? "保存中..." : "保存"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelCustomerEdit}
+                        disabled={updatingCustomer}
+                        className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              ) : null}
               <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-200 px-5 py-4">
                   <h2 className="text-base font-semibold">車両一覧</h2>
