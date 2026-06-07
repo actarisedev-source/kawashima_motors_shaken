@@ -361,17 +361,6 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
               </div>
             </aside>
             <div className="grid gap-6">
-              {!isEditingCustomer ? (
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={startCustomerEdit}
-                    className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-                  >
-                    修正
-                  </button>
-                </div>
-              ) : null}
               {updateMessage ? (
                 <div
                   className={
@@ -385,8 +374,15 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
               ) : null}
               {!isEditingCustomer ? (
                 <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                  <div className="border-b border-slate-200 px-5 py-4">
+                  <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
                     <h2 className="text-base font-semibold">顧客情報</h2>
+                    <button
+                      type="button"
+                      onClick={startCustomerEdit}
+                      className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                    >
+                      修正
+                    </button>
                   </div>
                   <dl className="grid gap-4 p-5 text-sm md:grid-cols-2">
                     <div>
