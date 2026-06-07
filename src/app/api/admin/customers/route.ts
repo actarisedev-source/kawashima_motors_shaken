@@ -4,6 +4,7 @@ import {
   adminSessionCookieName,
   verifyAdminSessionValue,
 } from "@/lib/auth/admin-session";
+import { normalizeBirthDateInput } from "@/lib/customers/birth-date";
 import { isValidNormalizedPhone, normalizePhone } from "@/lib/customers/phone";
 import { supabaseServer } from "@/lib/supabase/server";
 import {
@@ -21,6 +22,7 @@ type CreateCustomerRequest = {
   name?: string;
   nameKana?: string;
   phone?: string;
+  birthDate?: string;
   memo?: string;
   vehicleModel?: string;
   plateNumber?: string;
@@ -194,6 +196,7 @@ export async function POST(request: NextRequest) {
   const nameKana = normalizeOptional(body.nameKana);
   const phone = normalizeOptional(body.phone);
   const normalizedPhone = phone ? normalizePhone(phone) : "";
+  const birthDate = normalizeBirthDateInput(normalizeOptional(body.birthDate));
   const memo = normalizeOptional(body.memo);
   const vehicleModel = normalizeOptional(body.vehicleModel);
   const plateNumber = normalizeOptional(body.plateNumber);
@@ -212,6 +215,13 @@ export async function POST(request: NextRequest) {
   if (!phone || !isValidNormalizedPhone(normalizedPhone)) {
     return NextResponse.json(
       { ok: false, message: "電話番号を入力してください。" },
+      { status: 400 },
+    );
+  }
+
+  if (body.birthDate && !birthDate) {
+    return NextResponse.json(
+      { ok: false, message: "生年月日は今日以前の日付を入力してください。" },
       { status: 400 },
     );
   }
@@ -271,6 +281,7 @@ export async function POST(request: NextRequest) {
       name_kana: nameKana,
       phone,
       normalized_phone: normalizedPhone,
+      birth_date: birthDate,
       memo,
     })
     .select("id")

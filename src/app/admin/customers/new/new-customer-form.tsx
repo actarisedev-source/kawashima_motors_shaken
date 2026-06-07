@@ -24,6 +24,14 @@ type CreateCustomerResponse = {
   existingCustomerName?: string;
 };
 
+const getTodayJstDateKey = () =>
+  new Intl.DateTimeFormat("sv-SE", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Tokyo",
+  }).format(new Date());
+
 export function NewCustomerForm() {
   const router = useRouter();
   const [submitState, setSubmitState] = useState<SubmitState>({
@@ -47,6 +55,7 @@ export function NewCustomerForm() {
         name: formData.get("name"),
         nameKana: formData.get("nameKana"),
         phone: formData.get("phone"),
+        birthDate: formData.get("birthDate"),
         memo: formData.get("memo"),
         vehicleModel: formData.get("vehicleModel"),
         plateNumber: formData.get("plateNumber"),
@@ -135,6 +144,15 @@ export function NewCustomerForm() {
                   name="phone"
                   inputMode="tel"
                   placeholder="例: 090-1234-5678"
+                  className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-medium text-slate-800">
+                生年月日
+                <input
+                  name="birthDate"
+                  type="date"
+                  max={getTodayJstDateKey()}
                   className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
               </label>

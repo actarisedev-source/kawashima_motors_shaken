@@ -4,6 +4,8 @@ import {
   adminSessionCookieName,
   verifyAdminSessionValue,
 } from "@/lib/auth/admin-session";
+import { normalizeBirthDateInput } from "@/lib/customers/birth-date";
+import { isValidNormalizedPhone, normalizePhone } from "@/lib/customers/phone";
 import { supabaseServer } from "@/lib/supabase/server";
 import { normalizeDateInput } from "@/lib/vehicles/shaken-expiry";
 import type { Database } from "@/types/database";
@@ -18,6 +20,15 @@ const unauthorizedResponse = () =>
 
 const isAuthenticated = (request: NextRequest) =>
   verifyAdminSessionValue(request.cookies.get(adminSessionCookieName)?.value);
+
+const normalizeOptional = (value: unknown) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
 
 export async function GET(
   request: NextRequest,
@@ -89,6 +100,7 @@ export async function GET(
       name: customer.name,
       nameKana: customer.name_kana ?? "",
       phone: customer.phone ?? "",
+      birthDate: customer.birth_date,
       memo: customer.memo ?? "",
       createdAt: customer.created_at,
       latestReservedAt: reservations[0]?.reservedAt ?? null,
@@ -117,13 +129,105 @@ export async function PATCH(
   const body = (await request.json()) as {
     vehicleId?: unknown;
     shakenExpiryDate?: unknown;
+    name?: unknown;
+    nameKana?: unknown;
+    phone?: unknown;
+    birthDate?: unknown;
+    memo?: unknown;
   };
 
   if (typeof body.vehicleId !== "string" || !body.vehicleId) {
-    return NextResponse.json(
-      { ok: false, message: "vehicleId is required." },
-      { status: 400 },
-    );
+    const name = normalizeOptional(body.name);
+    const nameKana = normalizeOptional(body.nameKana);
+    const phone = normalizeOptional(body.phone);
+    const normalizedPhone = phone ? normalizePhone(phone) : "";
+    const birthDate =
+      typeof body.birthDate === "string"
+        ? normalizeBirthDateInput(body.birthDate)
+        : null;
+    const memo = normalizeOptional(body.memo);
+
+    if (!name) {
+      return NextResponse.json(
+        { ok: false, message: "氏名を入力してください。" },
+        { status: 400 },
+      );
+    }
+
+    if (!phone || !isValidNormalizedPhone(normalizedPhone)) {
+      return NextResponse.json(
+        { ok: false, message: "電話番号を入力してください。" },
+        { status: 400 },
+      );
+    }
+
+    if (body.birthDate && !birthDate) {
+      return NextResponse.json(
+        { ok: false, message: "生年月日は今日以前の日付を入力してください。" },
+        { status: 400 },
+      );
+    }
+
+    const { data: existingCustomer, error: existingCustomerError } =
+      await supabaseServer
+        .from("customers")
+        .select("id,name")
+        .eq("normalized_phone", normalizedPhone)
+        .neq("id", id)
+        .maybeSingle();
+
+    if (existingCustomerError) {
+      return NextResponse.json(
+        { ok: false, message: existingCustomerError.message },
+        { status: 500 },
+      );
+    }
+
+    if (existingCustomer) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message:
+            "同じ電話番号の顧客が既に登録されています。別の電話番号を入力してください。",
+          existingCustomerId: existingCustomer.id,
+          existingCustomerName: existingCustomer.name,
+        },
+        { status: 409 },
+      );
+    }
+
+    const { data: customer, error: customerError } = await supabaseServer
+      .from("customers")
+      .update({
+        name,
+        name_kana: nameKana,
+        phone,
+        normalized_phone: normalizedPhone,
+        birth_date: birthDate,
+        memo,
+      })
+      .eq("id", id)
+      .select("id,name,name_kana,phone,birth_date,memo")
+      .single();
+
+    if (customerError) {
+      return NextResponse.json(
+        { ok: false, message: customerError.message },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        nameKana: customer.name_kana ?? "",
+        phone: customer.phone ?? "",
+        birthDate: customer.birth_date,
+        memo: customer.memo ?? "",
+      },
+    });
   }
 
   const shakenExpiryDate =

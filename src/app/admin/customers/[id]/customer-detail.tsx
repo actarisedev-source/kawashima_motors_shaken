@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { getAgeFromBirthDate } from "@/lib/customers/birth-date";
 import { getShakenExpiryLabel } from "@/lib/vehicles/shaken-expiry";
 import { AdminHeader } from "../../admin-header";
 
@@ -11,6 +12,7 @@ type CustomerDetailItem = {
   name: string;
   nameKana: string;
   phone: string;
+  birthDate: string | null;
   memo: string;
   createdAt: string;
   latestReservedAt: string | null;
@@ -76,6 +78,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
   const [updatingVehicleId, setUpdatingVehicleId] = useState<string | null>(
     null,
   );
+  const [updatingCustomer, setUpdatingCustomer] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
 
   const loadCustomer = useCallback(async () => {
@@ -101,6 +104,60 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
     setCustomer(result.customer);
     setLoadState({ status: "ready", message: "" });
   }, [customerId]);
+
+  async function updateCustomer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setUpdatingCustomer(true);
+    setUpdateMessage("");
+
+    const formData = new FormData(event.currentTarget);
+    const response = await fetch(`/api/admin/customers/${customerId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: formData.get("name"),
+        nameKana: formData.get("nameKana"),
+        phone: formData.get("phone"),
+        birthDate: formData.get("birthDate"),
+        memo: formData.get("memo"),
+      }),
+    });
+    const result = (await response.json()) as {
+      ok: boolean;
+      customer?: {
+        id: string;
+        name: string;
+        nameKana: string;
+        phone: string;
+        birthDate: string | null;
+        memo: string;
+      };
+      message?: string;
+    };
+
+    if (!response.ok || !result.ok || !result.customer) {
+      setUpdateMessage(result.message ?? "顧客情報の更新に失敗しました。");
+      setUpdatingCustomer(false);
+      return;
+    }
+
+    setCustomer((current) =>
+      current
+        ? {
+            ...current,
+            name: result.customer?.name ?? current.name,
+            nameKana: result.customer?.nameKana ?? current.nameKana,
+            phone: result.customer?.phone ?? current.phone,
+            birthDate: result.customer?.birthDate ?? null,
+            memo: result.customer?.memo ?? current.memo,
+          }
+        : current,
+    );
+    setUpdateMessage("顧客情報を更新しました。");
+    setUpdatingCustomer(false);
+  }
 
   async function updateShakenExpiryDate(
     event: FormEvent<HTMLFormElement>,
@@ -205,6 +262,20 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                   </dd>
                 </div>
                 <div>
+                  <dt className="text-slate-500">生年月日</dt>
+                  <dd className="mt-1 font-semibold text-slate-950">
+                    {customer.birthDate ? formatDate(customer.birthDate) : "未登録"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">年齢</dt>
+                  <dd className="mt-1 font-semibold text-slate-950">
+                    {getAgeFromBirthDate(customer.birthDate) !== null
+                      ? `${getAgeFromBirthDate(customer.birthDate)}歳`
+                      : "未登録"}
+                  </dd>
+                </div>
+                <div>
                   <dt className="text-slate-500">最新予約日</dt>
                   <dd className="mt-1 font-semibold text-slate-950">
                     {customer.latestReservedAt
@@ -246,6 +317,77 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                   {updateMessage}
                 </div>
               ) : null}
+              <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+                <div className="border-b border-slate-200 px-5 py-4">
+                  <h2 className="text-base font-semibold">顧客情報編集</h2>
+                </div>
+                <form
+                  key={`${customer.id}-${customer.name}-${customer.nameKana}-${customer.phone}-${customer.birthDate ?? ""}-${customer.memo}`}
+                  onSubmit={(event) => void updateCustomer(event)}
+                  className="grid gap-4 p-5 md:grid-cols-2"
+                >
+                  <label className="grid gap-2 text-sm font-medium text-slate-800">
+                    氏名
+                    <input
+                      required
+                      name="name"
+                      defaultValue={customer.name}
+                      className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-slate-800">
+                    ふりがな
+                    <input
+                      name="nameKana"
+                      defaultValue={customer.nameKana}
+                      className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-slate-800">
+                    電話番号
+                    <input
+                      required
+                      name="phone"
+                      inputMode="tel"
+                      defaultValue={customer.phone}
+                      className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-slate-800">
+                    生年月日
+                    <input
+                      name="birthDate"
+                      type="date"
+                      defaultValue={customer.birthDate ?? ""}
+                      max={new Intl.DateTimeFormat("sv-SE", {
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                        timeZone: "Asia/Tokyo",
+                      }).format(new Date())}
+                      className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-slate-800 md:col-span-2">
+                    顧客メモ
+                    <textarea
+                      name="memo"
+                      rows={4}
+                      defaultValue={customer.memo}
+                      className="rounded-md border border-slate-300 bg-white px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                  <div className="md:col-span-2">
+                    <button
+                      type="submit"
+                      disabled={updatingCustomer}
+                      className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                    >
+                      {updatingCustomer ? "保存中..." : "顧客情報を保存"}
+                    </button>
+                  </div>
+                </form>
+              </section>
               <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-200 px-5 py-4">
                   <h2 className="text-base font-semibold">車両一覧</h2>

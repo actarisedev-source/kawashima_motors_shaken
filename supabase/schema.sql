@@ -22,6 +22,7 @@ create table customers (
   name_kana text,
   phone text,
   normalized_phone text,
+  birth_date date,
   line_user_id text,
   line_display_name text,
   memo text,

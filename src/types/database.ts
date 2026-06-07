@@ -13,6 +13,7 @@ export type Database = {
           name_kana: string | null;
           phone: string | null;
           normalized_phone: string | null;
+          birth_date: string | null;
           memo: string | null;
           created_at: string;
           updated_at: string;
@@ -23,6 +24,7 @@ export type Database = {
           name_kana?: string | null;
           phone?: string | null;
           normalized_phone?: string | null;
+          birth_date?: string | null;
           memo?: string | null;
           created_at?: string;
           updated_at?: string;
