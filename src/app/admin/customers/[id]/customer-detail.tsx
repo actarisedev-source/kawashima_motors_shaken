@@ -706,26 +706,28 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
               <div className="border-b border-slate-200 px-5 py-4">
                 <h2 className="text-base font-semibold">予約履歴</h2>
               </div>
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-                  <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
-                    <tr>
-                      <th className="px-5 py-3">予約日時</th>
-                      <th className="px-5 py-3">車種</th>
-                      <th className="px-5 py-3">ステータス</th>
-                      <th className="px-5 py-3">登録日</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {customer.reservations.map((reservation) => (
-                      <tr key={reservation.id} className="hover:bg-slate-50">
-                        <td className="px-5 py-4 font-semibold text-slate-950">
+              <div className="grid gap-4 p-6 sm:p-8">
+                {customer.reservations.map((reservation) => (
+                  <div
+                    key={reservation.id}
+                    className="border-t border-slate-200 pt-4 first:border-t-0 first:pt-0"
+                  >
+                    <dl className="grid gap-4 text-sm md:grid-cols-2 lg:grid-cols-4">
+                      <div>
+                        <dt className={readonlyLabelClassName}>予約日時</dt>
+                        <dd className={readonlyValueClassName}>
                           {formatDateTime(reservation.reservedAt)}
-                        </td>
-                        <td className="px-5 py-4 text-slate-600">
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className={readonlyLabelClassName}>車種</dt>
+                        <dd className={readonlyValueClassName}>
                           {reservation.vehicleModel}
-                        </td>
-                        <td className="px-5 py-4">
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className={readonlyLabelClassName}>ステータス</dt>
+                        <dd className={readonlyValueClassName}>
                           <span
                             className={`inline-flex rounded-[5px] px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
                               reservation.status,
@@ -733,46 +735,23 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                           >
                             {reservation.status}
                           </span>
-                        </td>
-                        <td className="px-5 py-4 text-slate-600">
-                          {formatDate(reservation.createdAt)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="divide-y divide-slate-100 md:hidden">
-                {customer.reservations.map((reservation) => (
-                  <div key={reservation.id} className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-slate-950">
-                          {formatDateTime(reservation.reservedAt)}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {reservation.vehicleModel}
-                        </p>
+                        </dd>
                       </div>
-                      <span
-                        className={`rounded-[5px] px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
-                          reservation.status,
-                        )}`}
-                      >
-                        {reservation.status}
-                      </span>
-                    </div>
-                    <p className="mt-3 text-sm text-slate-500">
-                      登録日 {formatDate(reservation.createdAt)}
-                    </p>
+                      <div>
+                        <dt className={readonlyLabelClassName}>登録日</dt>
+                        <dd className={readonlyValueClassName}>
+                          {formatDate(reservation.createdAt)}
+                        </dd>
+                      </div>
+                    </dl>
                   </div>
                 ))}
+                {!customer.reservations.length ? (
+                  <div className="rounded-[5px] border border-slate-200 bg-slate-50 px-5 py-12 text-center text-sm text-slate-500">
+                    予約履歴はありません。
+                  </div>
+                ) : null}
               </div>
-              {!customer.reservations.length ? (
-                <div className="px-5 py-12 text-center text-sm text-slate-500">
-                  予約履歴はありません。
-                </div>
-              ) : null}
             </section>
           </div>
         ) : null}
