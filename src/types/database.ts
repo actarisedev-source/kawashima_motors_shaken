@@ -10,16 +10,20 @@ export type Database = {
         Row: {
           id: string;
           name: string;
+          name_kana: string | null;
           phone: string | null;
           normalized_phone: string | null;
+          memo: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
           name: string;
+          name_kana?: string | null;
           phone?: string | null;
           normalized_phone?: string | null;
+          memo?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -33,6 +37,7 @@ export type Database = {
           model_name: string;
           plate_number: string | null;
           shaken_expiry_date: string | null;
+          memo: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -42,6 +47,7 @@ export type Database = {
           model_name: string;
           plate_number?: string | null;
           shaken_expiry_date?: string | null;
+          memo?: string | null;
           created_at?: string;
           updated_at?: string;
         };

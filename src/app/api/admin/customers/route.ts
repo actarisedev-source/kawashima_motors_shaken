@@ -4,17 +4,29 @@ import {
   adminSessionCookieName,
   verifyAdminSessionValue,
 } from "@/lib/auth/admin-session";
-import { normalizePhone } from "@/lib/customers/phone";
+import { isValidNormalizedPhone, normalizePhone } from "@/lib/customers/phone";
 import { supabaseServer } from "@/lib/supabase/server";
 import {
   getShakenExpiryLabel,
   getShakenExpiryStatus,
+  normalizeDateInput,
 } from "@/lib/vehicles/shaken-expiry";
 import type { Database } from "@/types/database";
 
 type CustomerRow = Database["public"]["Tables"]["customers"]["Row"];
 type ReservationRow = Database["public"]["Tables"]["reservations"]["Row"];
 type VehicleRow = Database["public"]["Tables"]["vehicles"]["Row"];
+
+type CreateCustomerRequest = {
+  name?: string;
+  nameKana?: string;
+  phone?: string;
+  memo?: string;
+  vehicleModel?: string;
+  plateNumber?: string;
+  shakenExpiryDate?: string;
+  vehicleMemo?: string;
+};
 
 const unauthorizedResponse = () =>
   NextResponse.json(
@@ -36,6 +48,15 @@ const getLatestReservedAt = (reservations: ReservationRow[]) =>
       ? reservation.reserved_at
       : latest;
   }, null);
+
+const normalizeOptional = (value: unknown) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
 
 export async function GET(request: NextRequest) {
   if (!isAuthenticated(request)) {
@@ -161,4 +182,159 @@ export async function GET(request: NextRequest) {
   });
 
   return NextResponse.json({ ok: true, items });
+}
+
+export async function POST(request: NextRequest) {
+  if (!isAuthenticated(request)) {
+    return unauthorizedResponse();
+  }
+
+  const body = (await request.json()) as CreateCustomerRequest;
+  const name = normalizeOptional(body.name);
+  const nameKana = normalizeOptional(body.nameKana);
+  const phone = normalizeOptional(body.phone);
+  const normalizedPhone = phone ? normalizePhone(phone) : "";
+  const memo = normalizeOptional(body.memo);
+  const vehicleModel = normalizeOptional(body.vehicleModel);
+  const plateNumber = normalizeOptional(body.plateNumber);
+  const shakenExpiryDate = normalizeDateInput(
+    normalizeOptional(body.shakenExpiryDate),
+  );
+  const vehicleMemo = normalizeOptional(body.vehicleMemo);
+
+  if (!name) {
+    return NextResponse.json(
+      { ok: false, message: "氏名を入力してください。" },
+      { status: 400 },
+    );
+  }
+
+  if (!phone || !isValidNormalizedPhone(normalizedPhone)) {
+    return NextResponse.json(
+      { ok: false, message: "電話番号を入力してください。" },
+      { status: 400 },
+    );
+  }
+
+  if (body.shakenExpiryDate && !shakenExpiryDate) {
+    return NextResponse.json(
+      { ok: false, message: "車検満了日の形式が正しくありません。" },
+      { status: 400 },
+    );
+  }
+
+  const hasVehicleInput = Boolean(
+    vehicleModel || plateNumber || shakenExpiryDate || vehicleMemo,
+  );
+
+  if (hasVehicleInput && !vehicleModel) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "車両情報を登録する場合は車種を入力してください。",
+      },
+      { status: 400 },
+    );
+  }
+
+  const { data: existingCustomer, error: existingCustomerError } =
+    await supabaseServer
+      .from("customers")
+      .select("id,name,phone")
+      .eq("normalized_phone", normalizedPhone)
+      .maybeSingle();
+
+  if (existingCustomerError) {
+    return NextResponse.json(
+      { ok: false, message: existingCustomerError.message },
+      { status: 500 },
+    );
+  }
+
+  if (existingCustomer) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message:
+          "同じ電話番号の顧客が既に登録されています。既存顧客の詳細を確認してください。",
+        existingCustomerId: existingCustomer.id,
+        existingCustomerName: existingCustomer.name,
+      },
+      { status: 409 },
+    );
+  }
+
+  const { data: customer, error: customerError } = await supabaseServer
+    .from("customers")
+    .insert({
+      name,
+      name_kana: nameKana,
+      phone,
+      normalized_phone: normalizedPhone,
+      memo,
+    })
+    .select("id")
+    .single();
+
+  if (customerError) {
+    return NextResponse.json(
+      { ok: false, message: customerError.message },
+      { status: 500 },
+    );
+  }
+
+  let vehicleId: string | null = null;
+
+  if (hasVehicleInput && vehicleModel) {
+    let vehicleQuery = supabaseServer
+      .from("vehicles")
+      .select("id")
+      .eq("customer_id", customer.id)
+      .eq("model_name", vehicleModel);
+
+    vehicleQuery = plateNumber
+      ? vehicleQuery.eq("plate_number", plateNumber)
+      : vehicleQuery.is("plate_number", null);
+
+    const { data: existingVehicle, error: existingVehicleError } =
+      await vehicleQuery.maybeSingle();
+
+    if (existingVehicleError) {
+      return NextResponse.json(
+        { ok: false, message: existingVehicleError.message },
+        { status: 500 },
+      );
+    }
+
+    if (existingVehicle) {
+      vehicleId = existingVehicle.id;
+    } else {
+      const { data: vehicle, error: vehicleError } = await supabaseServer
+        .from("vehicles")
+        .insert({
+          customer_id: customer.id,
+          model_name: vehicleModel,
+          plate_number: plateNumber,
+          shaken_expiry_date: shakenExpiryDate,
+          memo: vehicleMemo,
+        })
+        .select("id")
+        .single();
+
+      if (vehicleError) {
+        return NextResponse.json(
+          { ok: false, message: vehicleError.message },
+          { status: 500 },
+        );
+      }
+
+      vehicleId = vehicle.id;
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    customerId: customer.id,
+    vehicleId,
+  });
 }

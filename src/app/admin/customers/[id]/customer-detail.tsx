@@ -9,7 +9,9 @@ type ReservationStatus = "受付中" | "確定" | "完了" | "キャンセル";
 type CustomerDetailItem = {
   id: string;
   name: string;
+  nameKana: string;
   phone: string;
+  memo: string;
   createdAt: string;
   latestReservedAt: string | null;
   vehicles: {
@@ -17,6 +19,7 @@ type CustomerDetailItem = {
     modelName: string;
     plateNumber: string;
     shakenExpiryDate: string | null;
+    memo: string;
     createdAt: string;
   }[];
   reservations: {
@@ -184,6 +187,12 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
               </h2>
               <dl className="mt-6 grid gap-4 text-sm">
                 <div>
+                  <dt className="text-slate-500">ふりがな</dt>
+                  <dd className="mt-1 font-semibold text-slate-950">
+                    {customer.nameKana || "未登録"}
+                  </dd>
+                </div>
+                <div>
                   <dt className="text-slate-500">電話番号</dt>
                   <dd className="mt-1 font-semibold text-slate-950">
                     {customer.phone || "未登録"}
@@ -201,6 +210,12 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                     {customer.latestReservedAt
                       ? formatDateTime(customer.latestReservedAt)
                       : "なし"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">メモ</dt>
+                  <dd className="mt-1 whitespace-pre-wrap font-semibold text-slate-950">
+                    {customer.memo || "未登録"}
                   </dd>
                 </div>
               </dl>
@@ -250,6 +265,11 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                             ナンバー {vehicle.plateNumber || "未登録"} / 登録日{" "}
                             {formatDate(vehicle.createdAt)}
                           </p>
+                          {vehicle.memo ? (
+                            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
+                              {vehicle.memo}
+                            </p>
+                          ) : null}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">

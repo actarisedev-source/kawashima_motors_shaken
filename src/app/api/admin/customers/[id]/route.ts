@@ -87,7 +87,9 @@ export async function GET(
     customer: {
       id: customer.id,
       name: customer.name,
+      nameKana: customer.name_kana ?? "",
       phone: customer.phone ?? "",
+      memo: customer.memo ?? "",
       createdAt: customer.created_at,
       latestReservedAt: reservations[0]?.reservedAt ?? null,
       vehicles: vehicles.map((vehicle) => ({
@@ -95,6 +97,7 @@ export async function GET(
         modelName: vehicle.model_name,
         plateNumber: vehicle.plate_number ?? "",
         shakenExpiryDate: vehicle.shaken_expiry_date,
+        memo: vehicle.memo ?? "",
         createdAt: vehicle.created_at,
       })),
       reservations,

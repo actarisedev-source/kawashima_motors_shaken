@@ -107,6 +107,14 @@ export function CustomersDashboard() {
         title="顧客管理"
         onRefresh={() => loadCustomers({ name: nameQuery, phone: phoneQuery })}
       >
+          <div className="flex justify-end">
+            <Link
+              href="/admin/customers/new"
+              className="flex h-10 items-center justify-center rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+            >
+              新規顧客登録
+            </Link>
+          </div>
           <form
             onSubmit={handleSearch}
             className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto_auto]"
