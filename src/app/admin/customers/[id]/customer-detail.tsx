@@ -93,7 +93,7 @@ const statusClassName = (status: ReservationStatus) => {
 };
 
 const readonlyValueClassName =
-  "mt-2 min-h-11 rounded-xl border border-[#E2E8F0] bg-[#F5F7FA] px-4 py-2.5 font-bold text-slate-950";
+  "mt-2 min-h-11 rounded-xl border border-[#D6DEE8] bg-[#E9EEF5] px-4 py-2.5 font-bold text-slate-950";
 
 const readonlyLabelClassName = "text-sm font-semibold text-slate-500";
 
@@ -274,9 +274,12 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
       <AdminHeader title="顧客詳細" onRefresh={loadCustomer}>
         <Link
           href="/admin/customers"
-          className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-blue-700 transition hover:text-blue-800"
+          className="group inline-flex w-fit items-center gap-2 text-sm font-semibold text-blue-700 transition hover:text-blue-800"
         >
-          <span aria-hidden="true" className="text-lg leading-none">
+          <span
+            aria-hidden="true"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-lg leading-none text-blue-700 transition group-hover:bg-blue-100"
+          >
             ←
           </span>
           顧客一覧に戻る
