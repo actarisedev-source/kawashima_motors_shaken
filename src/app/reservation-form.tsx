@@ -83,7 +83,8 @@ export function ReservationForm() {
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>(
     {},
   );
-  const [availabilityMessage, setAvailabilityMessage] = useState("読み込み中です。");
+  const [availabilityMessage, setAvailabilityMessage] =
+    useState("最新情報を取得中です");
   const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
 
   const month = formatMonth(monthDate);
@@ -99,7 +100,7 @@ export function ReservationForm() {
     let cancelled = false;
 
     async function loadAvailability() {
-      setAvailabilityMessage("読み込み中です。");
+      setAvailabilityMessage("最新情報を取得中です");
 
       const response = await fetch(`/api/reservations/availability?month=${month}`, {
         cache: "no-store",
@@ -342,6 +343,8 @@ export function ReservationForm() {
                     {monthDates.map((date) => {
                       const dateKey = formatDate(date);
                       const slot = availability[dateKey]?.slots[time];
+                      const isLoadingAvailability =
+                        availabilityMessage === "最新情報を取得中です";
                       const status = getSlotMark(slot);
                       const selected =
                         selectedDate === dateKey && selectedTime === time;
@@ -359,7 +362,7 @@ export function ReservationForm() {
                         >
                           <button
                             type="button"
-                            disabled={!status.selectable}
+                            disabled={isLoadingAvailability || !status.selectable}
                             onClick={() => {
                               setSelectedDate(dateKey);
                               setSelectedTime(time);
@@ -373,12 +376,15 @@ export function ReservationForm() {
                               status.selectable && !selected
                                 ? "hover:bg-blue-50 active:scale-95"
                                 : "",
-                              !status.selectable
+                              isLoadingAvailability
+                                ? "cursor-wait bg-white text-transparent"
+                                : "",
+                              !isLoadingAvailability && !status.selectable
                                 ? "cursor-not-allowed bg-zinc-50 text-zinc-400"
                                 : "",
                             ].join(" ")}
                           >
-                            {status.mark}
+                            {isLoadingAvailability ? "" : status.mark}
                           </button>
                         </td>
                       );
