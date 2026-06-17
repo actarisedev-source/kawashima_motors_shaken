@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { reservationTimeSlots } from "@/lib/reservations/slots";
 
@@ -34,6 +34,7 @@ type AvailabilityResponse = {
 };
 
 const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
+const baseYear = new Date().getFullYear();
 
 const formatMonth = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -43,16 +44,27 @@ const formatDate = (date: Date) =>
     date.getDate(),
   ).padStart(2, "0")}`;
 
-const getCalendarDates = (monthDate: Date) => {
-  const firstDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-  const startDate = new Date(firstDate);
-  startDate.setDate(firstDate.getDate() - firstDate.getDay());
+const getMonthDates = (monthDate: Date) => {
+  const lastDate = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
 
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + index);
+  return Array.from({ length: lastDate.getDate() }, (_, index) => {
+    const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), index + 1);
     return date;
   });
+};
+
+const getSlotMark = (slot?: SlotAvailability) => {
+  const remaining = slot ? Math.max(slot.capacity - slot.reservedCount, 0) : 0;
+
+  if (remaining >= 2) {
+    return { mark: "○", label: "予約可能", selectable: true, tone: "available" };
+  }
+
+  if (remaining === 1) {
+    return { mark: "△", label: "残りわずか", selectable: true, tone: "limited" };
+  }
+
+  return { mark: "×", label: "予約不可", selectable: false, tone: "unavailable" };
 };
 
 export function ReservationForm() {
@@ -72,10 +84,16 @@ export function ReservationForm() {
     {},
   );
   const [availabilityMessage, setAvailabilityMessage] = useState("読み込み中です。");
+  const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
 
   const month = formatMonth(monthDate);
-  const calendarDates = useMemo(() => getCalendarDates(monthDate), [monthDate]);
-  const selectedDay = selectedDate ? availability[selectedDate] : undefined;
+  const monthDates = useMemo(() => getMonthDates(monthDate), [monthDate]);
+  const yearOptions = useMemo(
+    () => Array.from({ length: 6 }, (_, index) => baseYear + index),
+    [],
+  );
+  const selectedYear = monthDate.getFullYear();
+  const selectedMonth = monthDate.getMonth() + 1;
 
   useEffect(() => {
     let cancelled = false;
@@ -109,12 +127,14 @@ export function ReservationForm() {
     };
   }, [month]);
 
-  function moveMonth(amount: number) {
-    setMonthDate(
-      (current) => new Date(current.getFullYear(), current.getMonth() + amount, 1),
-    );
+  function updateMonth(nextYear: number, nextMonth: number) {
+    setMonthDate(new Date(nextYear, nextMonth - 1, 1));
     setSelectedDate("");
     setSelectedTime("");
+  }
+
+  function scrollSchedule(amount: number) {
+    scheduleScrollRef.current?.scrollBy({ left: amount, behavior: "smooth" });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -123,7 +143,7 @@ export function ReservationForm() {
     if (!selectedDate || !selectedTime) {
       setSubmitState({
         status: "error",
-        message: "カレンダーから予約日と時間を選択してください。",
+        message: "予約表から予約日と時間を選択してください。",
       });
       return;
     }
@@ -142,7 +162,7 @@ export function ReservationForm() {
     if (!selectedSlot?.available) {
       setSubmitState({
         status: "error",
-        message: "選択した時間枠は予約済みです。別の時間を選択してください。",
+        message: "選択した時間枠は予約できません。別の時間を選択してください。",
       });
       return;
     }
@@ -215,6 +235,190 @@ export function ReservationForm() {
       onSubmit={handleSubmit}
       className="grid gap-5 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm"
     >
+      <section className="grid gap-5">
+        <div className="text-center">
+          <h2 className="text-3xl font-black tracking-tight text-zinc-950">
+            車検の予約
+          </h2>
+          <p className="mt-2 text-base font-medium text-zinc-500">
+            ご希望の日時を選択してください
+          </p>
+        </div>
+
+        <div className="grid gap-4 rounded-[16px] border border-zinc-200 bg-white p-5 shadow-sm">
+          <h3 className="text-xl font-black text-zinc-950">年月を選択</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="grid gap-2 text-sm font-bold text-zinc-700">
+              年
+              <select
+                value={selectedYear}
+                onChange={(event) =>
+                  updateMonth(Number(event.target.value), selectedMonth)
+                }
+                className="h-14 rounded-[12px] border border-zinc-200 bg-white px-4 text-xl font-black text-zinc-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}年
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-bold text-zinc-700">
+              月
+              <select
+                value={selectedMonth}
+                onChange={(event) =>
+                  updateMonth(selectedYear, Number(event.target.value))
+                }
+                className="h-14 rounded-[12px] border border-zinc-200 bg-white px-4 text-xl font-black text-zinc-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                {Array.from({ length: 12 }, (_, index) => index + 1).map(
+                  (monthNumber) => (
+                    <option key={monthNumber} value={monthNumber}>
+                      {monthNumber}月
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-7 gap-y-3 px-1 text-base font-bold text-zinc-800">
+          <span className="inline-flex items-center gap-2">
+            <span className="text-3xl leading-none text-blue-600">○</span>
+            予約可能
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <span className="text-3xl leading-none text-orange-500">△</span>
+            残りわずか
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <span className="text-3xl leading-none text-zinc-500">×</span>
+            予約不可
+          </span>
+        </div>
+
+        <div className="overflow-hidden rounded-[16px] border border-zinc-200 bg-white shadow-sm">
+          <div ref={scheduleScrollRef} className="overflow-x-auto">
+            <table className="min-w-max border-collapse text-center">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 z-20 w-20 min-w-20 border-b border-r border-zinc-200 bg-white px-3 py-5 text-base font-black text-zinc-950">
+                    時間
+                  </th>
+                  {monthDates.map((date) => {
+                    const weekday = date.getDay();
+                    const weekendClass =
+                      weekday === 0
+                        ? "text-red-600"
+                        : weekday === 6
+                          ? "text-blue-600"
+                          : "text-zinc-950";
+
+                    return (
+                      <th
+                        key={formatDate(date)}
+                        className={`w-24 min-w-24 border-b border-r border-zinc-200 bg-white px-3 py-4 text-lg font-black ${weekendClass}`}
+                      >
+                        <span className="block">
+                          {date.getMonth() + 1}/{date.getDate()}
+                        </span>
+                        <span className="mt-1 block">
+                          （{weekdayLabels[weekday]}）
+                        </span>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {reservationTimeSlots.map((time) => (
+                  <tr key={time}>
+                    <th className="sticky left-0 z-10 w-20 min-w-20 border-b border-r border-zinc-200 bg-white px-3 py-5 text-lg font-black text-zinc-950">
+                      {time.replace(/^0/, "")}
+                    </th>
+                    {monthDates.map((date) => {
+                      const dateKey = formatDate(date);
+                      const slot = availability[dateKey]?.slots[time];
+                      const status = getSlotMark(slot);
+                      const selected =
+                        selectedDate === dateKey && selectedTime === time;
+                      const symbolClass =
+                        status.tone === "available"
+                          ? "text-blue-600"
+                          : status.tone === "limited"
+                            ? "text-orange-500"
+                            : "text-zinc-500";
+
+                      return (
+                        <td
+                          key={`${dateKey}-${time}`}
+                          className="border-b border-r border-zinc-200 bg-white p-2"
+                        >
+                          <button
+                            type="button"
+                            disabled={!status.selectable}
+                            onClick={() => {
+                              setSelectedDate(dateKey);
+                              setSelectedTime(time);
+                            }}
+                            aria-label={`${date.getMonth() + 1}/${date.getDate()} ${time} ${status.label}`}
+                            className={[
+                              "grid h-16 w-full place-items-center rounded-[12px] text-4xl font-black leading-none transition",
+                              selected
+                                ? "bg-blue-600 text-white shadow-md ring-2 ring-blue-200"
+                                : symbolClass,
+                              status.selectable && !selected
+                                ? "hover:bg-blue-50 active:scale-95"
+                                : "",
+                              !status.selectable
+                                ? "cursor-not-allowed bg-zinc-50 text-zinc-400"
+                                : "",
+                            ].join(" ")}
+                          >
+                            {status.mark}
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 px-1">
+          <button
+            type="button"
+            onClick={() => scrollSchedule(-280)}
+            className="grid h-10 w-10 place-items-center rounded-full bg-white text-2xl font-black text-zinc-950 shadow-sm ring-1 ring-zinc-200"
+            aria-label="予約表を左へスクロール"
+          >
+            ‹
+          </button>
+          <div className="h-3 flex-1 rounded-full bg-zinc-200">
+            <div className="h-3 w-1/3 rounded-full bg-zinc-400" />
+          </div>
+          <button
+            type="button"
+            onClick={() => scrollSchedule(280)}
+            className="grid h-10 w-10 place-items-center rounded-full bg-white text-2xl font-black text-zinc-950 shadow-sm ring-1 ring-zinc-200"
+            aria-label="予約表を右へスクロール"
+          >
+            ›
+          </button>
+        </div>
+
+        {availabilityMessage ? (
+          <p className="text-sm font-semibold text-zinc-500">
+            {availabilityMessage}
+          </p>
+        ) : null}
+      </section>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="grid gap-2 text-sm font-medium text-zinc-800">
           お名前
@@ -245,7 +449,10 @@ export function ReservationForm() {
             }
           />
           {customerKanaError ? (
-            <span id="customer-kana-error" className="text-xs font-semibold text-red-600">
+            <span
+              id="customer-kana-error"
+              className="text-xs font-semibold text-red-600"
+            >
               {customerKanaError}
             </span>
           ) : null}
@@ -284,117 +491,6 @@ export function ReservationForm() {
         </label>
       </div>
 
-      <section className="grid gap-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => moveMonth(-1)}
-            className="h-9 rounded-md border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-700"
-          >
-            前月
-          </button>
-          <h2 className="text-base font-bold text-zinc-950">
-            {monthDate.getFullYear()}年 {monthDate.getMonth() + 1}月
-          </h2>
-          <button
-            type="button"
-            onClick={() => moveMonth(1)}
-            className="h-9 rounded-md border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-700"
-          >
-            次月
-          </button>
-        </div>
-        <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-zinc-500">
-          {weekdayLabels.map((label) => (
-            <div key={label} className="py-1">
-              {label}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {calendarDates.map((date) => {
-            const dateKey = formatDate(date);
-            const day = availability[dateKey];
-            const isCurrentMonth = date.getMonth() === monthDate.getMonth();
-            const isSelected = dateKey === selectedDate;
-            const isFull =
-              day && day.totalReserved >= day.totalCapacity && day.totalCapacity > 0;
-            const isHoliday = Boolean(day?.holiday);
-
-            return (
-              <button
-                key={dateKey}
-                type="button"
-                disabled={!isCurrentMonth || isHoliday}
-                onClick={() => {
-                  setSelectedDate(dateKey);
-                  setSelectedTime("");
-                }}
-                className={[
-                  "aspect-square rounded-md border p-1 text-left text-sm transition",
-                  isSelected
-                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
-                    : "border-zinc-200 bg-white text-zinc-800",
-                  !isCurrentMonth || isHoliday ? "cursor-not-allowed opacity-35" : "",
-                  (isFull || isHoliday) && isCurrentMonth
-                    ? "bg-zinc-100 text-zinc-400"
-                    : "",
-                ].join(" ")}
-              >
-                <span className="font-semibold">{date.getDate()}</span>
-                {isCurrentMonth && isHoliday ? (
-                  <span className="mt-1 block text-[11px]">休業</span>
-                ) : null}
-                {isCurrentMonth && day && !isHoliday ? (
-                  <span className="mt-1 block text-[11px]">
-                    {day.totalReserved}/{day.totalCapacity}
-                  </span>
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-        {availabilityMessage ? (
-          <p className="text-sm font-medium text-zinc-600">{availabilityMessage}</p>
-        ) : null}
-      </section>
-
-      {selectedDate ? (
-        <section className="grid gap-3">
-          <h3 className="text-sm font-bold text-zinc-950">
-            {selectedDate} の時間枠
-          </h3>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {reservationTimeSlots.map((time) => {
-              const slot = selectedDay?.slots[time];
-              const available = Boolean(slot?.available);
-              const selected = selectedTime === time;
-
-              return (
-                <button
-                  key={time}
-                  type="button"
-                  disabled={!available}
-                  onClick={() => setSelectedTime(time)}
-                  className={[
-                    "h-11 rounded-md border text-sm font-semibold transition",
-                    selected
-                      ? "border-emerald-600 bg-emerald-700 text-white"
-                      : "border-zinc-300 bg-white text-zinc-800",
-                    !available
-                      ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400"
-                      : "hover:border-emerald-600",
-                  ].join(" ")}
-                >
-                  {time}
-                  {!available ? " 満" : ""}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
       <label className="grid gap-2 text-sm font-medium text-zinc-800">
         ご要望
         <textarea
@@ -405,10 +501,15 @@ export function ReservationForm() {
       </label>
       <button
         type="submit"
-        disabled={submitState.status === "submitting" || Boolean(customerKanaError)}
-        className="h-11 rounded-md bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+        disabled={
+          submitState.status === "submitting" ||
+          Boolean(customerKanaError) ||
+          !selectedDate ||
+          !selectedTime
+        }
+        className="flex h-14 items-center justify-center rounded-[12px] bg-blue-600 px-5 text-lg font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-zinc-300"
       >
-        予約を送信
+        {submitState.status === "submitting" ? "送信中..." : "予約に進む"}
       </button>
       {submitState.message ? (
         <div

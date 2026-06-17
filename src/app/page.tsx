@@ -16,20 +16,6 @@ export default function Home() {
           </p>
         </div>
         <ReservationForm />
-        <div className="grid gap-3 text-sm text-zinc-700 sm:grid-cols-3">
-          <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-            <p className="font-semibold text-zinc-950">予約登録</p>
-            <p className="mt-2">入力内容を Supabase に保存します。</p>
-          </div>
-          <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-            <p className="font-semibold text-zinc-950">接続確認</p>
-            <p className="mt-2">API から主要テーブルの状態を確認できます。</p>
-          </div>
-          <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-            <p className="font-semibold text-zinc-950">確認・キャンセル</p>
-            <p className="mt-2">発行されたURLから予約内容を確認できます。</p>
-          </div>
-        </div>
       </section>
     </main>
   );
