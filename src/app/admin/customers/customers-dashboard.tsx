@@ -111,14 +111,15 @@ export function CustomersDashboard({
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <AdminHeader title="顧客管理" onRefresh={() => loadCustomers(query)} />
-      <main className="mx-auto grid max-w-[1600px] gap-5 px-5 py-6 sm:px-6 lg:grid-cols-[390px_minmax(0,1fr)] lg:px-8">
-        {loadState.message ? (
+      <main className="relative mx-auto grid max-w-[1600px] gap-5 px-5 py-6 sm:px-6 lg:grid-cols-[390px_minmax(0,1fr)] lg:px-8">
+        {loadState.status === "loading" ? (
+          <div className="pointer-events-none absolute right-5 top-2 z-10 rounded-[5px] border border-blue-100 bg-white/95 px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-sm sm:right-6 lg:right-8">
+            読み込み中です。
+          </div>
+        ) : null}
+        {loadState.status === "error" ? (
           <div
-            className={
-              loadState.status === "error"
-                ? "rounded-[5px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 lg:col-span-2"
-                : "rounded-[5px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 lg:col-span-2"
-            }
+            className="rounded-[5px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 lg:col-span-2"
           >
             {loadState.message}
           </div>

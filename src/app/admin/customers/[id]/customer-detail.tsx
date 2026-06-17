@@ -304,17 +304,18 @@ export function CustomerDetail({
       <main
         className={
           embedded
-            ? "grid gap-5"
-            : "mx-auto max-w-7xl px-5 py-6 sm:px-6 lg:px-8"
+            ? "relative grid gap-5"
+            : "relative mx-auto max-w-7xl px-5 py-6 sm:px-6 lg:px-8"
         }
       >
-        {loadState.message ? (
+        {loadState.status === "loading" ? (
+          <div className="pointer-events-none absolute right-0 top-0 z-10 rounded-[5px] border border-blue-100 bg-white/95 px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-sm">
+            読み込み中です。
+          </div>
+        ) : null}
+        {loadState.status === "error" ? (
           <div
-            className={
-              loadState.status === "error"
-                ? "mb-4 rounded-[5px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
-                : "mb-4 rounded-[5px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700"
-            }
+            className="mb-4 rounded-[5px] border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
           >
             {loadState.message}
           </div>
