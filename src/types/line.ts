@@ -13,3 +13,24 @@ export type LineProfile = {
 
 export type LineWebhookEventType = "follow" | "unfollow" | "message" | "postback";
 
+export type LineWebhookEvent = {
+  type: string;
+  timestamp: number;
+  webhookEventId?: string;
+  deliveryContext?: {
+    isRedelivery: boolean;
+  };
+  source?: {
+    type: "user" | "group" | "room";
+    userId?: string;
+    groupId?: string;
+    roomId?: string;
+  };
+  replyToken?: string;
+  mode?: "active" | "standby";
+};
+
+export type LineWebhookPayload = {
+  destination?: string;
+  events: LineWebhookEvent[];
+};

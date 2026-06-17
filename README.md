@@ -38,6 +38,10 @@ NEXT_PUBLIC_LIFF_ID=
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
+`LINE_CHANNEL_SECRET` と `LINE_CHANNEL_ACCESS_TOKEN` は、LINE Developers
+コンソールの Messaging API チャネルから取得します。`NEXT_PUBLIC_LIFF_ID` は
+LIFFを利用するときだけ設定してください。
+
 開発サーバーを起動します。
 
 ```bash
@@ -49,6 +53,40 @@ npm run dev
 ```text
 http://localhost:3000
 ```
+
+## LINE連携基盤
+
+LINE公式アカウント固有の情報はコードに保持せず、次の環境変数で切り替えます。
+
+| 環境変数 | 用途 | 必須 |
+| --- | --- | --- |
+| `LINE_CHANNEL_SECRET` | Webhook署名検証 | 必須 |
+| `LINE_CHANNEL_ACCESS_TOKEN` | 将来のMessaging API送信用 | 必須 |
+| `NEXT_PUBLIC_LIFF_ID` | 将来のLIFF連携用 | 任意 |
+
+テスト用LINE公式アカウントのMessaging APIチャネルで、Webhook URLを次のURLに
+設定してください。
+
+```text
+https://<Vercelのドメイン>/api/line/webhook
+```
+
+VercelのProject SettingsにあるEnvironment Variablesへ上記の環境変数を設定し、
+再デプロイします。その後、LINE DevelopersコンソールでWebhookの「検証」を実行し、
+成功することを確認してください。
+
+環境変数の設定状態は、秘密値を表示しない次のエンドポイントで確認できます。
+
+```text
+https://<Vercelのドメイン>/api/line/health
+```
+
+本番LINE公式アカウントへ切り替える際は、Vercelの環境変数を本番チャネルの値へ
+差し替えて再デプロイし、本番チャネル側のWebhook URLを設定します。コード変更は
+不要です。
+
+現在のWebhookは署名検証とイベント受信のみ行います。メッセージ返信、配信、
+自動配信、イベントのDB保存はまだ行いません。
 
 ## よく使うコマンド
 
