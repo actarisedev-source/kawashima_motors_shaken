@@ -103,7 +103,17 @@ const inputClassName =
 const vehicleInputClassName =
   "h-10 w-full rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100";
 
-export function CustomerDetail({ customerId }: { customerId: string }) {
+type CustomerDetailProps = {
+  customerId: string;
+  embedded?: boolean;
+  onCustomerUpdated?: () => void;
+};
+
+export function CustomerDetail({
+  customerId,
+  embedded = false,
+  onCustomerUpdated,
+}: CustomerDetailProps) {
   const [customer, setCustomer] = useState<CustomerDetailItem | null>(null);
   const [vehicleDrafts, setVehicleDrafts] = useState<VehicleDraft[]>([]);
   const [loadState, setLoadState] = useState<LoadState>({
@@ -213,6 +223,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
     setUpdateMessage("顧客情報を更新しました。");
     setIsEditingCustomer(false);
     setUpdatingCustomer(false);
+    onCustomerUpdated?.();
   }
 
   useEffect(() => {
@@ -272,8 +283,9 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
+  const content = (
+    <>
+      {!embedded ? (
       <AdminHeader title="顧客詳細" onRefresh={loadCustomer}>
         <Link
           href="/admin/customers"
@@ -288,7 +300,14 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
           顧客一覧に戻る
         </Link>
       </AdminHeader>
-      <main className="mx-auto max-w-7xl px-5 py-6 sm:px-6 lg:px-8">
+      ) : null}
+      <main
+        className={
+          embedded
+            ? "grid gap-5"
+            : "mx-auto max-w-7xl px-5 py-6 sm:px-6 lg:px-8"
+        }
+      >
         {loadState.message ? (
           <div
             className={
@@ -360,8 +379,12 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
               }`}
             >
               <div className="flex flex-col gap-3 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="text-lg font-bold">
-                  {isEditingCustomer ? "顧客情報編集中" : "顧客詳細"}
+                <h2 className={embedded ? "text-2xl font-bold" : "text-lg font-bold"}>
+                  {isEditingCustomer
+                    ? "顧客情報編集中"
+                    : embedded
+                      ? `${customer.name} 様`
+                      : "顧客詳細"}
                 </h2>
                 {isEditingCustomer ? (
                   <div className="flex flex-col gap-2 sm:flex-row">
@@ -388,7 +411,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                     onClick={startCustomerEdit}
                     className="h-10 rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
                   >
-                    修正
+                    {embedded ? "編集" : "修正"}
                   </button>
                 )}
               </div>
@@ -400,7 +423,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                   onSubmit={(event) => void updateCustomer(event)}
                   className="grid gap-8 p-6 sm:p-8"
                 >
-                  <section className="grid gap-4">
+                  <section className="grid gap-4 rounded-[12px] border border-slate-200 bg-slate-50 p-5">
                     <h3 className="text-base font-bold">顧客情報</h3>
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                       <label className="grid gap-2 text-sm font-medium text-slate-800">
@@ -491,7 +514,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                     </div>
                   </section>
 
-                  <section className="grid gap-4 border-t border-slate-200 pt-6">
+                  <section className="grid gap-4 rounded-[12px] border border-slate-200 bg-slate-50 p-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <h3 className="text-base font-bold">車両情報</h3>
@@ -603,35 +626,13 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                 </form>
               ) : (
                 <div className="grid gap-8 p-6 sm:p-8">
-                  <section className="grid gap-4">
+                  <section className="grid gap-4 rounded-[12px] border border-slate-200 bg-slate-50 p-5">
                     <h3 className="text-base font-bold">顧客情報</h3>
-                    <dl className="grid gap-4 text-sm md:grid-cols-2 lg:grid-cols-4">
+                    <dl className="grid gap-4 text-sm lg:grid-cols-2">
                       <div>
                         <dt className={readonlyLabelClassName}>氏名</dt>
                         <dd className={readonlyValueClassName}>
                           {customer.name || "未登録"}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className={readonlyLabelClassName}>ふりがな</dt>
-                        <dd className={readonlyValueClassName}>
-                          {customer.nameKana || "未登録"}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className={readonlyLabelClassName}>生年月日</dt>
-                        <dd className={readonlyValueClassName}>
-                          {customer.birthDate
-                            ? formatDate(customer.birthDate)
-                            : "未登録"}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className={readonlyLabelClassName}>年齢</dt>
-                        <dd className={readonlyValueClassName}>
-                          {getAgeFromBirthDate(customer.birthDate) !== null
-                            ? `${getAgeFromBirthDate(customer.birthDate)}歳`
-                            : "未登録"}
                         </dd>
                       </div>
                       <div>
@@ -646,7 +647,29 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                           {formatDate(customer.createdAt)}
                         </dd>
                       </div>
-                      <div className="md:col-span-2 lg:col-span-4">
+                      <div>
+                        <dt className={readonlyLabelClassName}>生年月日</dt>
+                        <dd className={readonlyValueClassName}>
+                          {customer.birthDate
+                            ? `${formatDate(customer.birthDate)}${
+                                getAgeFromBirthDate(customer.birthDate) !== null
+                                  ? `（${getAgeFromBirthDate(customer.birthDate)}歳）`
+                                  : ""
+                              }`
+                            : "未登録"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className={readonlyLabelClassName}>ふりがな</dt>
+                        <dd className={readonlyValueClassName}>
+                          {customer.nameKana || "未登録"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className={readonlyLabelClassName}>住所</dt>
+                        <dd className={readonlyValueClassName}>未登録</dd>
+                      </div>
+                      <div>
                         <dt className={readonlyLabelClassName}>顧客メモ</dt>
                         <dd className={readonlyValueClassName}>
                           {customer.memo || "未登録"}
@@ -655,7 +678,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                     </dl>
                   </section>
 
-                  <section className="grid gap-4 border-t border-slate-200 pt-6">
+                  <section className="grid gap-4 rounded-[12px] border border-slate-200 bg-slate-50 p-5">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                       <h3 className="text-base font-bold">車両情報</h3>
                       <p className="text-sm font-semibold text-slate-500">
@@ -710,8 +733,14 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
             </section>
 
             <section className="overflow-hidden rounded-[5px] border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 px-5 py-4">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
                 <h2 className="text-base font-semibold">予約履歴</h2>
+                <Link
+                  href="/admin"
+                  className="text-sm font-semibold text-blue-700 transition hover:text-blue-900"
+                >
+                  すべて見る
+                </Link>
               </div>
               <div className="grid gap-4 p-6 sm:p-8">
                 {customer.reservations.map((reservation) => (
@@ -727,9 +756,9 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                         </dd>
                       </div>
                       <div>
-                        <dt className={readonlyLabelClassName}>車種</dt>
+                        <dt className={readonlyLabelClassName}>メニュー</dt>
                         <dd className={readonlyValueClassName}>
-                          {reservation.vehicleModel}
+                          車検
                         </dd>
                       </div>
                       <div>
@@ -750,6 +779,14 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                           {formatDate(reservation.createdAt)}
                         </dd>
                       </div>
+                      <div className="lg:col-span-4">
+                        <dt className={readonlyLabelClassName}>備考</dt>
+                        <dd className={readonlyValueClassName}>
+                          {reservation.vehicleModel
+                            ? `対象車両：${reservation.vehicleModel}`
+                            : "-"}
+                        </dd>
+                      </div>
                     </dl>
                   </div>
                 ))}
@@ -763,6 +800,16 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
           </div>
         ) : null}
       </main>
+    </>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-950">
+      {content}
     </div>
   );
 }

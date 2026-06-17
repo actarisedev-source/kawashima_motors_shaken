@@ -5,7 +5,7 @@ import {
   adminSessionCookieName,
   verifyAdminSessionValue,
 } from "@/lib/auth/admin-session";
-import { CustomerDetail } from "./customer-detail";
+import { CustomersDashboard } from "../customers-dashboard";
 
 export const metadata: Metadata = {
   title: "顧客詳細 | Kawashima Motors Shaken",
@@ -25,5 +25,5 @@ export default async function AdminCustomerDetailPage({
 
   const { id } = await params;
 
-  return <CustomerDetail customerId={id} />;
+  return <CustomersDashboard initialCustomerId={id} />;
 }
