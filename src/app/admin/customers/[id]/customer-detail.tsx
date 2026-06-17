@@ -93,12 +93,15 @@ const statusClassName = (status: ReservationStatus) => {
 };
 
 const readonlyValueClassName =
-  "mt-2 min-h-11 rounded-[5px] border border-[#D6DEE8] bg-[#E9EEF5] px-4 py-2.5 font-bold text-slate-950";
+  "mt-2 min-h-11 rounded-[12px] border border-[#E2E8F0] bg-white px-4 py-2.5 font-bold text-slate-950 shadow-sm";
 
 const readonlyLabelClassName = "text-sm font-semibold text-slate-500";
 
 const inputClassName =
-  "h-11 rounded-[5px] border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
+  "h-11 rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100";
+
+const vehicleInputClassName =
+  "h-10 w-full rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100";
 
 export function CustomerDetail({ customerId }: { customerId: string }) {
   const [customer, setCustomer] = useState<CustomerDetailItem | null>(null);
@@ -351,10 +354,14 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
               </div>
             ) : null}
 
-            <section className="overflow-hidden rounded-[5px] border border-slate-200 bg-white shadow-sm">
+            <section
+              className={`overflow-hidden rounded-[5px] border border-slate-200 shadow-sm ${
+                isEditingCustomer ? "bg-[#FAFBFC]" : "bg-white"
+              }`}
+            >
               <div className="flex flex-col gap-3 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-lg font-bold">
-                  {isEditingCustomer ? "顧客詳細（編集中）" : "顧客詳細"}
+                  {isEditingCustomer ? "顧客情報編集中" : "顧客詳細"}
                 </h2>
                 {isEditingCustomer ? (
                   <div className="flex flex-col gap-2 sm:flex-row">
@@ -420,7 +427,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                           aria-describedby="customer-name-kana-error"
                           className={
                             customerKanaError
-                              ? "h-11 rounded-[5px] border border-red-400 bg-white px-3 text-base font-normal outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                              ? "h-11 rounded-[12px] border border-red-400 bg-[#F3F6FA] px-3 text-base font-normal outline-none transition focus:border-red-500 focus:bg-white focus:ring-2 focus:ring-red-100"
                               : inputClassName
                           }
                         />
@@ -450,7 +457,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                       </label>
                       <div className="grid gap-2 text-sm font-medium text-slate-800">
                         年齢
-                        <div className="flex h-11 items-center rounded-[5px] border border-slate-200 bg-slate-50 px-3 text-base font-semibold text-slate-500">
+                        <div className="flex h-11 items-center rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
                           {getAgeFromBirthDate(customer.birthDate) !== null
                             ? `${getAgeFromBirthDate(customer.birthDate)}歳`
                             : "未登録"}
@@ -468,7 +475,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                       </label>
                       <div className="grid gap-2 text-sm font-medium text-slate-800">
                         登録日
-                        <div className="flex h-11 items-center rounded-[5px] border border-slate-200 bg-slate-50 px-3 text-base font-semibold text-slate-500">
+                        <div className="flex h-11 items-center rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
                           {formatDate(customer.createdAt)}
                         </div>
                       </div>
@@ -478,7 +485,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                           name="memo"
                           rows={4}
                           defaultValue={customer.memo}
-                          className="min-h-28 rounded-[5px] border border-slate-300 bg-white px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          className="min-h-28 rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                         />
                       </label>
                     </div>
@@ -530,7 +537,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                                       event.target.value,
                                     )
                                   }
-                                  className="h-10 w-full rounded-[5px] border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                  className={vehicleInputClassName}
                                 />
                               </td>
                               <td className="px-4 py-3">
@@ -543,7 +550,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                                       event.target.value,
                                     )
                                   }
-                                  className="h-10 w-full rounded-[5px] border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                  className={vehicleInputClassName}
                                 />
                               </td>
                               <td className="px-4 py-3">
@@ -557,7 +564,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                                       event.target.value,
                                     )
                                   }
-                                  className="h-10 w-full rounded-[5px] border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                  className={vehicleInputClassName}
                                 />
                               </td>
                               <td className="px-4 py-3">
@@ -570,7 +577,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
                                       event.target.value,
                                     )
                                   }
-                                  className="h-10 w-full rounded-[5px] border border-slate-300 px-3 outline-none focus:border-blue-500"
+                                  className={vehicleInputClassName}
                                 />
                               </td>
                               <td className="px-4 py-3 text-right">
