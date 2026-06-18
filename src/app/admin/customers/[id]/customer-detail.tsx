@@ -27,6 +27,10 @@ type CustomerDetailItem = {
   nameKana: string;
   phone: string;
   birthDate: string | null;
+  lineStatus: string;
+  lineDisplayName: string | null;
+  linePictureUrl: string | null;
+  lineLinkedAt: string | null;
   memo: string;
   createdAt: string;
   latestReservedAt: string | null;
@@ -513,6 +517,37 @@ export function CustomerDetail({
                         />
                       </label>
                     </div>
+                  </section>
+
+                  <section className="grid gap-4 rounded-[12px] border border-slate-200 bg-slate-50 p-5">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <h3 className="text-base font-bold">LINE連携状況</h3>
+                      <span
+                        className={`inline-flex w-fit rounded-[5px] px-3 py-1 text-xs font-bold ring-1 ${
+                          customer.lineStatus === "連携済み"
+                            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                            : "bg-slate-100 text-slate-600 ring-slate-200"
+                        }`}
+                      >
+                        {customer.lineStatus || "未連携"}
+                      </span>
+                    </div>
+                    <dl className="grid gap-4 text-sm lg:grid-cols-2">
+                      <div>
+                        <dt className={readonlyLabelClassName}>LINE表示名</dt>
+                        <dd className={readonlyValueClassName}>
+                          {customer.lineDisplayName || "未登録"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className={readonlyLabelClassName}>連携日時</dt>
+                        <dd className={readonlyValueClassName}>
+                          {customer.lineLinkedAt
+                            ? formatDate(customer.lineLinkedAt)
+                            : "未連携"}
+                        </dd>
+                      </div>
+                    </dl>
                   </section>
 
                   <section className="grid gap-4 rounded-[12px] border border-slate-200 bg-slate-50 p-5">

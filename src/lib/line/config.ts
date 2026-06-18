@@ -5,6 +5,7 @@ export const getLineConfig = () => ({
   channelSecret: readEnvironmentVariable("LINE_CHANNEL_SECRET"),
   channelAccessToken: readEnvironmentVariable("LINE_CHANNEL_ACCESS_TOKEN"),
   liffId: readEnvironmentVariable("NEXT_PUBLIC_LIFF_ID"),
+  loginChannelId: readEnvironmentVariable("LINE_LOGIN_CHANNEL_ID"),
 });
 
 export const getLineConfigurationStatus = () => {
@@ -13,6 +14,6 @@ export const getLineConfigurationStatus = () => {
   return {
     webhook: Boolean(config.channelSecret),
     messaging: Boolean(config.channelSecret && config.channelAccessToken),
-    liff: Boolean(config.liffId),
+    liff: Boolean(config.liffId && config.loginChannelId),
   };
 };

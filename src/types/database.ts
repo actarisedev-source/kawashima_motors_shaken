@@ -14,6 +14,11 @@ export type Database = {
           phone: string | null;
           normalized_phone: string | null;
           birth_date: string | null;
+          line_user_id: string | null;
+          line_linked_at: string | null;
+          line_display_name: string | null;
+          line_picture_url: string | null;
+          line_status: string;
           memo: string | null;
           created_at: string;
           updated_at: string;
@@ -25,6 +30,11 @@ export type Database = {
           phone?: string | null;
           normalized_phone?: string | null;
           birth_date?: string | null;
+          line_user_id?: string | null;
+          line_linked_at?: string | null;
+          line_display_name?: string | null;
+          line_picture_url?: string | null;
+          line_status?: string;
           memo?: string | null;
           created_at?: string;
           updated_at?: string;
