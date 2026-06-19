@@ -125,7 +125,7 @@ export function CustomersDashboard({
           </div>
         ) : null}
 
-        <aside className="flex min-h-[calc(100vh-150px)] flex-col overflow-hidden rounded-[12px] border border-slate-200 bg-white shadow-sm">
+        <aside className="flex min-h-[calc(100vh-150px)] flex-col overflow-hidden rounded-[5px] border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 p-5">
             <div className="flex items-center justify-between gap-3">
               <div>

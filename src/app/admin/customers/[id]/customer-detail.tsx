@@ -432,7 +432,7 @@ export function CustomerDetail({
                   onSubmit={(event) => void updateCustomer(event)}
                   className="grid gap-8 p-6 sm:p-8"
                 >
-                  <section className="grid gap-4 rounded-[12px] border border-slate-200 bg-slate-50 p-5">
+                  <section className="grid gap-4 rounded-[5px] border border-slate-200 bg-slate-50 p-5">
                     <h3 className="text-base font-bold">顧客情報</h3>
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                       <label className="grid gap-2 text-sm font-medium text-slate-800">
@@ -565,7 +565,7 @@ export function CustomerDetail({
                     </div>
                   </section>
 
-                  <section className="grid gap-4 rounded-[12px] border border-slate-200 bg-slate-50 p-5">
+                  <section className="grid gap-4 rounded-[5px] border border-slate-200 bg-slate-50 p-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <h3 className="text-base font-bold">車両情報</h3>
@@ -677,7 +677,7 @@ export function CustomerDetail({
                 </form>
               ) : (
                 <div className="grid gap-8 p-6 sm:p-8">
-                  <section className="grid gap-4 rounded-[12px] border border-slate-200 bg-slate-50 p-5">
+                  <section className="grid gap-4 rounded-[5px] border border-slate-200 bg-slate-50 p-5">
                     <h3 className="text-base font-bold">顧客情報</h3>
                     <dl className="grid gap-4 text-sm lg:grid-cols-2">
                       <div>
@@ -765,7 +765,7 @@ export function CustomerDetail({
                     </dl>
                   </section>
 
-                  <section className="grid gap-4 rounded-[12px] border border-slate-200 bg-slate-50 p-5">
+                  <section className="grid gap-4 rounded-[5px] border border-slate-200 bg-slate-50 p-5">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                       <h3 className="text-base font-bold">車両情報</h3>
                       <p className="text-sm font-semibold text-slate-500">
