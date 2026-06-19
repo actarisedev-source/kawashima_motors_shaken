@@ -130,6 +130,10 @@ export type Database = {
           error_message: string | null;
           sent_at: string | null;
           created_at: string;
+          vehicle_id: string | null;
+          reservation_id: string | null;
+          automation_type: string | null;
+          target_date: string | null;
         };
         Insert: {
           id?: string;
@@ -142,9 +146,47 @@ export type Database = {
           error_message?: string | null;
           sent_at?: string | null;
           created_at?: string;
+          vehicle_id?: string | null;
+          reservation_id?: string | null;
+          automation_type?: string | null;
+          target_date?: string | null;
         };
         Update: Partial<
           Database["public"]["Tables"]["line_message_logs"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      line_automation_settings: {
+        Row: {
+          id: string;
+          automation_type:
+            | "shaken_60_days"
+            | "shaken_30_days"
+            | "reservation_previous_day";
+          enabled: boolean;
+          title: string;
+          body: string;
+          send_time: string;
+          last_run_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          automation_type:
+            | "shaken_60_days"
+            | "shaken_30_days"
+            | "reservation_previous_day";
+          enabled?: boolean;
+          title: string;
+          body: string;
+          send_time?: string;
+          last_run_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["line_automation_settings"]["Insert"]
         >;
         Relationships: [];
       };

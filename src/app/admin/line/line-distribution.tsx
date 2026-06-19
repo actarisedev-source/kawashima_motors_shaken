@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminHeader } from "../admin-header";
+import { LineAutomationSettings } from "./line-automation-settings";
+
+type LineTab = "manual" | "automations" | "history";
 
 type Filters = {
   shaken: string[];
@@ -92,6 +95,7 @@ const previewMessage = (body: string) =>
   );
 
 export function LineDistribution() {
+  const [activeTab, setActiveTab] = useState<LineTab>("manual");
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -220,7 +224,36 @@ export function LineDistribution() {
         title="LINE配信"
         onRefresh={() => window.location.reload()}
       />
-      <main className="mx-auto grid max-w-7xl gap-5 px-5 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8">
+      <div className="border-b border-slate-200 bg-white">
+        <nav
+          className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-5 sm:px-6 lg:px-8"
+          aria-label="LINE配信メニュー"
+        >
+          {(
+            [
+              ["manual", "手動配信"],
+              ["automations", "自動配信設定"],
+              ["history", "配信履歴"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setActiveTab(value)}
+              className={`min-h-12 shrink-0 border-b-2 px-4 text-sm font-bold transition ${
+                activeTab === value
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {activeTab === "manual" ? (
+        <main className="mx-auto grid max-w-7xl gap-5 px-5 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8">
         <div className="grid gap-5">
           {!configured ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
@@ -313,9 +346,62 @@ export function LineDistribution() {
             </div>
           </section>
         </aside>
-      </main>
+        </main>
+      ) : activeTab === "automations" ? (
+        <LineAutomationSettings />
+      ) : (
+        <main className="mx-auto min-h-[640px] max-w-7xl px-5 py-6 sm:px-6 lg:px-8">
+          <section className="grid gap-4 rounded-[5px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div>
+              <h2 className="text-lg font-bold">配信履歴</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                手動配信・テスト送信・自動配信の最新20件を表示します。
+              </p>
+            </div>
+            <div className="grid gap-3">
+              {logs.map((log) => (
+                <div
+                  key={log.id}
+                  className="grid gap-2 rounded-[5px] border border-slate-200 p-4 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
+                >
+                  <div>
+                    <p className="font-bold text-slate-900">{log.title}</p>
+                    <p className="mt-1 text-slate-600">{log.target_type}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {new Intl.DateTimeFormat("ja-JP", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                        timeZone: "Asia/Tokyo",
+                      }).format(new Date(log.sent_at ?? log.created_at))}
+                    </p>
+                    {log.error_message ? (
+                      <p className="mt-2 text-xs font-semibold text-red-600">
+                        {log.error_message}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span
+                    className={
+                      log.status === "成功"
+                        ? "w-fit rounded-[5px] bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700"
+                        : "w-fit rounded-[5px] bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700"
+                    }
+                  >
+                    {log.status}
+                  </span>
+                </div>
+              ))}
+              {!logs.length ? (
+                <p className="py-10 text-center text-sm text-slate-500">
+                  配信履歴はありません。
+                </p>
+              ) : null}
+            </div>
+          </section>
+        </main>
+      )}
 
-      {confirming ? (
+      {activeTab === "manual" && confirming ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-5" role="dialog" aria-modal="true" aria-labelledby="line-confirm-title">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <h2 id="line-confirm-title" className="text-xl font-bold">LINE配信確認</h2>
