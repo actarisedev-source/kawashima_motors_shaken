@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { reservationTimeSlots } from "@/lib/reservations/slots";
+import { reservationCompletionStorageKey } from "@/lib/reservations/completion-storage";
 import {
   CompletedReservation,
   ReservationComplete,
@@ -234,6 +235,8 @@ export function ReservationForm({
     };
 
     try {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 45_000);
       const response = await fetch("/api/reservations", {
         method: "POST",
         headers: {
@@ -250,7 +253,9 @@ export function ReservationForm({
           note: formData.get("note"),
           lineIdToken: lineIdToken || undefined,
         }),
+        signal: controller.signal,
       });
+      window.clearTimeout(timeoutId);
 
       const result = (await response.json()) as {
         ok: boolean;
@@ -281,14 +286,28 @@ export function ReservationForm({
       setSelectedTime("");
       setCustomerKana("");
       setCustomerKanaError("");
-      setSubmitState({
+      const successState: SubmitState = {
         status: "success",
         message: result.lineLinkWarning ?? "",
         reservation: {
           ...completedReservation,
           confirmationUrl: result.confirmationUrl,
         },
-      });
+      };
+      setSubmitState(successState);
+
+      try {
+        window.sessionStorage.setItem(
+          reservationCompletionStorageKey,
+          JSON.stringify({
+            reservation: successState.reservation,
+            notice: successState.message,
+          }),
+        );
+        window.location.assign("/reservations/complete");
+      } catch {
+        // The in-page completion screen remains as a fallback.
+      }
 
       void fetch(`/api/reservations/availability?month=${month}`, {
         cache: "no-store",
