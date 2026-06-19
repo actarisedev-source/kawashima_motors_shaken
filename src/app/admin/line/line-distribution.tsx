@@ -117,7 +117,6 @@ export function LineDistribution() {
       setCount(result.count);
       setExcludedCount(result.excludedCount);
       setConfigured(result.configured);
-      setMessage("");
     } else {
       setMessage(result.message ?? "対象件数の取得に失敗しました。");
     }
