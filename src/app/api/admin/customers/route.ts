@@ -23,6 +23,7 @@ type CreateCustomerRequest = {
   nameKana?: string;
   phone?: string;
   birthDate?: string;
+  gender?: string;
   memo?: string;
   vehicleModel?: string;
   plateNumber?: string;
@@ -197,6 +198,9 @@ export async function POST(request: NextRequest) {
   const phone = normalizeOptional(body.phone);
   const normalizedPhone = phone ? normalizePhone(phone) : "";
   const birthDate = normalizeBirthDateInput(normalizeOptional(body.birthDate));
+  const gender = ["男性", "女性", "未設定"].includes(body.gender ?? "")
+    ? (body.gender as "男性" | "女性" | "未設定")
+    : "未設定";
   const memo = normalizeOptional(body.memo);
   const vehicleModel = normalizeOptional(body.vehicleModel);
   const plateNumber = normalizeOptional(body.plateNumber);
@@ -282,6 +286,7 @@ export async function POST(request: NextRequest) {
       phone,
       normalized_phone: normalizedPhone,
       birth_date: birthDate,
+      gender,
       memo,
     })
     .select("id")

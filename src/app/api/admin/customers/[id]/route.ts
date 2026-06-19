@@ -110,6 +110,7 @@ export async function GET(
       nameKana: customer.name_kana ?? "",
       phone: customer.phone ?? "",
       birthDate: customer.birth_date,
+      gender: customer.gender ?? "未設定",
       lineStatus: customer.line_status,
       lineDisplayName: customer.line_display_name,
       linePictureUrl: customer.line_picture_url,
@@ -146,6 +147,7 @@ export async function PATCH(
     nameKana?: unknown;
     phone?: unknown;
     birthDate?: unknown;
+    gender?: unknown;
     memo?: unknown;
     vehicles?: unknown;
   };
@@ -159,6 +161,9 @@ export async function PATCH(
       typeof body.birthDate === "string"
         ? normalizeBirthDateInput(body.birthDate)
         : null;
+    const gender = ["男性", "女性", "未設定"].includes(String(body.gender))
+      ? (body.gender as "男性" | "女性" | "未設定")
+      : "未設定";
     const memo = normalizeOptional(body.memo);
     const vehicleInputs: VehicleInput[] = Array.isArray(body.vehicles)
       ? body.vehicles
@@ -274,10 +279,11 @@ export async function PATCH(
         phone,
         normalized_phone: normalizedPhone,
         birth_date: birthDate,
+        gender,
         memo,
       })
       .eq("id", id)
-      .select("id,name,name_kana,phone,birth_date,memo")
+      .select("id,name,name_kana,phone,birth_date,gender,memo")
       .single();
 
     if (customerError) {
@@ -394,6 +400,7 @@ export async function PATCH(
         nameKana: customer.name_kana ?? "",
         phone: customer.phone ?? "",
         birthDate: customer.birth_date,
+        gender: customer.gender,
         memo: customer.memo ?? "",
         vehicles: vehicles?.map((vehicle) => ({
           id: vehicle.id,

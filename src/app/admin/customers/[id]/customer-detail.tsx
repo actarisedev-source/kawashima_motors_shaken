@@ -27,6 +27,7 @@ type CustomerDetailItem = {
   nameKana: string;
   phone: string;
   birthDate: string | null;
+  gender: "男性" | "女性" | "未設定";
   lineStatus: string;
   lineDisplayName: string | null;
   linePictureUrl: string | null;
@@ -180,6 +181,7 @@ export function CustomerDetail({
         nameKana,
         phone: formData.get("phone"),
         birthDate: formData.get("birthDate"),
+        gender: formData.get("gender"),
         memo: formData.get("memo"),
         vehicles: vehicleDrafts.map((vehicle) => ({
           id: vehicle.id || undefined,
@@ -198,6 +200,7 @@ export function CustomerDetail({
         nameKana: string;
         phone: string;
         birthDate: string | null;
+        gender: "男性" | "女性" | "未設定";
         memo: string;
         vehicles?: VehicleItem[];
       };
@@ -218,6 +221,7 @@ export function CustomerDetail({
             nameKana: result.customer?.nameKana ?? current.nameKana,
             phone: result.customer?.phone ?? current.phone,
             birthDate: result.customer?.birthDate ?? null,
+            gender: result.customer?.gender ?? current.gender,
             memo: result.customer?.memo ?? current.memo,
             vehicles: result.customer?.vehicles ?? current.vehicles,
           }
@@ -424,7 +428,7 @@ export function CustomerDetail({
               {isEditingCustomer ? (
                 <form
                   id="customer-detail-form"
-                  key={`${customer.id}-${customer.name}-${customer.nameKana}-${customer.phone}-${customer.birthDate ?? ""}-${customer.memo}`}
+                  key={`${customer.id}-${customer.name}-${customer.nameKana}-${customer.phone}-${customer.birthDate ?? ""}-${customer.gender}-${customer.memo}`}
                   onSubmit={(event) => void updateCustomer(event)}
                   className="grid gap-8 p-6 sm:p-8"
                 >
@@ -491,6 +495,18 @@ export function CustomerDetail({
                             : "未登録"}
                         </div>
                       </div>
+                      <label className="grid gap-2 text-sm font-medium text-slate-800">
+                        性別
+                        <select
+                          name="gender"
+                          defaultValue={customer.gender ?? "未設定"}
+                          className={inputClassName}
+                        >
+                          <option value="未設定">未設定</option>
+                          <option value="男性">男性</option>
+                          <option value="女性">女性</option>
+                        </select>
+                      </label>
                       <label className="grid gap-2 text-sm font-medium text-slate-800">
                         電話番号
                         <input
@@ -698,6 +714,12 @@ export function CustomerDetail({
                         <dt className={readonlyLabelClassName}>ふりがな</dt>
                         <dd className={readonlyValueClassName}>
                           {customer.nameKana || "未登録"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className={readonlyLabelClassName}>性別</dt>
+                        <dd className={readonlyValueClassName}>
+                          {customer.gender || "未設定"}
                         </dd>
                       </div>
                       <div>

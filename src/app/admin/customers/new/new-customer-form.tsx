@@ -56,6 +56,7 @@ export function NewCustomerForm() {
         nameKana: formData.get("nameKana"),
         phone: formData.get("phone"),
         birthDate: formData.get("birthDate"),
+        gender: formData.get("gender"),
         memo: formData.get("memo"),
         vehicleModel: formData.get("vehicleModel"),
         plateNumber: formData.get("plateNumber"),
@@ -155,6 +156,18 @@ export function NewCustomerForm() {
                   max={getTodayJstDateKey()}
                   className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
+              </label>
+              <label className="grid gap-2 text-sm font-medium text-slate-800">
+                性別
+                <select
+                  name="gender"
+                  defaultValue="未設定"
+                  className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="未設定">未設定</option>
+                  <option value="男性">男性</option>
+                  <option value="女性">女性</option>
+                </select>
               </label>
               <label className="grid gap-2 text-sm font-medium text-slate-800 md:col-span-2">
                 メモ

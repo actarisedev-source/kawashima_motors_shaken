@@ -14,6 +14,7 @@ export type Database = {
           phone: string | null;
           normalized_phone: string | null;
           birth_date: string | null;
+          gender: "男性" | "女性" | "未設定";
           line_user_id: string | null;
           line_linked_at: string | null;
           line_display_name: string | null;
@@ -30,6 +31,7 @@ export type Database = {
           phone?: string | null;
           normalized_phone?: string | null;
           birth_date?: string | null;
+          gender?: "男性" | "女性" | "未設定";
           line_user_id?: string | null;
           line_linked_at?: string | null;
           line_display_name?: string | null;
@@ -114,6 +116,36 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["line_profiles"]["Insert"]>;
+        Relationships: [];
+      };
+      line_message_logs: {
+        Row: {
+          id: string;
+          customer_id: string;
+          line_user_id: string;
+          target_type: string;
+          title: string;
+          body: string;
+          status: "成功" | "失敗";
+          error_message: string | null;
+          sent_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          customer_id: string;
+          line_user_id: string;
+          target_type: string;
+          title: string;
+          body: string;
+          status: "成功" | "失敗";
+          error_message?: string | null;
+          sent_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["line_message_logs"]["Insert"]
+        >;
         Relationships: [];
       };
       holidays: {

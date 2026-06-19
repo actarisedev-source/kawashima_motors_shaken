@@ -28,6 +28,11 @@ const navItems = [
     label: "予約枠管理",
     match: (path: string) => path.startsWith("/admin/settings/slots"),
   },
+  {
+    href: "/admin/line",
+    label: "LINE配信",
+    match: (path: string) => path.startsWith("/admin/line"),
+  },
 ];
 
 const navButtonClassName = (active: boolean) =>
