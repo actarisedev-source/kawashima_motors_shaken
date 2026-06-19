@@ -526,21 +526,6 @@ export function CustomerDetail({
                         </select>
                       </label>
                       <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-start-1 lg:row-start-4">
-                        登録日
-                        <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
-                          {formatDate(customer.createdAt)}
-                        </div>
-                      </div>
-                      <label className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:row-start-5">
-                        顧客メモ
-                        <textarea
-                          name="memo"
-                          rows={4}
-                          defaultValue={customer.memo}
-                          className="min-h-28 rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                        />
-                      </label>
-                      <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-start-2 lg:row-start-3">
                         LINE連携状況
                         <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3">
                           <span
@@ -554,6 +539,21 @@ export function CustomerDetail({
                               ? "連携済み"
                               : "未連携"}
                           </span>
+                        </div>
+                      </div>
+                      <label className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:row-start-5">
+                        顧客メモ
+                        <textarea
+                          name="memo"
+                          rows={4}
+                          defaultValue={customer.memo}
+                          className="min-h-28 rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
+                      <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-start-2 lg:row-start-3">
+                        登録日
+                        <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
+                          {formatDate(customer.createdAt)}
                         </div>
                       </div>
                       <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-start-2 lg:row-start-4">
@@ -738,18 +738,6 @@ export function CustomerDetail({
                         </dd>
                       </div>
                       <div className="lg:col-start-1 lg:row-start-4">
-                        <dt className={readonlyLabelClassName}>登録日</dt>
-                        <dd className={readonlyValueClassName}>
-                          {formatDate(customer.createdAt)}
-                        </dd>
-                      </div>
-                      <div className="lg:col-span-2 lg:row-start-5">
-                        <dt className={readonlyLabelClassName}>顧客メモ</dt>
-                        <dd className={readonlyValueClassName}>
-                          {customer.memo || "未登録"}
-                        </dd>
-                      </div>
-                      <div className="lg:col-start-2 lg:row-start-3">
                         <dt className={readonlyLabelClassName}>LINE連携状況</dt>
                         <dd className={`${readonlyValueClassName} flex items-center`}>
                           <span
@@ -763,6 +751,18 @@ export function CustomerDetail({
                               ? "連携済み"
                               : "未連携"}
                           </span>
+                        </dd>
+                      </div>
+                      <div className="lg:col-span-2 lg:row-start-5">
+                        <dt className={readonlyLabelClassName}>顧客メモ</dt>
+                        <dd className={readonlyValueClassName}>
+                          {customer.memo || "未登録"}
+                        </dd>
+                      </div>
+                      <div className="lg:col-start-2 lg:row-start-3">
+                        <dt className={readonlyLabelClassName}>登録日</dt>
+                        <dd className={readonlyValueClassName}>
+                          {formatDate(customer.createdAt)}
                         </dd>
                       </div>
                       <div className="lg:col-start-2 lg:row-start-4">
