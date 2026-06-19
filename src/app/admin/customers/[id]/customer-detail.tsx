@@ -516,38 +516,37 @@ export function CustomerDetail({
                           className="min-h-28 rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                         />
                       </label>
-                    </div>
-                  </section>
-
-                  <section className="grid gap-4 rounded-[12px] border border-slate-200 bg-slate-50 p-5">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <h3 className="text-base font-bold">LINE連携状況</h3>
-                      <span
-                        className={`inline-flex w-fit rounded-[5px] px-3 py-1 text-xs font-bold ring-1 ${
-                          customer.lineStatus === "連携済み"
-                            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                            : "bg-slate-100 text-slate-600 ring-slate-200"
-                        }`}
-                      >
-                        {customer.lineStatus || "未連携"}
-                      </span>
-                    </div>
-                    <dl className="grid gap-4 text-sm lg:grid-cols-2">
-                      <div>
-                        <dt className={readonlyLabelClassName}>LINE表示名</dt>
-                        <dd className={readonlyValueClassName}>
+                      <div className="grid gap-2 text-sm font-medium text-slate-800">
+                        LINE連携状況
+                        <div className="flex h-11 items-center rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3">
+                          <span
+                            className={`inline-flex rounded-[5px] px-3 py-1 text-xs font-bold ring-1 ${
+                              customer.lineStatus === "連携済み"
+                                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                : "bg-slate-100 text-slate-600 ring-slate-200"
+                            }`}
+                          >
+                            {customer.lineStatus === "連携済み"
+                              ? "連携済み"
+                              : "未連携"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="grid gap-2 text-sm font-medium text-slate-800">
+                        LINE表示名
+                        <div className="flex h-11 items-center rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
                           {customer.lineDisplayName || "未登録"}
-                        </dd>
+                        </div>
                       </div>
-                      <div>
-                        <dt className={readonlyLabelClassName}>連携日時</dt>
-                        <dd className={readonlyValueClassName}>
+                      <div className="grid gap-2 text-sm font-medium text-slate-800 md:col-span-2">
+                        LINE連携日時
+                        <div className="flex h-11 items-center rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
                           {customer.lineLinkedAt
-                            ? formatDate(customer.lineLinkedAt)
+                            ? formatDateTime(customer.lineLinkedAt)
                             : "未連携"}
-                        </dd>
+                        </div>
                       </div>
-                    </dl>
+                    </div>
                   </section>
 
                   <section className="grid gap-4 rounded-[12px] border border-slate-200 bg-slate-50 p-5">
@@ -709,6 +708,36 @@ export function CustomerDetail({
                         <dt className={readonlyLabelClassName}>顧客メモ</dt>
                         <dd className={readonlyValueClassName}>
                           {customer.memo || "未登録"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className={readonlyLabelClassName}>LINE連携状況</dt>
+                        <dd className={`${readonlyValueClassName} flex items-center`}>
+                          <span
+                            className={`inline-flex rounded-[5px] px-3 py-1 text-xs font-bold ring-1 ${
+                              customer.lineStatus === "連携済み"
+                                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                : "bg-slate-100 text-slate-600 ring-slate-200"
+                            }`}
+                          >
+                            {customer.lineStatus === "連携済み"
+                              ? "連携済み"
+                              : "未連携"}
+                          </span>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className={readonlyLabelClassName}>LINE表示名</dt>
+                        <dd className={readonlyValueClassName}>
+                          {customer.lineDisplayName || "未登録"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className={readonlyLabelClassName}>LINE連携日時</dt>
+                        <dd className={readonlyValueClassName}>
+                          {customer.lineLinkedAt
+                            ? formatDateTime(customer.lineLinkedAt)
+                            : "未連携"}
                         </dd>
                       </div>
                     </dl>
