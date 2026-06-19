@@ -142,10 +142,10 @@ export function LineAutomationSettings() {
         setMessage(result.message ?? "テスト送信に失敗しました。");
         return;
       }
+      await loadSettings();
       setMessage(
         `テスト送信が完了しました。成功 ${result.successCount}件 / 失敗 ${result.failureCount}件`,
       );
-      await loadSettings();
     } catch {
       setMessage("テスト送信に失敗しました。");
     } finally {
