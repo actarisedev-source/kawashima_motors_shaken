@@ -1,6 +1,11 @@
 import { ReservationForm } from "./reservation-form";
 
 export default function Home() {
+  const reservationLiffId =
+    process.env.NEXT_PUBLIC_RESERVATION_LIFF_ID?.trim() ||
+    process.env.NEXT_PUBLIC_LIFF_ID?.trim() ||
+    "";
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
       <section className="grid gap-8 py-8">
@@ -15,7 +20,7 @@ export default function Home() {
             お車の情報とご希望日時を入力してください。内容を確認後、担当者よりご連絡します。
           </p>
         </div>
-        <ReservationForm />
+        <ReservationForm reservationLiffId={reservationLiffId} />
       </section>
     </main>
   );

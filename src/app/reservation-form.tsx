@@ -33,6 +33,10 @@ type AvailabilityResponse = {
   days?: Record<string, DayAvailability>;
 };
 
+type ReservationFormProps = {
+  reservationLiffId?: string;
+};
+
 const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
 const baseYear = new Date().getFullYear();
 
@@ -67,7 +71,9 @@ const getSlotMark = (slot?: SlotAvailability) => {
   return { mark: "×", label: "予約不可", selectable: false, tone: "unavailable" };
 };
 
-export function ReservationForm() {
+export function ReservationForm({
+  reservationLiffId = "",
+}: ReservationFormProps) {
   const [submitState, setSubmitState] = useState<SubmitState>({
     status: "idle",
     message: "",
@@ -80,6 +86,7 @@ export function ReservationForm() {
   const [selectedTime, setSelectedTime] = useState("");
   const [customerKana, setCustomerKana] = useState("");
   const [customerKanaError, setCustomerKanaError] = useState("");
+  const [lineIdToken, setLineIdToken] = useState("");
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>(
     {},
   );
@@ -95,6 +102,38 @@ export function ReservationForm() {
   );
   const selectedYear = monthDate.getFullYear();
   const selectedMonth = monthDate.getMonth() + 1;
+
+  useEffect(() => {
+    if (!reservationLiffId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function initializeReservationLiff() {
+      try {
+        const { default: liff } = await import("@line/liff");
+        await liff.init({ liffId: reservationLiffId });
+
+        if (cancelled || !liff.isInClient() || !liff.isLoggedIn()) {
+          return;
+        }
+
+        const token = liff.getIDToken();
+        if (token) {
+          setLineIdToken(token);
+        }
+      } catch (error) {
+        console.warn("Reservation LIFF initialization failed", error);
+      }
+    }
+
+    void initializeReservationLiff();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reservationLiffId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -185,6 +224,7 @@ export function ReservationForm() {
         inspectionExpiresOn: formData.get("inspectionExpiresOn"),
         reservedAt: `${selectedDate}T${selectedTime}:00+09:00`,
         note: formData.get("note"),
+        lineIdToken: lineIdToken || undefined,
       }),
     });
 
@@ -193,6 +233,7 @@ export function ReservationForm() {
       message?: string;
       reservationId?: string;
       confirmationUrl?: string;
+      lineLinkWarning?: string;
     };
 
     if (!response.ok || !result.ok) {
@@ -218,7 +259,9 @@ export function ReservationForm() {
     setCustomerKanaError("");
     setSubmitState({
       status: "success",
-      message: `予約を受け付けました。受付番号: ${result.reservationId}`,
+      message: `予約を受け付けました。受付番号: ${result.reservationId}${
+        result.lineLinkWarning ? ` ${result.lineLinkWarning}` : ""
+      }`,
       confirmationUrl: result.confirmationUrl,
     });
 

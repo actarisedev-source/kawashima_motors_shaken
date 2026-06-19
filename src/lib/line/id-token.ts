@@ -1,6 +1,6 @@
 import { getLineConfig } from "@/lib/line/config";
 
-type LineIdTokenProfile = {
+export type LineIdTokenProfile = {
   sub: string;
   name: string | null;
   picture: string | null;

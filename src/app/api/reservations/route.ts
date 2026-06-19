@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { fetchHolidays, findHolidayForDate } from "@/lib/holidays/holidays";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { isValidNormalizedPhone, normalizePhone } from "@/lib/customers/phone";
+import {
+  LineLoginConfigurationError,
+  verifyLineIdToken,
+  type LineIdTokenProfile,
+} from "@/lib/line/id-token";
 import { createReservationConfirmationToken } from "@/lib/reservations/confirmation-token";
 import {
   getSlotEnd,
@@ -25,6 +30,7 @@ type ReservationRequest = {
   inspectionExpiresOn?: string;
   reservedAt?: string;
   note?: string;
+  lineIdToken?: string;
 };
 
 const normalizeOptional = (value: unknown) => {
@@ -49,6 +55,7 @@ export async function POST(request: Request) {
     normalizeOptional(body.inspectionExpiresOn),
   );
   const reservedAt = normalizeOptional(body.reservedAt);
+  const lineIdToken = normalizeOptional(body.lineIdToken);
 
   if (
     !customerName ||
@@ -180,10 +187,34 @@ export async function POST(request: Request) {
     );
   }
 
+  let lineProfile: LineIdTokenProfile | null = null;
+  let lineLinkWarning: string | null = null;
+
+  if (lineIdToken) {
+    try {
+      lineProfile = await verifyLineIdToken(lineIdToken);
+
+      if (!lineProfile) {
+        lineLinkWarning =
+          "LINEログイン情報を確認できなかったため、予約のみ受け付けました。";
+        console.warn("Reservation LINE ID token verification failed");
+      }
+    } catch (error) {
+      lineLinkWarning =
+        "LINE連携を確認できなかったため、予約のみ受け付けました。";
+      console.warn(
+        error instanceof LineLoginConfigurationError
+          ? "Reservation LINE login is not configured"
+          : "Reservation LINE ID token verification failed",
+        error,
+      );
+    }
+  }
+
   const { data: existingCustomer, error: existingCustomerError } =
     await supabaseServer
       .from("customers")
-      .select("id")
+      .select("id,line_user_id")
       .eq("normalized_phone", normalizedPhone)
       .maybeSingle();
 
@@ -194,19 +225,72 @@ export async function POST(request: Request) {
     );
   }
 
+  if (lineProfile) {
+    const { data: customerLinkedToLine, error: lineCustomerError } =
+      await supabaseServer
+        .from("customers")
+        .select("id")
+        .eq("line_user_id", lineProfile.sub)
+        .maybeSingle();
+
+    if (lineCustomerError) {
+      lineLinkWarning =
+        "LINE連携を保存できなかったため、予約のみ受け付けました。";
+      console.warn("Reservation LINE customer lookup failed", lineCustomerError);
+      lineProfile = null;
+    } else if (
+      customerLinkedToLine &&
+      customerLinkedToLine.id !== existingCustomer?.id
+    ) {
+      lineLinkWarning =
+        "このLINEアカウントは別の顧客情報と連携済みのため、予約のみ受け付けました。";
+      console.warn("Reservation LINE user is already linked to another customer");
+      lineProfile = null;
+    }
+  }
+
   let customer = existingCustomer;
 
   if (!customer) {
-    const { data: createdCustomer, error: customerError } = await supabaseServer
+    const lineLinkedAt = new Date().toISOString();
+    let customerResult = await supabaseServer
       .from("customers")
       .insert({
         name: customerName,
         name_kana: customerKana,
         phone,
         normalized_phone: normalizedPhone,
+        ...(lineProfile
+          ? {
+              line_user_id: lineProfile.sub,
+              line_display_name: lineProfile.name,
+              line_picture_url: lineProfile.picture,
+              line_linked_at: lineLinkedAt,
+              line_status: "連携済み",
+            }
+          : {}),
       })
-      .select("id")
+      .select("id,line_user_id")
       .single();
+
+    if (customerResult.error?.code === "23505" && lineProfile) {
+      lineLinkWarning =
+        "LINE連携を保存できなかったため、予約のみ受け付けました。";
+      console.warn("Reservation LINE customer link conflicted during insert");
+      lineProfile = null;
+      customerResult = await supabaseServer
+        .from("customers")
+        .insert({
+          name: customerName,
+          name_kana: customerKana,
+          phone,
+          normalized_phone: normalizedPhone,
+        })
+        .select("id,line_user_id")
+        .single();
+    }
+
+    const { data: createdCustomer, error: customerError } = customerResult;
 
     if (customerError) {
       return NextResponse.json(
@@ -216,17 +300,52 @@ export async function POST(request: Request) {
     }
 
     customer = createdCustomer;
-  } else if (customerKana) {
-    const { error: customerKanaError } = await supabaseServer
-      .from("customers")
-      .update({ name_kana: customerKana })
-      .eq("id", customer.id);
+  } else {
+    if (customerKana) {
+      const { error: customerKanaError } = await supabaseServer
+        .from("customers")
+        .update({ name_kana: customerKana })
+        .eq("id", customer.id);
 
-    if (customerKanaError) {
-      return NextResponse.json(
-        { ok: false, message: customerKanaError.message },
-        { status: 500 },
-      );
+      if (customerKanaError) {
+        return NextResponse.json(
+          { ok: false, message: customerKanaError.message },
+          { status: 500 },
+        );
+      }
+    }
+
+    if (lineProfile && !customer.line_user_id) {
+      const { data: linkedCustomer, error: lineLinkError } =
+        await supabaseServer
+          .from("customers")
+          .update({
+            line_user_id: lineProfile.sub,
+            line_display_name: lineProfile.name,
+            line_picture_url: lineProfile.picture,
+            line_linked_at: new Date().toISOString(),
+            line_status: "連携済み",
+          })
+          .eq("id", customer.id)
+          .is("line_user_id", null)
+          .select("id")
+          .maybeSingle();
+
+      if (lineLinkError || !linkedCustomer) {
+        lineLinkWarning =
+          "LINE連携を保存できなかったため、予約のみ受け付けました。";
+        console.warn(
+          "Reservation customer LINE link was not saved",
+          lineLinkError,
+        );
+      }
+    } else if (
+      lineProfile &&
+      customer.line_user_id !== lineProfile.sub
+    ) {
+      lineLinkWarning =
+        "この顧客情報は別のLINEアカウントと連携済みのため、予約のみ受け付けました。";
+      console.warn("Reservation customer is linked to another LINE user");
     }
   }
 
@@ -304,5 +423,6 @@ export async function POST(request: Request) {
       `/reservations/confirm/${reservation.confirmation_token}`,
       request.url,
     ).toString(),
+    lineLinkWarning,
   });
 }
