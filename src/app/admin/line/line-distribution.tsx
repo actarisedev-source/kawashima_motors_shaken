@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminHeader } from "../admin-header";
 
 type Filters = {
@@ -103,6 +103,8 @@ export function LineDistribution() {
   const [candidates, setCandidates] = useState<CustomerOption[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
+  const [deliveryCompleted, setDeliveryCompleted] = useState(false);
+  const deliveryLockedRef = useRef(false);
   const [message, setMessage] = useState("");
   const [logs, setLogs] = useState<MessageLog[]>([]);
 
@@ -178,34 +180,45 @@ export function LineDistribution() {
   }
 
   async function sendMessages() {
-    setSending(true);
-    setMessage("");
-    const response = await fetch("/api/admin/line/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, messageBody: body, targetLabel, filters }),
-    });
-    const result = await response.json();
-    setSending(false);
-    setConfirming(false);
-    if (!response.ok || !result.ok) {
-      setMessage(result.message ?? "LINE配信に失敗しました。");
+    if (deliveryLockedRef.current || sending || deliveryCompleted) {
       return;
     }
-    setMessage(
-      `配信が完了しました。成功 ${result.successCount}件 / 失敗 ${result.failureCount}件 / 対象外 ${result.excludedCount}件 / ログ保存 ${result.logSavedCount}件 / ログ保存失敗 ${result.logFailureCount}件`,
-    );
-    await loadAudience();
-    await loadLogs();
+
+    deliveryLockedRef.current = true;
+    setSending(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/line/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, messageBody: body, targetLabel, filters }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        deliveryLockedRef.current = false;
+        setMessage(result.message ?? "LINE配信に失敗しました。");
+        return;
+      }
+      setDeliveryCompleted(true);
+      setMessage(
+        `配信が完了しました。成功 ${result.successCount}件 / 失敗 ${result.failureCount}件 / 対象外 ${result.excludedCount}件 / ログ保存 ${result.logSavedCount}件 / ログ保存失敗 ${result.logFailureCount}件`,
+      );
+      await loadAudience();
+      await loadLogs();
+    } catch {
+      deliveryLockedRef.current = false;
+      setMessage("通信に失敗しました。時間をおいてもう一度お試しください。");
+    } finally {
+      setSending(false);
+      setConfirming(false);
+    }
   }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <AdminHeader
         title="LINE配信"
-        onRefresh={async () => {
-          await Promise.all([loadAudience(), loadLogs()]);
-        }}
+        onRefresh={() => window.location.reload()}
       />
       <main className="mx-auto grid max-w-7xl gap-5 px-5 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8">
         <div className="grid gap-5">
@@ -281,7 +294,7 @@ export function LineDistribution() {
             <div className="min-h-48 whitespace-pre-wrap rounded-md bg-[#8cabd9] p-4 text-sm leading-6">
               <div className="ml-auto max-w-[90%] rounded-md bg-white p-3 shadow-sm">{previewMessage(body) || "配信本文を入力するとプレビューを表示します。"}</div>
             </div>
-            <button type="button" disabled={!configured || !title.trim() || !body.trim() || count === 0 || loadingCount} onClick={() => setConfirming(true)} className="h-12 rounded-md bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">配信実行</button>
+            <button type="button" disabled={deliveryCompleted || !configured || !title.trim() || !body.trim() || count === 0 || loadingCount} onClick={() => setConfirming(true)} className="h-12 rounded-md bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">{deliveryCompleted ? "配信済み" : "配信実行"}</button>
           </section>
           <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold">最近の配信結果</h2>
@@ -308,7 +321,7 @@ export function LineDistribution() {
             <h2 id="line-confirm-title" className="text-xl font-bold">LINE配信確認</h2>
             <dl className="mt-5 grid gap-4 text-sm"><div><dt className="font-semibold text-slate-500">対象</dt><dd className="mt-1 font-bold">{targetLabel}</dd></div><div><dt className="font-semibold text-slate-500">対象件数</dt><dd className="mt-1 text-2xl font-black text-blue-700">{count}件</dd></div></dl>
             <p className="mt-5 font-semibold">この内容で送信しますか？</p>
-            <div className="mt-6 flex justify-end gap-3"><button type="button" disabled={sending} onClick={() => setConfirming(false)} className="h-10 rounded-md border border-slate-300 px-4 text-sm font-semibold">キャンセル</button><button type="button" disabled={sending} onClick={() => void sendMessages()} className="h-10 rounded-md bg-blue-600 px-5 text-sm font-bold text-white disabled:bg-slate-400">{sending ? "送信中..." : "送信する"}</button></div>
+            <div className="mt-6 flex justify-end gap-3"><button type="button" disabled={sending} onClick={() => setConfirming(false)} className="h-10 rounded-md border border-slate-300 px-4 text-sm font-semibold">キャンセル</button><button type="button" disabled={sending || deliveryCompleted} onClick={() => void sendMessages()} className="h-10 rounded-md bg-blue-600 px-5 text-sm font-bold text-white disabled:bg-slate-400">{sending ? "送信中..." : deliveryCompleted ? "配信済み" : "送信する"}</button></div>
           </div>
         </div>
       ) : null}
