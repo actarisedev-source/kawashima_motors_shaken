@@ -755,7 +755,9 @@ export function CustomerDetail({
                       </div>
                       <div className="lg:col-span-6 lg:row-start-4">
                         <dt className={readonlyLabelClassName}>顧客メモ</dt>
-                        <dd className={readonlyValueClassName}>
+                        <dd
+                          className={`${readonlyValueClassName} min-h-28 whitespace-pre-wrap`}
+                        >
                           {customer.memo || "未登録"}
                         </dd>
                       </div>
