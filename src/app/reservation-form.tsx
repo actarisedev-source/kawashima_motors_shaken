@@ -3,11 +3,19 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { reservationTimeSlots } from "@/lib/reservations/slots";
+import {
+  CompletedReservation,
+  ReservationComplete,
+} from "./reservation-complete";
 
 type SubmitState =
   | { status: "idle"; message: "" }
   | { status: "submitting"; message: "送信中です。" }
-  | { status: "success"; message: string; confirmationUrl: string }
+  | {
+      status: "success";
+      message: string;
+      reservation: CompletedReservation;
+    }
   | { status: "error"; message: string };
 
 type SlotAvailability = {
@@ -93,6 +101,7 @@ export function ReservationForm({
   const [availabilityMessage, setAvailabilityMessage] =
     useState("最新情報を取得中です");
   const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
+  const submissionInFlightRef = useRef(false);
 
   const month = formatMonth(monthDate);
   const monthDates = useMemo(() => getMonthDates(monthDate), [monthDate]);
@@ -180,6 +189,10 @@ export function ReservationForm({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (submissionInFlightRef.current) {
+      return;
+    }
+
     if (!selectedDate || !selectedTime) {
       setSubmitState({
         status: "error",
@@ -207,71 +220,106 @@ export function ReservationForm({
       return;
     }
 
+    submissionInFlightRef.current = true;
     setSubmitState({ status: "submitting", message: "送信中です。" });
 
-    const formData = new FormData(event.currentTarget);
-    const response = await fetch("/api/reservations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        customerName: formData.get("customerName"),
-        customerKana: formData.get("customerKana"),
-        phone: formData.get("phone"),
-        vehicleModel: formData.get("vehicleModel"),
-        licensePlate: formData.get("licensePlate"),
-        inspectionExpiresOn: formData.get("inspectionExpiresOn"),
-        reservedAt: `${selectedDate}T${selectedTime}:00+09:00`,
-        note: formData.get("note"),
-        lineIdToken: lineIdToken || undefined,
-      }),
-    });
-
-    const result = (await response.json()) as {
-      ok: boolean;
-      message?: string;
-      reservationId?: string;
-      confirmationUrl?: string;
-      lineLinkWarning?: string;
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const completedReservation = {
+      reservedDate: selectedDate,
+      reservedTime: selectedTime,
+      customerName: String(formData.get("customerName") ?? ""),
+      phone: String(formData.get("phone") ?? ""),
+      vehicleModel: String(formData.get("vehicleModel") ?? ""),
     };
 
-    if (!response.ok || !result.ok) {
+    try {
+      const response = await fetch("/api/reservations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          customerName: completedReservation.customerName,
+          customerKana: formData.get("customerKana"),
+          phone: completedReservation.phone,
+          vehicleModel: completedReservation.vehicleModel,
+          licensePlate: formData.get("licensePlate"),
+          inspectionExpiresOn: formData.get("inspectionExpiresOn"),
+          reservedAt: `${selectedDate}T${selectedTime}:00+09:00`,
+          note: formData.get("note"),
+          lineIdToken: lineIdToken || undefined,
+        }),
+      });
+
+      const result = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+        reservationId?: string;
+        confirmationUrl?: string;
+        lineLinkWarning?: string;
+      };
+
+      if (!response.ok || !result.ok) {
+        setSubmitState({
+          status: "error",
+          message: result.message ?? "予約の送信に失敗しました。",
+        });
+        return;
+      }
+
+      if (!result.reservationId || !result.confirmationUrl) {
+        setSubmitState({
+          status: "error",
+          message: "予約確認URLの発行に失敗しました。",
+        });
+        return;
+      }
+
+      form.reset();
+      setSelectedDate("");
+      setSelectedTime("");
+      setCustomerKana("");
+      setCustomerKanaError("");
+      setSubmitState({
+        status: "success",
+        message: result.lineLinkWarning ?? "",
+        reservation: {
+          ...completedReservation,
+          confirmationUrl: result.confirmationUrl,
+        },
+      });
+
+      void fetch(`/api/reservations/availability?month=${month}`, {
+        cache: "no-store",
+      })
+        .then(async (refreshed) => ({
+          refreshed,
+          result: (await refreshed.json()) as AvailabilityResponse,
+        }))
+        .then(({ refreshed, result: refreshedResult }) => {
+          if (refreshed.ok && refreshedResult.ok && refreshedResult.days) {
+            setAvailability(refreshedResult.days);
+          }
+        })
+        .catch(() => undefined);
+    } catch {
       setSubmitState({
         status: "error",
-        message: result.message ?? "予約の送信に失敗しました。",
+        message: "通信に失敗しました。時間をおいてもう一度お試しください。",
       });
-      return;
+    } finally {
+      submissionInFlightRef.current = false;
     }
+  }
 
-    if (!result.reservationId || !result.confirmationUrl) {
-      setSubmitState({
-        status: "error",
-        message: "予約確認URLの発行に失敗しました。",
-      });
-      return;
-    }
-
-    event.currentTarget.reset();
-    setSelectedDate("");
-    setSelectedTime("");
-    setCustomerKana("");
-    setCustomerKanaError("");
-    setSubmitState({
-      status: "success",
-      message: `予約を受け付けました。受付番号: ${result.reservationId}${
-        result.lineLinkWarning ? ` ${result.lineLinkWarning}` : ""
-      }`,
-      confirmationUrl: result.confirmationUrl,
-    });
-
-    const refreshed = await fetch(`/api/reservations/availability?month=${month}`, {
-      cache: "no-store",
-    });
-    const refreshedResult = (await refreshed.json()) as AvailabilityResponse;
-    if (refreshed.ok && refreshedResult.ok && refreshedResult.days) {
-      setAvailability(refreshedResult.days);
-    }
+  if (submitState.status === "success") {
+    return (
+      <ReservationComplete
+        reservation={submitState.reservation}
+        notice={submitState.message}
+      />
+    );
   }
 
   return (
@@ -560,23 +608,11 @@ export function ReservationForm({
       >
         {submitState.status === "submitting" ? "送信中..." : "予約に進む"}
       </button>
-      {submitState.message ? (
+      {submitState.status === "error" ? (
         <div
-          className={
-            submitState.status === "error"
-              ? "rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
-              : "rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700"
-          }
+          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
         >
           <p>{submitState.message}</p>
-          {submitState.status === "success" ? (
-            <a
-              href={submitState.confirmationUrl}
-              className="mt-2 block break-all font-semibold underline underline-offset-4"
-            >
-              予約確認・キャンセルページを開く
-            </a>
-          ) : null}
         </div>
       ) : null}
     </form>
