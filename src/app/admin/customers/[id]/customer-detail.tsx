@@ -525,7 +525,7 @@ export function CustomerDetail({
                           <option value="女性">女性</option>
                         </select>
                       </label>
-                      <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:col-start-1 lg:row-start-4">
+                      <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:col-start-1 lg:row-start-5">
                         LINE連携状況
                         <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3">
                           <span
@@ -541,7 +541,7 @@ export function CustomerDetail({
                           </span>
                         </div>
                       </div>
-                      <label className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-6 lg:row-start-5">
+                      <label className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-6 lg:row-start-4">
                         顧客メモ
                         <textarea
                           name="memo"
@@ -556,13 +556,13 @@ export function CustomerDetail({
                           {formatDate(customer.createdAt)}
                         </div>
                       </div>
-                      <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:col-start-3 lg:row-start-4">
+                      <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:col-start-3 lg:row-start-5">
                         LINE表示名
                         <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
                           {customer.lineDisplayName || "未登録"}
                         </div>
                       </div>
-                      <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:col-start-5 lg:row-start-4">
+                      <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:col-start-5 lg:row-start-5">
                         LINE連携日時
                         <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
                           {customer.lineLinkedAt
@@ -737,7 +737,7 @@ export function CustomerDetail({
                           {customer.gender || "未設定"}
                         </dd>
                       </div>
-                      <div className="lg:col-span-2 lg:col-start-1 lg:row-start-4">
+                      <div className="lg:col-span-2 lg:col-start-1 lg:row-start-5">
                         <dt className={readonlyLabelClassName}>LINE連携状況</dt>
                         <dd className={`${readonlyValueClassName} flex items-center`}>
                           <span
@@ -753,7 +753,7 @@ export function CustomerDetail({
                           </span>
                         </dd>
                       </div>
-                      <div className="lg:col-span-6 lg:row-start-5">
+                      <div className="lg:col-span-6 lg:row-start-4">
                         <dt className={readonlyLabelClassName}>顧客メモ</dt>
                         <dd className={readonlyValueClassName}>
                           {customer.memo || "未登録"}
@@ -765,13 +765,13 @@ export function CustomerDetail({
                           {formatDate(customer.createdAt)}
                         </dd>
                       </div>
-                      <div className="lg:col-span-2 lg:col-start-3 lg:row-start-4">
+                      <div className="lg:col-span-2 lg:col-start-3 lg:row-start-5">
                         <dt className={readonlyLabelClassName}>LINE表示名</dt>
                         <dd className={readonlyValueClassName}>
                           {customer.lineDisplayName || "未登録"}
                         </dd>
                       </div>
-                      <div className="lg:col-span-2 lg:col-start-5 lg:row-start-4">
+                      <div className="lg:col-span-2 lg:col-start-5 lg:row-start-5">
                         <dt className={readonlyLabelClassName}>LINE連携日時</dt>
                         <dd className={readonlyValueClassName}>
                           {customer.lineLinkedAt
