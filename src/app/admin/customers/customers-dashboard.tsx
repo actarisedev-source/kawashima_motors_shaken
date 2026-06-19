@@ -146,7 +146,7 @@ export function CustomersDashboard({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="顧客名・電話番号で検索"
-                className="h-11 rounded-[12px] border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="h-11 rounded-[5px] border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
               <button
                 type="submit"

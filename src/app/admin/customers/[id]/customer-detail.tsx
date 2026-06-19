@@ -98,15 +98,15 @@ const statusClassName = (status: ReservationStatus) => {
 };
 
 const readonlyValueClassName =
-  "mt-2 min-h-11 rounded-[12px] border border-[#E2E8F0] bg-white px-4 py-2.5 font-bold text-slate-950 shadow-sm";
+  "mt-2 min-h-11 rounded-[5px] border border-[#E2E8F0] bg-white px-4 py-2.5 font-bold text-slate-950 shadow-sm";
 
 const readonlyLabelClassName = "text-sm font-semibold text-slate-500";
 
 const inputClassName =
-  "h-11 rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100";
+  "h-11 rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100";
 
 const vehicleInputClassName =
-  "h-10 w-full rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100";
+  "h-10 w-full rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100";
 
 type CustomerDetailProps = {
   customerId: string;
@@ -459,7 +459,7 @@ export function CustomerDetail({
                           aria-describedby="customer-name-kana-error"
                           className={
                             customerKanaError
-                              ? "h-11 rounded-[12px] border border-red-400 bg-[#F3F6FA] px-3 text-base font-normal outline-none transition focus:border-red-500 focus:bg-white focus:ring-2 focus:ring-red-100"
+                              ? "h-11 rounded-[5px] border border-red-400 bg-[#F3F6FA] px-3 text-base font-normal outline-none transition focus:border-red-500 focus:bg-white focus:ring-2 focus:ring-red-100"
                               : inputClassName
                           }
                         />
@@ -489,7 +489,7 @@ export function CustomerDetail({
                       </label>
                       <div className="grid gap-2 text-sm font-medium text-slate-800">
                         年齢
-                        <div className="flex h-11 items-center rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
+                        <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
                           {getAgeFromBirthDate(customer.birthDate) !== null
                             ? `${getAgeFromBirthDate(customer.birthDate)}歳`
                             : "未登録"}
@@ -519,7 +519,7 @@ export function CustomerDetail({
                       </label>
                       <div className="grid gap-2 text-sm font-medium text-slate-800">
                         登録日
-                        <div className="flex h-11 items-center rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
+                        <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
                           {formatDate(customer.createdAt)}
                         </div>
                       </div>
@@ -529,12 +529,12 @@ export function CustomerDetail({
                           name="memo"
                           rows={4}
                           defaultValue={customer.memo}
-                          className="min-h-28 rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                          className="min-h-28 rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 py-2 text-base font-normal outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                         />
                       </label>
                       <div className="grid gap-2 text-sm font-medium text-slate-800">
                         LINE連携状況
-                        <div className="flex h-11 items-center rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3">
+                        <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3">
                           <span
                             className={`inline-flex rounded-[5px] px-3 py-1 text-xs font-bold ring-1 ${
                               customer.lineStatus === "連携済み"
@@ -550,13 +550,13 @@ export function CustomerDetail({
                       </div>
                       <div className="grid gap-2 text-sm font-medium text-slate-800">
                         LINE表示名
-                        <div className="flex h-11 items-center rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
+                        <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
                           {customer.lineDisplayName || "未登録"}
                         </div>
                       </div>
                       <div className="grid gap-2 text-sm font-medium text-slate-800 md:col-span-2">
                         LINE連携日時
-                        <div className="flex h-11 items-center rounded-[12px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
+                        <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
                           {customer.lineLinkedAt
                             ? formatDateTime(customer.lineLinkedAt)
                             : "未連携"}
