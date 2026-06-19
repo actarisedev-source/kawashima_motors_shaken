@@ -19,6 +19,16 @@ type CustomerOption = {
   vehiclePlateNumbers: string[];
 };
 
+type MessageLog = {
+  id: string;
+  target_type: string;
+  title: string;
+  status: "成功" | "失敗";
+  error_message: string | null;
+  sent_at: string | null;
+  created_at: string;
+};
+
 const emptyFilters: Filters = {
   shaken: [],
   visits: [],
@@ -94,6 +104,15 @@ export function LineDistribution() {
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState("");
+  const [logs, setLogs] = useState<MessageLog[]>([]);
+
+  const loadLogs = useCallback(async () => {
+    const response = await fetch("/api/admin/line/logs", { cache: "no-store" });
+    const result = await response.json();
+    if (response.ok && result.ok) {
+      setLogs(result.logs ?? []);
+    }
+  }, []);
 
   const targetLabel = useMemo(() => {
     const labels = groups.flatMap((group) =>
@@ -127,6 +146,10 @@ export function LineDistribution() {
     const timer = window.setTimeout(() => void loadAudience(), 250);
     return () => window.clearTimeout(timer);
   }, [loadAudience]);
+
+  useEffect(() => {
+    void loadLogs();
+  }, [loadLogs]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -173,11 +196,17 @@ export function LineDistribution() {
       `配信が完了しました。成功 ${result.successCount}件 / 失敗 ${result.failureCount}件 / 対象外 ${result.excludedCount}件 / ログ保存 ${result.logSavedCount}件 / ログ保存失敗 ${result.logFailureCount}件`,
     );
     await loadAudience();
+    await loadLogs();
   }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
-      <AdminHeader title="LINE配信" onRefresh={loadAudience} />
+      <AdminHeader
+        title="LINE配信"
+        onRefresh={async () => {
+          await Promise.all([loadAudience(), loadLogs()]);
+        }}
+      />
       <main className="mx-auto grid max-w-7xl gap-5 px-5 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8">
         <div className="grid gap-5">
           {!configured ? (
@@ -253,6 +282,22 @@ export function LineDistribution() {
               <div className="ml-auto max-w-[90%] rounded-md bg-white p-3 shadow-sm">{previewMessage(body) || "配信本文を入力するとプレビューを表示します。"}</div>
             </div>
             <button type="button" disabled={!configured || !title.trim() || !body.trim() || count === 0 || loadingCount} onClick={() => setConfirming(true)} className="h-12 rounded-md bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">配信実行</button>
+          </section>
+          <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-base font-bold">最近の配信結果</h2>
+            <div className="grid gap-2">
+              {logs.slice(0, 5).map((log) => (
+                <div key={log.id} className="rounded-md border border-slate-200 p-3 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-bold text-slate-900">{log.title}</p>
+                    <span className={log.status === "成功" ? "rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700" : "rounded-md bg-red-50 px-2 py-1 text-xs font-bold text-red-700"}>{log.status}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">{log.target_type} / {new Intl.DateTimeFormat("ja-JP", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Tokyo" }).format(new Date(log.sent_at ?? log.created_at))}</p>
+                  {log.error_message ? <p className="mt-2 text-xs text-red-600">{log.error_message}</p> : null}
+                </div>
+              ))}
+              {!logs.length ? <p className="text-sm text-slate-500">配信履歴はありません。</p> : null}
+            </div>
           </section>
         </aside>
       </main>
