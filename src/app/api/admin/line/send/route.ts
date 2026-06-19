@@ -72,6 +72,8 @@ export async function POST(request: NextRequest) {
 
     let successCount = 0;
     let failureCount = 0;
+    let logSavedCount = 0;
+    let logFailureCount = 0;
     for (const member of audience) {
       const lineUserId = member.customer.line_user_id;
       if (!lineUserId) continue;
@@ -100,7 +102,10 @@ export async function POST(request: NextRequest) {
           sent_at: status === "成功" ? new Date().toISOString() : null,
         });
       if (logError) {
+        logFailureCount += 1;
         console.error("Failed to save LINE message log", logError.message);
+      } else {
+        logSavedCount += 1;
       }
     }
 
@@ -109,6 +114,8 @@ export async function POST(request: NextRequest) {
       successCount,
       failureCount,
       excludedCount: Math.max(allMatches.length - audience.length, 0),
+      logSavedCount,
+      logFailureCount,
     });
   } catch (error) {
     return NextResponse.json(

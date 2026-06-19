@@ -171,7 +171,7 @@ export function LineDistribution() {
       return;
     }
     setMessage(
-      `配信が完了しました。成功 ${result.successCount}件 / 失敗 ${result.failureCount}件 / 対象外 ${result.excludedCount}件`,
+      `配信が完了しました。成功 ${result.successCount}件 / 失敗 ${result.failureCount}件 / 対象外 ${result.excludedCount}件 / ログ保存 ${result.logSavedCount}件 / ログ保存失敗 ${result.logFailureCount}件`,
     );
     await loadAudience();
   }
