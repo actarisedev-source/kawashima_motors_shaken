@@ -120,10 +120,6 @@ export function LineAutomationSettings() {
   };
 
   const testSetting = async (setting: AutomationSetting) => {
-    if (setting.preview.count < 1) {
-      setMessage("現在の条件に一致するテスト送信先がありません。");
-      return;
-    }
     if (
       !window.confirm(
         `${labels[setting.automation_type]}の対象顧客1件へテスト送信します。よろしいですか？`,
@@ -289,8 +285,7 @@ export function LineAutomationSettings() {
                   type="button"
                   disabled={
                     testingType === setting.automation_type ||
-                    savingType === setting.automation_type ||
-                    setting.preview.count < 1
+                    savingType === setting.automation_type
                   }
                   onClick={() => void testSetting(setting)}
                   className="h-11 rounded-[5px] border border-blue-200 bg-white px-4 text-sm font-bold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"

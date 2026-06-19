@@ -180,6 +180,44 @@ const successfulTargetKeys = async (
 const targetKey = (target: LineAutomationTarget) =>
   `${target.customer.id}:${target.vehicle?.id ?? ""}:${target.reservation?.id ?? ""}`;
 
+const getLineAutomationTestTarget = async () => {
+  const { data: customer, error: customerError } = await supabaseServer
+    .from("customers")
+    .select("*")
+    .not("line_user_id", "is", null)
+    .eq("line_status", "連携済み")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (customerError) throw new Error(customerError.message);
+  if (!customer?.line_user_id) return null;
+
+  const [vehicleResult, reservationResult] = await Promise.all([
+    supabaseServer
+      .from("vehicles")
+      .select("*")
+      .eq("customer_id", customer.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabaseServer
+      .from("reservations")
+      .select("*")
+      .eq("customer_id", customer.id)
+      .order("reserved_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (vehicleResult.error) throw new Error(vehicleResult.error.message);
+  if (reservationResult.error) throw new Error(reservationResult.error.message);
+  return {
+    customer,
+    vehicle: vehicleResult.data ?? null,
+    reservation: reservationResult.data ?? null,
+    targetDate: japanDateKey(),
+  } satisfies LineAutomationTarget;
+};
+
 export async function getLineAutomationPreview(
   automationType: LineAutomationType,
   now = new Date(),
@@ -196,10 +234,14 @@ export async function sendLineAutomation(
   accessToken: string,
   options: { testOnly?: boolean; now?: Date } = {},
 ) {
-  const targets = await getLineAutomationTargets(
+  let targets = await getLineAutomationTargets(
     setting.automation_type,
     options.now,
   );
+  if (options.testOnly && !targets.length) {
+    const fallbackTarget = await getLineAutomationTestTarget();
+    targets = fallbackTarget ? [fallbackTarget] : [];
+  }
   const sent = targets.length
     ? await successfulTargetKeys(setting.automation_type, targets[0].targetDate)
     : new Set<string>();
