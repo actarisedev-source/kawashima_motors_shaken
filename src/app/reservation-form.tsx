@@ -8,6 +8,7 @@ import {
   CompletedReservation,
   ReservationComplete,
 } from "./reservation-complete";
+import { ReservationLineLinkGuide } from "./reservation-line-link-guide";
 
 type SubmitState =
   | { status: "idle"; message: "" }
@@ -16,6 +17,7 @@ type SubmitState =
       status: "success";
       message: string;
       reservation: CompletedReservation;
+      showLineLinkGuide: boolean;
     }
   | { status: "error"; message: string };
 
@@ -263,6 +265,7 @@ export function ReservationForm({
         reservationId?: string;
         confirmationUrl?: string;
         lineLinkWarning?: string;
+        lineLinked?: boolean;
       };
 
       if (!response.ok || !result.ok) {
@@ -293,6 +296,7 @@ export function ReservationForm({
           ...completedReservation,
           confirmationUrl: result.confirmationUrl,
         },
+        showLineLinkGuide: !result.lineLinked,
       };
       setSubmitState(successState);
 
@@ -302,6 +306,7 @@ export function ReservationForm({
           JSON.stringify({
             reservation: successState.reservation,
             notice: successState.message,
+            showLineLinkGuide: successState.showLineLinkGuide,
           }),
         );
         window.location.assign("/reservations/complete");
@@ -337,6 +342,9 @@ export function ReservationForm({
       <ReservationComplete
         reservation={submitState.reservation}
         notice={submitState.message}
+        additionalContent={
+          submitState.showLineLinkGuide ? <ReservationLineLinkGuide /> : null
+        }
       />
     );
   }

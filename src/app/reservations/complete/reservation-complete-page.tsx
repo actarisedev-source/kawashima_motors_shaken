@@ -7,10 +7,12 @@ import {
   ReservationComplete,
 } from "@/app/reservation-complete";
 import { reservationCompletionStorageKey } from "@/lib/reservations/completion-storage";
+import { ReservationLineLinkGuide } from "@/app/reservation-line-link-guide";
 
 type StoredCompletion = {
   reservation: CompletedReservation;
   notice?: string;
+  showLineLinkGuide?: boolean;
 };
 
 export function ReservationCompletePage() {
@@ -63,6 +65,9 @@ export function ReservationCompletePage() {
       <ReservationComplete
         reservation={completion.reservation}
         notice={completion.notice}
+        additionalContent={
+          completion.showLineLinkGuide ? <ReservationLineLinkGuide /> : null
+        }
       />
     </main>
   );

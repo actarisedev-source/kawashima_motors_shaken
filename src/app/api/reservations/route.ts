@@ -225,6 +225,8 @@ export async function POST(request: Request) {
     );
   }
 
+  let customerLineLinked = Boolean(existingCustomer?.line_user_id);
+
   if (lineProfile) {
     const { data: customerLinkedToLine, error: lineCustomerError } =
       await supabaseServer
@@ -300,6 +302,7 @@ export async function POST(request: Request) {
     }
 
     customer = createdCustomer;
+    customerLineLinked = Boolean(createdCustomer.line_user_id);
   } else {
     if (customerKana) {
       const { error: customerKanaError } = await supabaseServer
@@ -338,6 +341,8 @@ export async function POST(request: Request) {
           "Reservation customer LINE link was not saved",
           lineLinkError,
         );
+      } else {
+        customerLineLinked = true;
       }
     } else if (
       lineProfile &&
@@ -424,5 +429,6 @@ export async function POST(request: Request) {
       request.url,
     ).toString(),
     lineLinkWarning,
+    lineLinked: customerLineLinked,
   });
 }
