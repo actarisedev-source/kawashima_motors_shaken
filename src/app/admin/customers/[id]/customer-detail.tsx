@@ -739,22 +739,6 @@ export function CustomerDetail({
                           <option value="女性">女性</option>
                         </select>
                       </label>
-                      <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:col-start-1 lg:row-start-5">
-                        LINE連携状況
-                        <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3">
-                          <span
-                            className={`inline-flex rounded-[5px] px-3 py-1 text-xs font-bold ring-1 ${
-                              customer.lineStatus === "連携済み"
-                                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                                : "bg-slate-100 text-slate-600 ring-slate-200"
-                            }`}
-                          >
-                            {customer.lineStatus === "連携済み"
-                              ? "連携済み"
-                              : "未連携"}
-                          </span>
-                        </div>
-                      </div>
                       <label className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-6 lg:row-start-4">
                         顧客メモ
                         <textarea
@@ -770,28 +754,46 @@ export function CustomerDetail({
                           {formatDate(customer.createdAt)}
                         </div>
                       </div>
-                      <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:col-start-3 lg:row-start-5">
-                        LINE表示名
-                        <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
-                          {customer.lineDisplayName || "未登録"}
+                      <div className="grid min-w-0 gap-3 lg:col-span-6 lg:row-start-5 sm:grid-cols-2 xl:grid-cols-[repeat(3,minmax(0,1fr))_auto]">
+                        <div className="grid min-w-0 gap-2 text-sm font-medium text-slate-800">
+                          LINE連携状況
+                          <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3">
+                            <span
+                              className={`inline-flex rounded-[5px] px-3 py-1 text-xs font-bold ring-1 ${
+                                customer.lineStatus === "連携済み"
+                                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                  : "bg-slate-100 text-slate-600 ring-slate-200"
+                              }`}
+                            >
+                              {customer.lineStatus === "連携済み"
+                                ? "連携済み"
+                                : "未連携"}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:col-start-5 lg:row-start-5">
-                        <span className="flex items-center justify-between gap-3">
+                        <div className="grid min-w-0 gap-2 text-sm font-medium text-slate-800">
+                          LINE表示名
+                          <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
+                            {customer.lineDisplayName || "未登録"}
+                          </div>
+                        </div>
+                        <div className="grid min-w-0 gap-2 text-sm font-medium text-slate-800">
                           LINE連携日時
+                          <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
+                            {customer.lineLinkedAt
+                              ? formatDateTime(customer.lineLinkedAt)
+                              : "未連携"}
+                          </div>
+                        </div>
+                        <div className="flex items-end sm:col-span-2 sm:justify-end xl:col-span-1">
                           <button
                             type="button"
                             disabled={customer.lineStatus !== "連携済み"}
                             onClick={() => setLineUnlinkConfirmationStep(1)}
-                            className="h-9 rounded-[5px] border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                            className="h-10 w-full rounded-[5px] border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 sm:w-auto"
                           >
                             削除
                           </button>
-                        </span>
-                        <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
-                          {customer.lineLinkedAt
-                            ? formatDateTime(customer.lineLinkedAt)
-                            : "未連携"}
                         </div>
                       </div>
                     </div>
