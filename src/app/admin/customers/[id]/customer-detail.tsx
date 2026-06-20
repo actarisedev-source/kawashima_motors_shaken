@@ -21,6 +21,18 @@ type VehicleDraft = VehicleItem & {
   clientId: string;
 };
 
+type LineMessageLogItem = {
+  id: string;
+  sentAt: string;
+  deliveryType: "手動" | "セグメント" | "自動";
+  targetType: string;
+  title: string;
+  body: string;
+  imageUrl: string | null;
+  status: "成功" | "失敗";
+  errorMessage: string | null;
+};
+
 type CustomerDetailItem = {
   id: string;
   name: string;
@@ -43,6 +55,7 @@ type CustomerDetailItem = {
     createdAt: string;
     vehicleModel: string;
   }[];
+  lineMessageLogs: LineMessageLogItem[];
 };
 
 type LoadState =
@@ -130,6 +143,11 @@ export function CustomerDetail({
   const [isConfirmingEdit, setIsConfirmingEdit] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
   const [customerKanaError, setCustomerKanaError] = useState("");
+  const [showAllReservations, setShowAllReservations] = useState(false);
+  const [showAllLineMessageLogs, setShowAllLineMessageLogs] = useState(false);
+  const [expandedLineMessageLogId, setExpandedLineMessageLogId] = useState<
+    string | null
+  >(null);
 
   const loadCustomer = useCallback(async () => {
     setLoadState({ status: "loading", message: "読み込み中です。" });
@@ -838,71 +856,219 @@ export function CustomerDetail({
               )}
             </section>
 
-            <section className="overflow-hidden rounded-[5px] border border-slate-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
-                <h2 className="text-base font-semibold">予約履歴</h2>
-                <Link
-                  href="/admin"
-                  className="text-sm font-semibold text-blue-700 transition hover:text-blue-900"
-                >
-                  すべて見る
-                </Link>
-              </div>
-              <div className="grid gap-4 p-6 sm:p-8">
-                {customer.reservations.map((reservation) => (
-                  <div
-                    key={reservation.id}
-                    className="border-t border-slate-200 pt-4 first:border-t-0 first:pt-0"
-                  >
-                    <dl className="grid gap-4 text-sm md:grid-cols-2 lg:grid-cols-4">
-                      <div>
-                        <dt className={readonlyLabelClassName}>予約日時</dt>
-                        <dd className={readonlyValueClassName}>
-                          {formatDateTime(reservation.reservedAt)}
-                        </dd>
+            {!isEditingCustomer ? (
+              <>
+                <section className="overflow-hidden rounded-[5px] border border-slate-200 bg-white shadow-sm">
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                    <h2 className="text-base font-semibold">予約履歴</h2>
+                    <button
+                      type="button"
+                      disabled={customer.reservations.length <= 1}
+                      aria-expanded={showAllReservations}
+                      onClick={() =>
+                        setShowAllReservations((current) => !current)
+                      }
+                      className="cursor-pointer text-sm font-semibold text-blue-700 transition hover:text-blue-900 disabled:cursor-default disabled:text-slate-400"
+                    >
+                      {showAllReservations ? "折りたたむ" : "すべて見る"}
+                    </button>
+                  </div>
+                  <div className="grid gap-4 p-6 sm:p-8">
+                    {(showAllReservations
+                      ? customer.reservations
+                      : customer.reservations.slice(0, 1)
+                    ).map((reservation) => (
+                      <div
+                        key={reservation.id}
+                        className="border-t border-slate-200 pt-4 first:border-t-0 first:pt-0"
+                      >
+                        <dl className="grid gap-4 text-sm md:grid-cols-2 lg:grid-cols-4">
+                          <div>
+                            <dt className={readonlyLabelClassName}>予約日時</dt>
+                            <dd className={readonlyValueClassName}>
+                              {formatDateTime(reservation.reservedAt)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className={readonlyLabelClassName}>メニュー</dt>
+                            <dd className={readonlyValueClassName}>車検</dd>
+                          </div>
+                          <div>
+                            <dt className={readonlyLabelClassName}>
+                              ステータス
+                            </dt>
+                            <dd className={readonlyValueClassName}>
+                              <span
+                                className={`inline-flex rounded-[5px] px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
+                                  reservation.status,
+                                )}`}
+                              >
+                                {reservation.status}
+                              </span>
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className={readonlyLabelClassName}>登録日</dt>
+                            <dd className={readonlyValueClassName}>
+                              {formatDate(reservation.createdAt)}
+                            </dd>
+                          </div>
+                        </dl>
                       </div>
-                      <div>
-                        <dt className={readonlyLabelClassName}>メニュー</dt>
-                        <dd className={readonlyValueClassName}>
-                          車検
-                        </dd>
+                    ))}
+                    {!customer.reservations.length ? (
+                      <div className="rounded-[5px] border border-slate-200 bg-slate-50 px-5 py-12 text-center text-sm text-slate-500">
+                        予約履歴はありません。
                       </div>
-                      <div>
-                        <dt className={readonlyLabelClassName}>ステータス</dt>
-                        <dd className={readonlyValueClassName}>
-                          <span
-                            className={`inline-flex rounded-[5px] px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
-                              reservation.status,
-                            )}`}
+                    ) : null}
+                  </div>
+                </section>
+
+                <section className="overflow-hidden rounded-[5px] border border-slate-200 bg-white shadow-sm">
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                    <h2 className="text-base font-semibold">LINE配信履歴</h2>
+                    <button
+                      type="button"
+                      disabled={customer.lineMessageLogs.length <= 1}
+                      aria-expanded={showAllLineMessageLogs}
+                      onClick={() =>
+                        setShowAllLineMessageLogs((current) => !current)
+                      }
+                      className="cursor-pointer text-sm font-semibold text-blue-700 transition hover:text-blue-900 disabled:cursor-default disabled:text-slate-400"
+                    >
+                      {showAllLineMessageLogs ? "折りたたむ" : "すべて見る"}
+                    </button>
+                  </div>
+                  <div className="grid gap-3 p-6 sm:p-8">
+                    {(showAllLineMessageLogs
+                      ? customer.lineMessageLogs
+                      : customer.lineMessageLogs.slice(0, 1)
+                    ).map((log) => {
+                      const expanded = expandedLineMessageLogId === log.id;
+
+                      return (
+                        <div
+                          key={log.id}
+                          className="overflow-hidden rounded-[5px] border border-slate-200"
+                        >
+                          <button
+                            type="button"
+                            aria-expanded={expanded}
+                            onClick={() =>
+                              setExpandedLineMessageLogId((current) =>
+                                current === log.id ? null : log.id,
+                              )
+                            }
+                            className="grid w-full cursor-pointer gap-4 bg-white p-4 text-left transition hover:bg-slate-50 md:grid-cols-[180px_minmax(0,1fr)_auto] md:items-center"
                           >
-                            {reservation.status}
-                          </span>
-                        </dd>
+                            <div>
+                              <p className={readonlyLabelClassName}>送信日時</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-900">
+                                {formatDateTime(log.sentAt)}
+                              </p>
+                            </div>
+                            <div className="min-w-0">
+                              <p className={readonlyLabelClassName}>タイトル</p>
+                              <p className="mt-1 truncate text-sm font-semibold text-slate-900">
+                                {log.title}
+                              </p>
+                              {log.imageUrl ? (
+                                <span className="mt-2 inline-flex rounded-[5px] bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+                                  画像あり
+                                </span>
+                              ) : null}
+                            </div>
+                            <span
+                              className={
+                                log.status === "成功"
+                                  ? "w-fit rounded-[5px] bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200"
+                                  : "w-fit rounded-[5px] bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700 ring-1 ring-red-200"
+                              }
+                            >
+                              {log.status}
+                            </span>
+                          </button>
+                          {expanded ? (
+                            <dl className="grid gap-4 border-t border-slate-200 bg-slate-50 p-4 text-sm md:grid-cols-2">
+                              <div>
+                                <dt className={readonlyLabelClassName}>
+                                  送信日時
+                                </dt>
+                                <dd className="mt-1 font-semibold">
+                                  {formatDateTime(log.sentAt)}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className={readonlyLabelClassName}>
+                                  配信種別
+                                </dt>
+                                <dd className="mt-1 font-semibold">
+                                  {log.deliveryType}
+                                </dd>
+                              </div>
+                              <div className="md:col-span-2">
+                                <dt className={readonlyLabelClassName}>
+                                  タイトル
+                                </dt>
+                                <dd className="mt-1 font-semibold">
+                                  {log.title}
+                                </dd>
+                              </div>
+                              <div className="md:col-span-2">
+                                <dt className={readonlyLabelClassName}>本文</dt>
+                                <dd className="mt-1 whitespace-pre-wrap font-medium text-slate-800">
+                                  {log.body || "本文なし"}
+                                </dd>
+                              </div>
+                              {log.imageUrl ? (
+                                <div className="min-w-0 md:col-span-2">
+                                  <dt className={readonlyLabelClassName}>
+                                    画像URL
+                                  </dt>
+                                  <dd className="mt-1 break-all">
+                                    <a
+                                      href={log.imageUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="font-semibold text-blue-700 hover:text-blue-900"
+                                    >
+                                      {log.imageUrl}
+                                    </a>
+                                  </dd>
+                                </div>
+                              ) : null}
+                              <div>
+                                <dt className={readonlyLabelClassName}>
+                                  送信結果
+                                </dt>
+                                <dd className="mt-1 font-semibold">
+                                  {log.status}
+                                </dd>
+                              </div>
+                              {log.errorMessage ? (
+                                <div className="md:col-span-2">
+                                  <dt className={readonlyLabelClassName}>
+                                    エラーメッセージ
+                                  </dt>
+                                  <dd className="mt-1 whitespace-pre-wrap font-semibold text-red-700">
+                                    {log.errorMessage}
+                                  </dd>
+                                </div>
+                              ) : null}
+                            </dl>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                    {!customer.lineMessageLogs.length ? (
+                      <div className="rounded-[5px] border border-slate-200 bg-slate-50 px-5 py-12 text-center text-sm text-slate-500">
+                        LINE配信履歴はありません。
                       </div>
-                      <div>
-                        <dt className={readonlyLabelClassName}>登録日</dt>
-                        <dd className={readonlyValueClassName}>
-                          {formatDate(reservation.createdAt)}
-                        </dd>
-                      </div>
-                      <div className="lg:col-span-4">
-                        <dt className={readonlyLabelClassName}>備考</dt>
-                        <dd className={readonlyValueClassName}>
-                          {reservation.vehicleModel
-                            ? `対象車両：${reservation.vehicleModel}`
-                            : "-"}
-                        </dd>
-                      </div>
-                    </dl>
+                    ) : null}
                   </div>
-                ))}
-                {!customer.reservations.length ? (
-                  <div className="rounded-[5px] border border-slate-200 bg-slate-50 px-5 py-12 text-center text-sm text-slate-500">
-                    予約履歴はありません。
-                  </div>
-                ) : null}
-              </div>
-            </section>
+                </section>
+              </>
+            ) : null}
           </div>
         ) : null}
       </main>

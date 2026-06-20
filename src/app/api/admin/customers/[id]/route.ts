@@ -62,7 +62,8 @@ export async function GET(
     );
   }
 
-  const [vehiclesResult, reservationsResult] = await Promise.all([
+  const [vehiclesResult, reservationsResult, lineMessageLogsResult] =
+    await Promise.all([
     supabaseServer
       .from("vehicles")
       .select("*")
@@ -73,6 +74,13 @@ export async function GET(
       .select("*")
       .eq("customer_id", id)
       .order("reserved_at", { ascending: false }),
+    supabaseServer
+      .from("line_message_logs")
+      .select(
+        "id,target_type,title,body,image_url,status,error_message,sent_at,created_at,automation_type",
+      )
+      .eq("customer_id", id)
+      .order("created_at", { ascending: false }),
   ]);
 
   if (vehiclesResult.error) {
@@ -85,6 +93,13 @@ export async function GET(
   if (reservationsResult.error) {
     return NextResponse.json(
       { ok: false, message: reservationsResult.error.message },
+      { status: 500 },
+    );
+  }
+
+  if (lineMessageLogsResult.error) {
+    return NextResponse.json(
+      { ok: false, message: lineMessageLogsResult.error.message },
       { status: 500 },
     );
   }
@@ -127,6 +142,23 @@ export async function GET(
         createdAt: vehicle.created_at,
       })),
       reservations,
+      lineMessageLogs: (lineMessageLogsResult.data ?? []).map((log) => ({
+        id: log.id,
+        sentAt: log.sent_at ?? log.created_at,
+        deliveryType:
+          log.automation_type || log.target_type.startsWith("自動配信")
+            ? "自動"
+            : log.target_type.includes("個別") ||
+                log.target_type === "LINE連携済み全員"
+              ? "手動"
+              : "セグメント",
+        targetType: log.target_type,
+        title: log.title,
+        body: log.body,
+        imageUrl: log.image_url,
+        status: log.status,
+        errorMessage: log.error_message,
+      })),
     },
   });
 }
