@@ -106,7 +106,7 @@ const inputClassName =
   "h-11 rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100";
 
 const vehicleInputClassName =
-  "h-10 w-full rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100";
+  "h-10 min-w-0 w-full rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100";
 
 type CustomerDetailProps = {
   customerId: string;
@@ -594,89 +594,89 @@ export function CustomerDetail({
                         車両追加
                       </button>
                     </div>
-                    <div className="overflow-x-auto rounded-[5px] border border-slate-200">
-                      <table className="w-full min-w-[860px] border-collapse text-left text-sm">
-                        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-                          <tr>
-                            <th className="px-4 py-3">車名</th>
-                            <th className="px-4 py-3">ナンバー</th>
-                            <th className="px-4 py-3">車検満了日</th>
-                            <th className="px-4 py-3">車両メモ</th>
-                            <th className="px-4 py-3 text-right">削除</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {vehicleDrafts.map((vehicle) => (
-                            <tr key={vehicle.clientId}>
-                              <td className="px-4 py-3">
-                                <input
-                                  required
-                                  value={vehicle.modelName}
-                                  onChange={(event) =>
-                                    updateVehicleDraft(
-                                      vehicle.clientId,
-                                      "modelName",
-                                      event.target.value,
-                                    )
-                                  }
-                                  className={vehicleInputClassName}
-                                />
-                              </td>
-                              <td className="px-4 py-3">
-                                <input
-                                  value={vehicle.plateNumber}
-                                  onChange={(event) =>
-                                    updateVehicleDraft(
-                                      vehicle.clientId,
-                                      "plateNumber",
-                                      event.target.value,
-                                    )
-                                  }
-                                  className={vehicleInputClassName}
-                                />
-                              </td>
-                              <td className="px-4 py-3">
-                                <input
-                                  type="date"
-                                  value={vehicle.shakenExpiryDate ?? ""}
-                                  onChange={(event) =>
-                                    updateVehicleDraft(
-                                      vehicle.clientId,
-                                      "shakenExpiryDate",
-                                      event.target.value,
-                                    )
-                                  }
-                                  className={vehicleInputClassName}
-                                />
-                              </td>
-                              <td className="px-4 py-3">
-                                <input
-                                  value={vehicle.memo}
-                                  onChange={(event) =>
-                                    updateVehicleDraft(
-                                      vehicle.clientId,
-                                      "memo",
-                                      event.target.value,
-                                    )
-                                  }
-                                  className={vehicleInputClassName}
-                                />
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => removeVehicleDraft(vehicle.clientId)}
-                                  className="h-9 rounded-[5px] border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
-                                >
-                                  削除
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="grid gap-4">
+                      {vehicleDrafts.map((vehicle, index) => (
+                        <div
+                          key={vehicle.clientId}
+                          className="grid min-w-0 gap-3 border-t border-slate-200 pt-4 first:border-t-0 first:pt-0 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto]"
+                        >
+                          <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-800">
+                            車名
+                            <input
+                              required
+                              aria-label={`車両${index + 1}の車名`}
+                              value={vehicle.modelName}
+                              onChange={(event) =>
+                                updateVehicleDraft(
+                                  vehicle.clientId,
+                                  "modelName",
+                                  event.target.value,
+                                )
+                              }
+                              className={vehicleInputClassName}
+                            />
+                          </label>
+                          <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-800">
+                            ナンバー
+                            <input
+                              aria-label={`車両${index + 1}のナンバー`}
+                              value={vehicle.plateNumber}
+                              onChange={(event) =>
+                                updateVehicleDraft(
+                                  vehicle.clientId,
+                                  "plateNumber",
+                                  event.target.value,
+                                )
+                              }
+                              className={vehicleInputClassName}
+                            />
+                          </label>
+                          <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-800">
+                            車検満了日
+                            <input
+                              type="date"
+                              aria-label={`車両${index + 1}の車検満了日`}
+                              value={vehicle.shakenExpiryDate ?? ""}
+                              onChange={(event) =>
+                                updateVehicleDraft(
+                                  vehicle.clientId,
+                                  "shakenExpiryDate",
+                                  event.target.value,
+                                )
+                              }
+                              className={vehicleInputClassName}
+                            />
+                          </label>
+                          <label className="grid min-w-0 gap-2 text-sm font-medium text-slate-800">
+                            車両メモ
+                            <input
+                              aria-label={`車両${index + 1}の車両メモ`}
+                              value={vehicle.memo}
+                              onChange={(event) =>
+                                updateVehicleDraft(
+                                  vehicle.clientId,
+                                  "memo",
+                                  event.target.value,
+                                )
+                              }
+                              className={vehicleInputClassName}
+                            />
+                          </label>
+                          <div className="flex items-end sm:col-span-2 sm:justify-end xl:col-span-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                removeVehicleDraft(vehicle.clientId)
+                              }
+                              className="h-10 w-full rounded-[5px] border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 sm:w-auto"
+                            >
+                              削除
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                       {!vehicleDrafts.length ? (
-                        <div className="px-5 py-8 text-center text-sm text-slate-500">
+                        <div className="py-8 text-center text-sm text-slate-500">
                           登録車両はありません。
                         </div>
                       ) : null}
