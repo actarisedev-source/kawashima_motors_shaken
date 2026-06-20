@@ -95,7 +95,7 @@ export function AdminHeader({
             <button
               type="button"
               onClick={() => void handleLogout()}
-              className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              className="h-10 cursor-pointer rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-red-600 hover:bg-red-600 hover:text-white"
             >
               ログアウト
             </button>
