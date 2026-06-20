@@ -740,18 +740,7 @@ export function CustomerDetail({
                         </select>
                       </label>
                       <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:col-start-1 lg:row-start-5">
-                        <span className="flex items-center justify-between gap-3">
-                          LINE連携状況
-                          {customer.lineStatus === "連携済み" ? (
-                            <button
-                              type="button"
-                              onClick={() => setLineUnlinkConfirmationStep(1)}
-                              className="h-9 rounded-[5px] border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
-                            >
-                              削除
-                            </button>
-                          ) : null}
-                        </span>
+                        LINE連携状況
                         <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3">
                           <span
                             className={`inline-flex rounded-[5px] px-3 py-1 text-xs font-bold ring-1 ${
@@ -788,7 +777,17 @@ export function CustomerDetail({
                         </div>
                       </div>
                       <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:col-start-5 lg:row-start-5">
-                        LINE連携日時
+                        <span className="flex items-center justify-between gap-3">
+                          LINE連携日時
+                          <button
+                            type="button"
+                            disabled={customer.lineStatus !== "連携済み"}
+                            onClick={() => setLineUnlinkConfirmationStep(1)}
+                            className="h-9 rounded-[5px] border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                          >
+                            削除
+                          </button>
+                        </span>
                         <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3 text-base font-semibold text-slate-500">
                           {customer.lineLinkedAt
                             ? formatDateTime(customer.lineLinkedAt)
