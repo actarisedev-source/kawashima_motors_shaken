@@ -20,7 +20,9 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabaseServer
     .from("line_message_logs")
-    .select("id,customer_id,target_type,title,status,error_message,sent_at,created_at")
+    .select(
+      "id,customer_id,target_type,title,status,error_message,image_url,sent_at,created_at",
+    )
     .order("created_at", { ascending: false })
     .limit(20);
 

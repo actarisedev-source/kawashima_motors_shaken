@@ -128,6 +128,7 @@ export type Database = {
           target_type: string;
           title: string;
           body: string;
+          image_url: string | null;
           status: "成功" | "失敗";
           error_message: string | null;
           sent_at: string | null;
@@ -144,6 +145,7 @@ export type Database = {
           target_type: string;
           title: string;
           body: string;
+          image_url?: string | null;
           status: "成功" | "失敗";
           error_message?: string | null;
           sent_at?: string | null;
