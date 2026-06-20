@@ -27,11 +27,13 @@ type MessageLog = {
   id: string;
   target_type: string;
   title: string;
+  body: string;
   status: "成功" | "失敗";
   error_message: string | null;
   image_url: string | null;
   sent_at: string | null;
   created_at: string;
+  automation_type: string | null;
 };
 
 const emptyFilters: Filters = {
@@ -95,6 +97,28 @@ const previewMessage = (body: string) =>
   body.replace(/\{\{([a-z_]+)\}\}/g, (_, key: string) =>
     key in variableSamples ? variableSamples[key] : `{{${key}}}`,
   );
+
+const formatMessageLogDate = (log: MessageLog) =>
+  new Intl.DateTimeFormat("ja-JP", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Tokyo",
+  }).format(new Date(log.sent_at ?? log.created_at));
+
+const getMessageDeliveryType = (log: MessageLog) => {
+  if (log.automation_type || log.target_type.startsWith("自動配信")) {
+    return "自動";
+  }
+
+  if (
+    log.target_type.includes("個別") ||
+    log.target_type === "LINE連携済み全員"
+  ) {
+    return "手動";
+  }
+
+  return "セグメント";
+};
 
 const acceptedImageTypes = new Set([
   "image/jpeg",
@@ -188,6 +212,7 @@ export function LineDistribution() {
   const deliveryLockedRef = useRef(false);
   const [message, setMessage] = useState("");
   const [logs, setLogs] = useState<MessageLog[]>([]);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   const loadLogs = useCallback(async () => {
     const response = await fetch("/api/admin/line/logs", { cache: "no-store" });
@@ -541,38 +566,137 @@ export function LineDistribution() {
               {logs.map((log) => (
                 <div
                   key={log.id}
-                  className="grid gap-2 rounded-[5px] border border-slate-200 p-4 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
+                  className="rounded-[5px] border border-slate-200 bg-white p-4 text-sm transition hover:border-blue-200"
                 >
-                  <div>
-                    <p className="font-bold text-slate-900">{log.title}</p>
-                    <p className="mt-1 text-slate-600">{log.target_type}</p>
-                    {log.image_url ? (
-                      <p className="mt-1 text-xs font-semibold text-blue-700">
-                        画像あり
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-900">{log.title}</p>
+                      <p className="mt-1 text-slate-600">{log.target_type}</p>
+                      {log.image_url ? (
+                        <p className="mt-1 text-xs font-semibold text-blue-700">
+                          画像あり
+                        </p>
+                      ) : null}
+                      <p className="mt-1 text-xs text-slate-500">
+                        {formatMessageLogDate(log)}
                       </p>
-                    ) : null}
-                    <p className="mt-1 text-xs text-slate-500">
-                      {new Intl.DateTimeFormat("ja-JP", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                        timeZone: "Asia/Tokyo",
-                      }).format(new Date(log.sent_at ?? log.created_at))}
-                    </p>
-                    {log.error_message ? (
-                      <p className="mt-2 text-xs font-semibold text-red-600">
-                        {log.error_message}
-                      </p>
-                    ) : null}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                      <span
+                        className={
+                          log.status === "成功"
+                            ? "w-fit rounded-[5px] bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700"
+                            : "w-fit rounded-[5px] bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700"
+                        }
+                      >
+                        {log.status}
+                      </span>
+                      <button
+                        type="button"
+                        aria-expanded={expandedLogId === log.id}
+                        onClick={() =>
+                          setExpandedLogId((current) =>
+                            current === log.id ? null : log.id,
+                          )
+                        }
+                        className="h-9 rounded-[5px] border border-blue-200 bg-white px-3 text-xs font-bold text-blue-700 transition hover:bg-blue-50"
+                      >
+                        {expandedLogId === log.id ? "閉じる" : "詳細を見る"}
+                      </button>
+                    </div>
                   </div>
-                  <span
-                    className={
-                      log.status === "成功"
-                        ? "w-fit rounded-[5px] bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700"
-                        : "w-fit rounded-[5px] bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700"
-                    }
-                  >
-                    {log.status}
-                  </span>
+                  {expandedLogId === log.id ? (
+                    <div className="mt-4 border-t border-slate-200 pt-4">
+                      <dl className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <dt className="text-xs font-semibold text-slate-500">
+                            送信日時
+                          </dt>
+                          <dd className="mt-1 font-semibold text-slate-900">
+                            {formatMessageLogDate(log)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-semibold text-slate-500">
+                            配信種別
+                          </dt>
+                          <dd className="mt-1 font-semibold text-slate-900">
+                            {getMessageDeliveryType(log)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-semibold text-slate-500">
+                            対象
+                          </dt>
+                          <dd className="mt-1 font-semibold text-slate-900">
+                            {log.target_type}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-semibold text-slate-500">
+                            タイトル
+                          </dt>
+                          <dd className="mt-1 font-semibold text-slate-900">
+                            {log.title}
+                          </dd>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <dt className="text-xs font-semibold text-slate-500">
+                            本文
+                          </dt>
+                          <dd className="mt-1 whitespace-pre-wrap rounded-[5px] border border-slate-200 bg-slate-50 p-3 leading-6 text-slate-800">
+                            {log.body || "本文なし"}
+                          </dd>
+                        </div>
+                        {log.image_url ? (
+                          <div className="sm:col-span-2">
+                            <dt className="text-xs font-semibold text-slate-500">
+                              画像
+                            </dt>
+                            <dd className="mt-2">
+                              <a
+                                href={log.image_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block w-fit"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={log.image_url}
+                                  alt={`${log.title}の配信画像`}
+                                  className="max-h-80 w-auto max-w-full rounded-[5px] border border-slate-200 object-contain"
+                                />
+                              </a>
+                            </dd>
+                          </div>
+                        ) : null}
+                        <div>
+                          <dt className="text-xs font-semibold text-slate-500">
+                            送信結果
+                          </dt>
+                          <dd
+                            className={`mt-1 font-bold ${
+                              log.status === "成功"
+                                ? "text-emerald-700"
+                                : "text-red-700"
+                            }`}
+                          >
+                            {log.status}
+                          </dd>
+                        </div>
+                        {log.error_message ? (
+                          <div>
+                            <dt className="text-xs font-semibold text-slate-500">
+                              エラーメッセージ
+                            </dt>
+                            <dd className="mt-1 whitespace-pre-wrap font-semibold text-red-700">
+                              {log.error_message}
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    </div>
+                  ) : null}
                 </div>
               ))}
               {!logs.length ? (
