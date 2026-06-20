@@ -435,7 +435,13 @@ export function CustomerDetail({
                   >
                     {vehicleDeleteConfirmationStep === 1
                       ? "この車両を削除しますか？"
-                      : "この操作は取り消しできません。本当に削除しますか？"}
+                      : (
+                          <>
+                            この操作は取り消しできません。
+                            <br />
+                            本当に削除しますか？
+                          </>
+                        )}
                   </p>
                   <div className="mt-6 grid grid-cols-2 gap-3">
                     <button
