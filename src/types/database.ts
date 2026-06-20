@@ -76,6 +76,7 @@ export type Database = {
           reserved_at: string;
           confirmation_token: string;
           status: Database["public"]["Enums"]["reservation_status"];
+          note: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -86,6 +87,7 @@ export type Database = {
           reserved_at: string;
           confirmation_token?: string;
           status?: Database["public"]["Enums"]["reservation_status"];
+          note?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -258,6 +260,33 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      create_reservation_atomic: {
+        Args: {
+          p_customer_name: string;
+          p_customer_kana: string | null;
+          p_phone: string;
+          p_normalized_phone: string;
+          p_vehicle_model: string;
+          p_license_plate: string | null;
+          p_shaken_expiry_date: string | null;
+          p_reserved_at: string;
+          p_note: string | null;
+          p_line_user_id: string | null;
+          p_line_display_name: string | null;
+          p_line_picture_url: string | null;
+          p_slot_type?: string;
+        };
+        Returns: Array<{
+          reservation_id: string;
+          reservation_status: string;
+          confirmation_token: string;
+          customer_id: string;
+          vehicle_id: string;
+          line_linked: boolean;
+          line_link_warning: string | null;
+        }>;
+      };
+    };
   };
 };

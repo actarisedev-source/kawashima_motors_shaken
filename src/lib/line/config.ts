@@ -16,7 +16,7 @@ export const getLineConfigurationStatus = () => {
 
   return {
     webhook: Boolean(config.channelSecret),
-    messaging: Boolean(config.channelSecret && config.channelAccessToken),
+    messaging: Boolean(config.channelAccessToken),
     liff: Boolean(config.liffId && config.loginChannelId),
     reservationLiff: Boolean(
       config.reservationLiffId && config.loginChannelId,
