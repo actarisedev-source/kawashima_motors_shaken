@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 type AdminHeaderProps = {
   title: string;
@@ -50,8 +50,19 @@ export function AdminHeader({
   children,
 }: AdminHeaderProps) {
   const pathname = usePathname();
+  const [isConfirmingLogout, setIsConfirmingLogout] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const confirmLogoutButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isConfirmingLogout) {
+      confirmLogoutButtonRef.current?.focus();
+    }
+  }, [isConfirmingLogout]);
 
   async function handleLogout() {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
     await fetch("/api/admin/logout", {
       method: "POST",
     });
@@ -59,50 +70,93 @@ export function AdminHeader({
   }
 
   return (
-    <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6 sm:px-6 lg:px-8">
-        <div className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_auto] lg:items-start">
-          <div>
-            <p className="text-sm font-semibold text-blue-700">
-              Kawashima Motors
-            </p>
-            <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <h1 className="text-2xl font-bold tracking-normal sm:text-3xl">
-                {title}
-              </h1>
+    <>
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6 sm:px-6 lg:px-8">
+          <div className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_auto] lg:items-start">
+            <div>
+              <p className="text-sm font-semibold text-blue-700">
+                Kawashima Motors
+              </p>
+              <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <h1 className="text-2xl font-bold tracking-normal sm:text-3xl">
+                  {title}
+                </h1>
+                <button
+                  type="button"
+                  onClick={() => void onRefresh()}
+                  className="h-9 w-fit rounded-md bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                >
+                  最新に更新
+                </button>
+              </div>
+              {description ? (
+                <p className="mt-1 text-sm text-slate-500">{description}</p>
+              ) : null}
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
+              {navItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={navButtonClassName(item.match(pathname))}
+                >
+                  {item.label}
+                </Link>
+              ))}
               <button
                 type="button"
-                onClick={() => void onRefresh()}
-                className="h-9 w-fit rounded-md bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                onClick={() => setIsConfirmingLogout(true)}
+                className="h-10 cursor-pointer rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-red-600 hover:bg-red-600 hover:text-white"
               >
-                最新に更新
+                ログアウト
               </button>
             </div>
-            {description ? (
-              <p className="mt-1 text-sm text-slate-500">{description}</p>
-            ) : null}
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={navButtonClassName(item.match(pathname))}
-              >
-                {item.label}
-              </Link>
-            ))}
-            <button
-              type="button"
-              onClick={() => void handleLogout()}
-              className="h-10 cursor-pointer rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-red-600 hover:bg-red-600 hover:text-white"
+          {children}
+        </div>
+      </header>
+
+      {isConfirmingLogout ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-5"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="logout-confirm-title"
+          aria-describedby="logout-confirm-description"
+        >
+          <div className="w-full max-w-sm rounded-md border border-slate-200 bg-white p-6 shadow-xl">
+            <h2 id="logout-confirm-title" className="text-lg font-bold">
+              ログアウト確認
+            </h2>
+            <p
+              id="logout-confirm-description"
+              className="mt-3 text-sm text-slate-600"
             >
-              ログアウト
-            </button>
+              ログアウトしますがよろしいですか？
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={isLoggingOut}
+                onClick={() => setIsConfirmingLogout(false)}
+                className="h-11 cursor-pointer rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                いいえ
+              </button>
+              <button
+                ref={confirmLogoutButtonRef}
+                type="button"
+                disabled={isLoggingOut}
+                onClick={() => void handleLogout()}
+                className="h-11 cursor-pointer rounded-md bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-red-300"
+              >
+                {isLoggingOut ? "ログアウト中..." : "はい"}
+              </button>
+            </div>
           </div>
         </div>
-        {children}
-      </div>
-    </header>
+      ) : null}
+    </>
   );
 }
