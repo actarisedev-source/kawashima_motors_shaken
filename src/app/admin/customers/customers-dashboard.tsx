@@ -125,7 +125,7 @@ export function CustomersDashboard({
           </div>
         ) : null}
 
-        <aside className="flex min-h-[calc(100vh-150px)] flex-col overflow-hidden rounded-[5px] border border-slate-200 bg-white shadow-sm">
+        <aside className="flex min-h-[calc(100vh-150px)] self-start flex-col overflow-hidden rounded-[5px] border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -136,7 +136,7 @@ export function CustomersDashboard({
               </div>
               <Link
                 href="/admin/customers/new"
-                className="hidden h-10 items-center rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:inline-flex"
+                className="inline-flex h-10 items-center rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
               >
                 ＋ 新規登録
               </Link>
@@ -239,12 +239,6 @@ export function CustomersDashboard({
                 次へ
               </button>
             </div>
-            <Link
-              href="/admin/customers/new"
-              className="flex h-11 items-center justify-center rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-            >
-              ＋ 新規登録
-            </Link>
           </div>
         </aside>
 
