@@ -144,6 +144,8 @@ export function CustomerDetail({
   const [pendingVehicleDeleteId, setPendingVehicleDeleteId] = useState<
     string | null
   >(null);
+  const [vehicleDeleteConfirmationStep, setVehicleDeleteConfirmationStep] =
+    useState<1 | 2>(1);
   const [updateMessage, setUpdateMessage] = useState("");
   const [customerKanaError, setCustomerKanaError] = useState("");
   const [showAllReservations, setShowAllReservations] = useState(false);
@@ -279,6 +281,7 @@ export function CustomerDetail({
     }
     setIsEditingCustomer(false);
     setPendingVehicleDeleteId(null);
+    setVehicleDeleteConfirmationStep(1);
     setUpdateMessage("");
     setCustomerKanaError("");
   }
@@ -305,9 +308,20 @@ export function CustomerDetail({
 
   function removeVehicleDraft(clientId: string) {
     setPendingVehicleDeleteId(clientId);
+    setVehicleDeleteConfirmationStep(1);
   }
 
-  function confirmVehicleDraftRemoval() {
+  function closeVehicleDeleteConfirmation() {
+    setPendingVehicleDeleteId(null);
+    setVehicleDeleteConfirmationStep(1);
+  }
+
+  function proceedVehicleDeleteConfirmation() {
+    if (vehicleDeleteConfirmationStep === 1) {
+      setVehicleDeleteConfirmationStep(2);
+      return;
+    }
+
     if (!pendingVehicleDeleteId) return;
     setVehicleDrafts((current) =>
       current.filter(
@@ -315,6 +329,7 @@ export function CustomerDetail({
       ),
     );
     setPendingVehicleDeleteId(null);
+    setVehicleDeleteConfirmationStep(1);
   }
 
   const content = (
@@ -402,23 +417,30 @@ export function CustomerDetail({
                 aria-labelledby="vehicle-delete-confirm-title"
                 aria-describedby="vehicle-delete-confirm-description"
               >
-                <div className="w-full max-w-sm rounded-[5px] border border-slate-200 bg-white p-6 shadow-xl">
+                <div
+                  key={vehicleDeleteConfirmationStep}
+                  className="w-full max-w-sm rounded-[5px] border border-slate-200 bg-white p-6 shadow-xl"
+                >
                   <h2
                     id="vehicle-delete-confirm-title"
                     className="text-lg font-bold text-slate-950"
                   >
-                    車両削除確認
+                    {vehicleDeleteConfirmationStep === 1
+                      ? "車両削除確認"
+                      : "最終確認"}
                   </h2>
                   <p
                     id="vehicle-delete-confirm-description"
                     className="mt-3 text-sm text-slate-600"
                   >
-                    この車両を削除しますか？
+                    {vehicleDeleteConfirmationStep === 1
+                      ? "この車両を削除しますか？"
+                      : "この操作は取り消しできません。"}
                   </p>
                   <div className="mt-6 grid grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setPendingVehicleDeleteId(null)}
+                      onClick={closeVehicleDeleteConfirmation}
                       className="h-11 cursor-pointer rounded-[5px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                     >
                       いいえ
@@ -426,7 +448,7 @@ export function CustomerDetail({
                     <button
                       type="button"
                       autoFocus
-                      onClick={confirmVehicleDraftRemoval}
+                      onClick={proceedVehicleDeleteConfirmation}
                       className="h-11 cursor-pointer rounded-[5px] bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-offset-2"
                     >
                       はい
