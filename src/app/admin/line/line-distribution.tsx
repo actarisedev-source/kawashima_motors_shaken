@@ -670,20 +670,6 @@ export function LineDistribution() {
                             </dd>
                           </div>
                         ) : null}
-                        <div>
-                          <dt className="text-xs font-semibold text-slate-500">
-                            送信結果
-                          </dt>
-                          <dd
-                            className={`mt-1 font-bold ${
-                              log.status === "成功"
-                                ? "text-emerald-700"
-                                : "text-red-700"
-                            }`}
-                          >
-                            {log.status}
-                          </dd>
-                        </div>
                         {log.error_message ? (
                           <div>
                             <dt className="text-xs font-semibold text-slate-500">
