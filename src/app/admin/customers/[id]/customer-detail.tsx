@@ -440,6 +440,7 @@ export function CustomerDetail({
                   <div className="mt-6 grid grid-cols-2 gap-3">
                     <button
                       type="button"
+                      autoFocus={vehicleDeleteConfirmationStep === 2}
                       onClick={closeVehicleDeleteConfirmation}
                       className="h-11 cursor-pointer rounded-[5px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                     >
@@ -447,7 +448,7 @@ export function CustomerDetail({
                     </button>
                     <button
                       type="button"
-                      autoFocus
+                      autoFocus={vehicleDeleteConfirmationStep === 1}
                       onClick={proceedVehicleDeleteConfirmation}
                       className="h-11 cursor-pointer rounded-[5px] bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-offset-2"
                     >
