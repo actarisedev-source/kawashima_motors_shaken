@@ -173,6 +173,7 @@ export async function PATCH(
 
   const { id } = await context.params;
   const body = (await request.json()) as {
+    unlinkLine?: unknown;
     vehicleId?: unknown;
     shakenExpiryDate?: unknown;
     name?: unknown;
@@ -183,6 +184,40 @@ export async function PATCH(
     memo?: unknown;
     vehicles?: unknown;
   };
+
+  if (body.unlinkLine === true) {
+    const { data: customer, error } = await supabaseServer
+      .from("customers")
+      .update({
+        line_user_id: null,
+        line_display_name: null,
+        line_picture_url: null,
+        line_linked_at: null,
+        line_status: "未連携",
+      })
+      .eq("id", id)
+      .select("id,line_status,line_display_name,line_picture_url,line_linked_at")
+      .single();
+
+    if (error) {
+      return NextResponse.json(
+        { ok: false, message: error.message },
+        { status: error.code === "PGRST116" ? 404 : 500 },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      customer: {
+        id: customer.id,
+        lineStatus: customer.line_status,
+        lineDisplayName: customer.line_display_name,
+        linePictureUrl: customer.line_picture_url,
+        lineLinkedAt: customer.line_linked_at,
+      },
+      message: "LINE連携情報を削除しました。",
+    });
+  }
 
   if (typeof body.vehicleId !== "string" || !body.vehicleId) {
     const name = normalizeOptional(body.name);

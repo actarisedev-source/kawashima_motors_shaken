@@ -146,6 +146,9 @@ export function CustomerDetail({
   >(null);
   const [vehicleDeleteConfirmationStep, setVehicleDeleteConfirmationStep] =
     useState<1 | 2>(1);
+  const [lineUnlinkConfirmationStep, setLineUnlinkConfirmationStep] =
+    useState<0 | 1 | 2>(0);
+  const [unlinkingLine, setUnlinkingLine] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
   const [customerKanaError, setCustomerKanaError] = useState("");
   const [showAllReservations, setShowAllReservations] = useState(false);
@@ -282,6 +285,7 @@ export function CustomerDetail({
     setIsEditingCustomer(false);
     setPendingVehicleDeleteId(null);
     setVehicleDeleteConfirmationStep(1);
+    setLineUnlinkConfirmationStep(0);
     setUpdateMessage("");
     setCustomerKanaError("");
   }
@@ -330,6 +334,58 @@ export function CustomerDetail({
     );
     setPendingVehicleDeleteId(null);
     setVehicleDeleteConfirmationStep(1);
+  }
+
+  async function proceedLineUnlinkConfirmation() {
+    if (lineUnlinkConfirmationStep === 1) {
+      setLineUnlinkConfirmationStep(2);
+      return;
+    }
+
+    if (lineUnlinkConfirmationStep !== 2 || unlinkingLine) return;
+
+    setUnlinkingLine(true);
+    setUpdateMessage("");
+
+    const response = await fetch(`/api/admin/customers/${customerId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ unlinkLine: true }),
+    });
+    const result = (await response.json()) as {
+      ok: boolean;
+      customer?: {
+        lineStatus: string;
+        lineDisplayName: string | null;
+        linePictureUrl: string | null;
+        lineLinkedAt: string | null;
+      };
+      message?: string;
+    };
+
+    if (!response.ok || !result.ok || !result.customer) {
+      setUpdateMessage(result.message ?? "LINE連携情報の削除に失敗しました。");
+      setUnlinkingLine(false);
+      return;
+    }
+
+    setCustomer((current) =>
+      current
+        ? {
+            ...current,
+            lineStatus: "未連携",
+            lineDisplayName: null,
+            linePictureUrl: null,
+            lineLinkedAt: null,
+          }
+        : current,
+    );
+    setLineUnlinkConfirmationStep(0);
+    setUnlinkingLine(false);
+    setUpdateMessage("LINE連携情報を削除しました。");
+    onCustomerUpdated?.();
   }
 
   const content = (
@@ -463,6 +519,63 @@ export function CustomerDetail({
                       {vehicleDeleteConfirmationStep === 1
                         ? "はい"
                         : "削除する"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {lineUnlinkConfirmationStep > 0 ? (
+              <div
+                className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-5"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="line-unlink-confirm-title"
+                aria-describedby="line-unlink-confirm-description"
+              >
+                <div
+                  key={lineUnlinkConfirmationStep}
+                  className="w-full max-w-md rounded-[5px] border border-slate-200 bg-white p-6 shadow-xl"
+                >
+                  <h2
+                    id="line-unlink-confirm-title"
+                    className="text-lg font-bold text-slate-950"
+                  >
+                    {lineUnlinkConfirmationStep === 1
+                      ? "LINE連携情報削除確認"
+                      : "最終確認"}
+                  </h2>
+                  <p
+                    id="line-unlink-confirm-description"
+                    className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600"
+                  >
+                    {lineUnlinkConfirmationStep === 1
+                      ? "LINE連携情報を削除しますか？"
+                      : "LINE連携情報を削除すると、この顧客へLINE配信ができなくなります。\n自動配信の対象からも除外されます。\n\n本当に削除しますか？"}
+                  </p>
+                  <div className="mt-6 grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      autoFocus
+                      disabled={unlinkingLine}
+                      onClick={() => setLineUnlinkConfirmationStep(0)}
+                      className="h-11 cursor-pointer rounded-[5px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {lineUnlinkConfirmationStep === 1
+                        ? "いいえ"
+                        : "キャンセル"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={unlinkingLine}
+                      onClick={() => void proceedLineUnlinkConfirmation()}
+                      className="h-11 cursor-pointer rounded-[5px] bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {lineUnlinkConfirmationStep === 1
+                        ? "はい"
+                        : unlinkingLine
+                          ? "削除中..."
+                          : "削除する"}
                     </button>
                   </div>
                 </div>
@@ -627,7 +740,18 @@ export function CustomerDetail({
                         </select>
                       </label>
                       <div className="grid gap-2 text-sm font-medium text-slate-800 lg:col-span-2 lg:col-start-1 lg:row-start-5">
-                        LINE連携状況
+                        <span className="flex items-center justify-between gap-3">
+                          LINE連携状況
+                          {customer.lineStatus === "連携済み" ? (
+                            <button
+                              type="button"
+                              onClick={() => setLineUnlinkConfirmationStep(1)}
+                              className="h-9 rounded-[5px] border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                            >
+                              削除
+                            </button>
+                          ) : null}
+                        </span>
                         <div className="flex h-11 items-center rounded-[5px] border border-[#CBD5E1] bg-[#F3F6FA] px-3">
                           <span
                             className={`inline-flex rounded-[5px] px-3 py-1 text-xs font-bold ring-1 ${
