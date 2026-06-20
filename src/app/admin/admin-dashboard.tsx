@@ -106,19 +106,6 @@ const statusClassName = (status: ReservationStatus) => {
   }
 };
 
-const statusCalendarClassName = (status: ReservationStatus) => {
-  switch (status) {
-    case "確定":
-      return "border-blue-200 bg-blue-50 text-blue-700";
-    case "完了":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    case "キャンセル":
-      return "border-zinc-200 bg-zinc-100 text-zinc-500";
-    default:
-      return "border-amber-200 bg-amber-50 text-amber-700";
-  }
-};
-
 export function AdminDashboard() {
   const [items, setItems] = useState<ReservationItem[]>([]);
   const [availability, setAvailability] = useState<
@@ -138,6 +125,7 @@ export function AdminDashboard() {
   const [selectedReservation, setSelectedReservation] =
     useState<ReservationItem | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const month = formatMonth(monthDate);
   const calendarDates = useMemo(() => getCalendarDates(monthDate), [monthDate]);
@@ -237,8 +225,30 @@ export function AdminDashboard() {
       1,
     );
     setMonthDate(nextMonth);
-    setSelectedDate(formatDateKey(nextMonth));
+  }
+
+  function selectDate(dateKey: string, closeCalendar = false) {
+    const [year, monthNumber] = dateKey.split("-").map(Number);
+
+    setSelectedDate(dateKey);
     setSelectedReservation(null);
+
+    if (
+      year !== monthDate.getFullYear() ||
+      monthNumber !== monthDate.getMonth() + 1
+    ) {
+      setMonthDate(new Date(year, monthNumber - 1, 1));
+    }
+
+    if (closeCalendar) {
+      setIsCalendarOpen(false);
+    }
+  }
+
+  function selectRelativeDate(dayOffset: number) {
+    const date = new Date();
+    date.setDate(date.getDate() + dayOffset);
+    selectDate(getJstDateKey(date));
   }
 
   useEffect(() => {
@@ -302,98 +312,44 @@ export function AdminDashboard() {
           </div>
         ) : null}
 
-        <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-            <div>
-              <h2 className="text-base font-semibold">予約カレンダー</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                日付を選択すると時間枠ごとの予約を確認できます。
-              </p>
-            </div>
-            <div className="flex items-center justify-between gap-2 sm:justify-end">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+              日付選択
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(event) => {
+                  if (event.target.value) {
+                    selectDate(event.target.value);
+                  }
+                }}
+                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-2 sm:flex">
               <button
                 type="button"
-                onClick={() => moveMonth(-1)}
-                className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                onClick={() => selectRelativeDate(0)}
+                className="h-11 cursor-pointer rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
               >
-                前月
+                今日
               </button>
-              <p className="min-w-28 text-center text-base font-bold">
-                {monthDate.getFullYear()}年 {monthDate.getMonth() + 1}月
-              </p>
               <button
                 type="button"
-                onClick={() => moveMonth(1)}
-                className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                onClick={() => selectRelativeDate(1)}
+                className="h-11 cursor-pointer rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
               >
-                次月
+                明日
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCalendarOpen(true)}
+                className="col-span-2 h-11 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              >
+                予約カレンダー
               </button>
             </div>
-          </div>
-          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center text-xs font-semibold text-slate-500">
-            {weekdayLabels.map((label) => (
-              <div key={label} className="px-1 py-2">
-                {label}
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7">
-            {calendarDates.map((date) => {
-              const dateKey = formatDateKey(date);
-              const dateItems = itemsByDate.get(dateKey) ?? [];
-              const isCurrentMonth = date.getMonth() === monthDate.getMonth();
-              const isSelected = dateKey === selectedDate;
-              const holiday = availability[dateKey]?.holiday;
-
-              return (
-                <button
-                  key={dateKey}
-                  type="button"
-                  onClick={() => {
-                    setSelectedDate(dateKey);
-                    setSelectedReservation(null);
-                  }}
-                  className={[
-                    "min-h-24 border-b border-r border-slate-100 p-2 text-left transition sm:min-h-32",
-                    isSelected ? "bg-blue-50 ring-2 ring-inset ring-blue-500" : "",
-                    holiday ? "bg-slate-100 text-slate-400" : "bg-white",
-                    !isCurrentMonth ? "text-slate-300" : "",
-                    !holiday && !isSelected ? "hover:bg-blue-50/60" : "",
-                  ].join(" ")}
-                >
-                  <div className="flex items-start justify-between gap-1">
-                    <span className="text-sm font-bold">{date.getDate()}</span>
-                    {isCurrentMonth && dateItems.length ? (
-                      <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-bold text-white">
-                        {dateItems.length}件
-                      </span>
-                    ) : null}
-                  </div>
-                  {isCurrentMonth && holiday ? (
-                    <span className="mt-2 block text-[11px] font-semibold">
-                      休業
-                    </span>
-                  ) : null}
-                  <div className="mt-2 hidden gap-1 sm:grid">
-                    {dateItems.slice(0, 3).map((item) => (
-                      <span
-                        key={item.id}
-                        className={`truncate rounded border px-1.5 py-0.5 text-[11px] font-semibold ${statusCalendarClassName(
-                          item.status,
-                        )}`}
-                      >
-                        {getJstTimeKey(item.reservedAt)} {item.customerName}
-                      </span>
-                    ))}
-                    {dateItems.length > 3 ? (
-                      <span className="text-[11px] font-semibold text-slate-500">
-                        +{dateItems.length - 3}件
-                      </span>
-                    ) : null}
-                  </div>
-                </button>
-              );
-            })}
           </div>
         </section>
 
@@ -571,6 +527,126 @@ export function AdminDashboard() {
           </aside>
         </section>
       </main>
+
+      {isCalendarOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-3 sm:p-6"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsCalendarOpen(false);
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reservation-calendar-title"
+            className="max-h-[92vh] w-full max-w-5xl overflow-auto rounded-lg border border-slate-200 bg-white shadow-xl"
+          >
+            <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div>
+                <h2
+                  id="reservation-calendar-title"
+                  className="text-base font-semibold"
+                >
+                  予約カレンダー
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  月全体の受付状況を確認できます。
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => moveMonth(-1)}
+                  className="h-9 cursor-pointer rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  前月
+                </button>
+                <p className="min-w-28 text-center text-base font-bold">
+                  {monthDate.getFullYear()}年 {monthDate.getMonth() + 1}月
+                </p>
+                <button
+                  type="button"
+                  onClick={() => moveMonth(1)}
+                  className="h-9 cursor-pointer rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  次月
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCalendarOpen(false)}
+                  className="ml-auto h-9 cursor-pointer rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  閉じる
+                </button>
+              </div>
+            </div>
+            <div className="min-w-[700px]">
+              <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center text-xs font-semibold text-slate-500">
+                {weekdayLabels.map((label) => (
+                  <div key={label} className="px-1 py-2">
+                    {label}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7">
+                {calendarDates.map((date) => {
+                  const dateKey = formatDateKey(date);
+                  const dateItems = itemsByDate.get(dateKey) ?? [];
+                  const acceptingCount = dateItems.filter(
+                    (item) => item.status === "受付中",
+                  ).length;
+                  const confirmedCount = dateItems.filter(
+                    (item) => item.status === "確定",
+                  ).length;
+                  const isCurrentMonth =
+                    date.getMonth() === monthDate.getMonth();
+                  const isSelected = dateKey === selectedDate;
+                  const holiday = availability[dateKey]?.holiday;
+
+                  return (
+                    <button
+                      key={dateKey}
+                      type="button"
+                      onClick={() => selectDate(dateKey, true)}
+                      className={[
+                        "min-h-28 cursor-pointer border-b border-r border-slate-100 p-2 text-left transition",
+                        isSelected
+                          ? "bg-blue-50 ring-2 ring-inset ring-blue-500"
+                          : "",
+                        holiday ? "bg-slate-100 text-slate-400" : "bg-white",
+                        !isCurrentMonth ? "text-slate-300" : "",
+                        !holiday && !isSelected ? "hover:bg-blue-50/60" : "",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-start justify-between gap-1">
+                        <span className="text-sm font-bold">
+                          {date.getDate()}
+                        </span>
+                        {isCurrentMonth && holiday ? (
+                          <span className="text-[11px] font-semibold">休業</span>
+                        ) : null}
+                      </div>
+                      {isCurrentMonth ? (
+                        <div className="mt-3 grid gap-1 text-xs font-semibold">
+                          <p className="text-amber-700">
+                            受付中：{acceptingCount}件
+                          </p>
+                          <p className="text-blue-700">
+                            確認済：{confirmedCount}件
+                          </p>
+                        </div>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }
