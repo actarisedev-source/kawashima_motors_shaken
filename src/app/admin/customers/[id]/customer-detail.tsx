@@ -141,6 +141,9 @@ export function CustomerDetail({
   const [updatingCustomer, setUpdatingCustomer] = useState(false);
   const [isEditingCustomer, setIsEditingCustomer] = useState(false);
   const [isConfirmingEdit, setIsConfirmingEdit] = useState(false);
+  const [pendingVehicleDeleteId, setPendingVehicleDeleteId] = useState<
+    string | null
+  >(null);
   const [updateMessage, setUpdateMessage] = useState("");
   const [customerKanaError, setCustomerKanaError] = useState("");
   const [showAllReservations, setShowAllReservations] = useState(false);
@@ -275,6 +278,7 @@ export function CustomerDetail({
       setVehicleDrafts(toVehicleDrafts(customer.vehicles));
     }
     setIsEditingCustomer(false);
+    setPendingVehicleDeleteId(null);
     setUpdateMessage("");
     setCustomerKanaError("");
   }
@@ -300,13 +304,17 @@ export function CustomerDetail({
   }
 
   function removeVehicleDraft(clientId: string) {
-    if (!window.confirm("この車両を削除しますか？")) {
-      return;
-    }
+    setPendingVehicleDeleteId(clientId);
+  }
 
+  function confirmVehicleDraftRemoval() {
+    if (!pendingVehicleDeleteId) return;
     setVehicleDrafts((current) =>
-      current.filter((vehicle) => vehicle.clientId !== clientId),
+      current.filter(
+        (vehicle) => vehicle.clientId !== pendingVehicleDeleteId,
+      ),
     );
+    setPendingVehicleDeleteId(null);
   }
 
   const content = (
@@ -378,6 +386,48 @@ export function CustomerDetail({
                       autoFocus
                       onClick={confirmCustomerEdit}
                       className="h-10 rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
+                    >
+                      はい
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {pendingVehicleDeleteId ? (
+              <div
+                className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-5"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="vehicle-delete-confirm-title"
+                aria-describedby="vehicle-delete-confirm-description"
+              >
+                <div className="w-full max-w-sm rounded-[5px] border border-slate-200 bg-white p-6 shadow-xl">
+                  <h2
+                    id="vehicle-delete-confirm-title"
+                    className="text-lg font-bold text-slate-950"
+                  >
+                    車両削除確認
+                  </h2>
+                  <p
+                    id="vehicle-delete-confirm-description"
+                    className="mt-3 text-sm text-slate-600"
+                  >
+                    この車両を削除しますか？
+                  </p>
+                  <div className="mt-6 grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPendingVehicleDeleteId(null)}
+                      className="h-11 cursor-pointer rounded-[5px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      いいえ
+                    </button>
+                    <button
+                      type="button"
+                      autoFocus
+                      onClick={confirmVehicleDraftRemoval}
+                      className="h-11 cursor-pointer rounded-[5px] bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-offset-2"
                     >
                       はい
                     </button>
