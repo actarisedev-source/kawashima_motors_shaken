@@ -435,7 +435,7 @@ export function CustomerDetail({
                   >
                     {vehicleDeleteConfirmationStep === 1
                       ? "この車両を削除しますか？"
-                      : "この操作は取り消しできません。"}
+                      : "この操作は取り消しできません。本当に削除しますか？"}
                   </p>
                   <div className="mt-6 grid grid-cols-2 gap-3">
                     <button
@@ -444,7 +444,9 @@ export function CustomerDetail({
                       onClick={closeVehicleDeleteConfirmation}
                       className="h-11 cursor-pointer rounded-[5px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                     >
-                      いいえ
+                      {vehicleDeleteConfirmationStep === 1
+                        ? "いいえ"
+                        : "キャンセル"}
                     </button>
                     <button
                       type="button"
@@ -452,7 +454,9 @@ export function CustomerDetail({
                       onClick={proceedVehicleDeleteConfirmation}
                       className="h-11 cursor-pointer rounded-[5px] bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-offset-2"
                     >
-                      はい
+                      {vehicleDeleteConfirmationStep === 1
+                        ? "はい"
+                        : "削除する"}
                     </button>
                   </div>
                 </div>
