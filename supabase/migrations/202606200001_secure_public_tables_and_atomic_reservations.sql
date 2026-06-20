@@ -102,7 +102,7 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = pg_catalog, public
+set search_path = pg_catalog, public, extensions
 as $$
 declare
   v_date date;
