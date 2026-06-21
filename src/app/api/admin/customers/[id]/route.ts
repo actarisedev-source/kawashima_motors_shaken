@@ -572,7 +572,6 @@ export async function DELETE(
 
   const relatedDeletes = [
     { table: "line_message_logs" as const, label: "LINE配信履歴" },
-    { table: "line_profiles" as const, label: "LINE連携情報" },
     { table: "reservations" as const, label: "予約履歴" },
     { table: "vehicles" as const, label: "車両情報" },
   ];
