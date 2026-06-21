@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   getJstDateKey,
@@ -8,6 +7,10 @@ import {
   reservationTimeSlots,
 } from "@/lib/reservations/slots";
 import { AdminHeader } from "./admin-header";
+import {
+  ReservationCustomerDetail,
+  ReservationCustomerSummary,
+} from "./reservation-customer-summary";
 
 const reservationStatuses = ["受付中", "確定", "完了", "キャンセル"] as const;
 const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
@@ -125,11 +128,16 @@ export function AdminDashboard() {
   );
   const [selectedReservation, setSelectedReservation] =
     useState<ReservationItem | null>(null);
+  const [selectedCustomer, setSelectedCustomer] =
+    useState<ReservationCustomerDetail | null>(null);
+  const [customerLoading, setCustomerLoading] = useState(false);
+  const [customerError, setCustomerError] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [printedAt, setPrintedAt] = useState(() => new Date());
 
   const month = formatMonth(monthDate);
+  const selectedCustomerId = selectedReservation?.customerId ?? null;
   const calendarDates = useMemo(() => getCalendarDates(monthDate), [monthDate]);
 
   async function loadReservations() {
@@ -263,6 +271,56 @@ export function AdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month]);
 
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      setSelectedCustomer(null);
+      setCustomerLoading(false);
+      setCustomerError("");
+      return;
+    }
+
+    const controller = new AbortController();
+    setSelectedCustomer(null);
+    setCustomerLoading(true);
+    setCustomerError("");
+
+    void fetch(`/api/admin/customers/${selectedCustomerId}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => ({
+        response,
+        result: (await response.json()) as {
+          ok: boolean;
+          customer?: ReservationCustomerDetail;
+          message?: string;
+        },
+      }))
+      .then(({ response, result }) => {
+        if (!response.ok || !result.ok || !result.customer) {
+          setCustomerError(
+            result.message ?? "顧客情報の取得に失敗しました。",
+          );
+          return;
+        }
+
+        setSelectedCustomer(result.customer);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        setCustomerError("顧客情報の取得に失敗しました。");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setCustomerLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [selectedCustomerId]);
+
   const itemsByDate = useMemo(() => {
     const map = new Map<string, ReservationItem[]>();
 
@@ -361,7 +419,7 @@ export function AdminDashboard() {
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[1fr_360px]">
+        <section className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_440px]">
           <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <div>
@@ -484,14 +542,8 @@ export function AdminDashboard() {
                 <div>
                   <p className="text-sm text-slate-500">顧客名</p>
                   <p className="mt-1 font-semibold text-slate-950">
-                    {selectedReservation.customerName}
+                    {selectedReservation.customerName} 様
                   </p>
-                  <Link
-                    href={`/admin/customers/${selectedReservation.customerId}`}
-                    className="mt-2 inline-flex text-sm font-semibold text-blue-700 transition hover:text-blue-900"
-                  >
-                    顧客詳細を見る
-                  </Link>
                 </div>
                 <dl className="grid gap-4 text-sm">
                   <div>
@@ -535,6 +587,11 @@ export function AdminDashboard() {
                     </select>
                   </label>
                 </div>
+                <ReservationCustomerSummary
+                  customer={selectedCustomer}
+                  loading={customerLoading}
+                  error={customerError}
+                />
               </div>
             ) : (
               <div className="px-5 py-12 text-center text-sm text-slate-500">
