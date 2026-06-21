@@ -604,14 +604,12 @@ export function ReservationForm({
                 : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
             }
           />
-          {fieldErrors.customerName ? (
-            <span
-              id="customer-name-error"
-              className="text-xs font-semibold text-red-600"
-            >
-              {fieldErrors.customerName}
-            </span>
-          ) : null}
+          <span
+            id="customer-name-error"
+            className="min-h-4 text-xs font-semibold leading-4 text-red-600"
+          >
+            {fieldErrors.customerName}
+          </span>
         </label>
         <label className="grid gap-2 text-sm font-medium text-zinc-800">
           ふりがな
@@ -633,14 +631,12 @@ export function ReservationForm({
                 : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
             }
           />
-          {customerKanaError ? (
-            <span
-              id="customer-kana-error"
-              className="text-xs font-semibold text-red-600"
-            >
-              {customerKanaError}
-            </span>
-          ) : null}
+          <span
+            id="customer-kana-error"
+            className="min-h-4 text-xs font-semibold leading-4 text-red-600"
+          >
+            {customerKanaError}
+          </span>
         </label>
         <label className="grid gap-2 text-sm font-medium text-zinc-800">
           電話番号
@@ -661,14 +657,12 @@ export function ReservationForm({
                 : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
             }
           />
-          {fieldErrors.phone ? (
-            <span
-              id="phone-error"
-              className="text-xs font-semibold text-red-600"
-            >
-              {fieldErrors.phone}
-            </span>
-          ) : null}
+          <span
+            id="phone-error"
+            className="min-h-4 text-xs font-semibold leading-4 text-red-600"
+          >
+            {fieldErrors.phone}
+          </span>
         </label>
         <label className="grid gap-2 text-sm font-medium text-zinc-800">
           車種
@@ -688,14 +682,12 @@ export function ReservationForm({
                 : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
             }
           />
-          {fieldErrors.vehicleModel ? (
-            <span
-              id="vehicle-model-error"
-              className="text-xs font-semibold text-red-600"
-            >
-              {fieldErrors.vehicleModel}
-            </span>
-          ) : null}
+          <span
+            id="vehicle-model-error"
+            className="min-h-4 text-xs font-semibold leading-4 text-red-600"
+          >
+            {fieldErrors.vehicleModel}
+          </span>
         </label>
         <label className="grid gap-2 text-sm font-medium text-zinc-800">
           ナンバー
@@ -703,6 +695,7 @@ export function ReservationForm({
             name="licensePlate"
             className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
           />
+          <span aria-hidden="true" className="min-h-4" />
         </label>
         <label className="grid gap-2 text-sm font-medium text-zinc-800">
           車検満了日
@@ -711,6 +704,7 @@ export function ReservationForm({
             type="date"
             className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
           />
+          <span aria-hidden="true" className="min-h-4" />
         </label>
       </div>
 
