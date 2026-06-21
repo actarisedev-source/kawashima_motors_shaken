@@ -386,13 +386,13 @@ export function AdminDashboard() {
                     key={time}
                     className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[72px_1fr]"
                   >
-                    <div className="grid gap-1">
+                    <div className="grid content-start gap-1">
                       <div className="text-sm font-bold text-slate-950">
                         {time}
                       </div>
                       <span
                         className={[
-                          "w-fit rounded-full px-2 py-0.5 text-xs font-semibold ring-1",
+                          "inline-flex h-fit w-fit self-start whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ring-1",
                           isStopped
                             ? "bg-slate-100 text-slate-500 ring-slate-200"
                             : isFull
