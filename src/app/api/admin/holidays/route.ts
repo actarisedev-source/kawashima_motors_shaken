@@ -9,6 +9,7 @@ import {
   isHolidayType,
   normalizeHoliday,
 } from "@/lib/holidays/holidays";
+import { getJstDateKey } from "@/lib/reservations/slots";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -35,7 +36,14 @@ export async function GET(request: NextRequest) {
     return unauthorizedResponse();
   }
 
-  const { data, error } = await fetchHolidays();
+  const [{ data, error }, reservationsResult] = await Promise.all([
+    fetchHolidays(),
+    supabaseServer
+      .from("reservations")
+      .select("reserved_at,status")
+      .neq("status", "キャンセル")
+      .gte("reserved_at", `${getJstDateKey(new Date())}T00:00:00+09:00`),
+  ]);
 
   if (error) {
     return NextResponse.json(
@@ -44,9 +52,25 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  if (reservationsResult.error) {
+    return NextResponse.json(
+      { ok: false, message: reservationsResult.error.message },
+      { status: 500 },
+    );
+  }
+
+  const reservationCounts = (reservationsResult.data ?? []).reduce<
+    Record<string, number>
+  >((counts, reservation) => {
+    const dateKey = getJstDateKey(reservation.reserved_at);
+    counts[dateKey] = (counts[dateKey] ?? 0) + 1;
+    return counts;
+  }, {});
+
   return NextResponse.json({
     ok: true,
     items: data.map(normalizeHoliday),
+    reservationCounts,
   });
 }
 
