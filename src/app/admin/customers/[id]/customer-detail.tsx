@@ -2,7 +2,6 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { getAgeFromBirthDate } from "@/lib/customers/birth-date";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { AdminHeader } from "../../admin-header";
@@ -133,7 +132,6 @@ export function CustomerDetail({
   embedded = false,
   onCustomerUpdated,
 }: CustomerDetailProps) {
-  const router = useRouter();
   const [customer, setCustomer] = useState<CustomerDetailItem | null>(null);
   const [vehicleDrafts, setVehicleDrafts] = useState<VehicleDraft[]>([]);
   const [loadState, setLoadState] = useState<LoadState>({
@@ -156,6 +154,8 @@ export function CustomerDetail({
   const [customerDeletePassword, setCustomerDeletePassword] = useState("");
   const [customerDeleteError, setCustomerDeleteError] = useState("");
   const [deletingCustomer, setDeletingCustomer] = useState(false);
+  const [customerDeleteSucceeded, setCustomerDeleteSucceeded] =
+    useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
   const [customerKanaError, setCustomerKanaError] = useState("");
   const [showAllReservations, setShowAllReservations] = useState(false);
@@ -448,8 +448,9 @@ export function CustomerDetail({
     }
 
     setCustomerDeleteConfirmationStep(0);
-    router.push("/admin/customers");
-    router.refresh();
+    setCustomerDeletePassword("");
+    setDeletingCustomer(false);
+    setCustomerDeleteSucceeded(true);
   }
 
   const content = (
@@ -749,6 +750,32 @@ export function CustomerDetail({
                             : "削除"}
                     </button>
                   </div>
+                </div>
+              </div>
+            ) : null}
+
+            {customerDeleteSucceeded ? (
+              <div
+                className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-5"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="customer-delete-success-title"
+              >
+                <div className="w-full max-w-sm rounded-[5px] border border-slate-200 bg-white p-6 text-center shadow-xl">
+                  <h2
+                    id="customer-delete-success-title"
+                    className="text-xl font-bold text-slate-950"
+                  >
+                    削除しました。
+                  </h2>
+                  <button
+                    type="button"
+                    autoFocus
+                    onClick={() => window.location.replace("/admin/customers")}
+                    className="mt-6 h-11 w-full rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
+                  >
+                    顧客一覧へ戻る
+                  </button>
                 </div>
               </div>
             ) : null}
