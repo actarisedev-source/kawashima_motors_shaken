@@ -1080,23 +1080,15 @@ export function CustomerDetail({
                     </div>
                   </section>
 
-                  <section className="grid gap-4 rounded-[5px] border border-red-200 bg-red-50 p-5">
-                    <div>
-                      <h3 className="text-base font-bold text-red-900">
-                        危険操作
-                      </h3>
-                      <p className="mt-1 text-sm text-red-700">
-                        顧客とすべての関連情報を完全に削除します。
-                      </p>
-                    </div>
+                  <div className="flex justify-center py-2">
                     <button
                       type="button"
                       onClick={() => setCustomerDeleteConfirmationStep(1)}
-                      className="h-10 w-full rounded-[5px] border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-100 sm:w-fit"
+                      className="h-10 rounded-[5px] border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50"
                     >
                       顧客を削除
                     </button>
-                  </section>
+                  </div>
                 </form>
               ) : (
                 <div className="grid gap-8 p-6 sm:p-8">
