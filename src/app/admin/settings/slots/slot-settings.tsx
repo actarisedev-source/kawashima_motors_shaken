@@ -26,6 +26,8 @@ const createDefaultWeekly = () =>
   ) as WeeklySettings;
 
 const createSpecialCapacities = () => createDefaultDay();
+const allWeekdays = Array.from({ length: 7 }, (_, weekday) => weekday);
+const allTimeSlots = [...reservationTimeSlots];
 
 export function SlotSettings() {
   const [weekly, setWeekly] = useState<WeeklySettings>(createDefaultWeekly);
@@ -39,6 +41,65 @@ export function SlotSettings() {
     message: "読み込み中です。",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [showBulkSettings, setShowBulkSettings] = useState(false);
+  const [bulkWeekdays, setBulkWeekdays] = useState<number[]>(allWeekdays);
+  const [bulkTimeSlots, setBulkTimeSlots] = useState<string[]>(allTimeSlots);
+  const [bulkCapacity, setBulkCapacity] = useState(1);
+
+  function openBulkSettings() {
+    setBulkWeekdays(allWeekdays);
+    setBulkTimeSlots(allTimeSlots);
+    setBulkCapacity(1);
+    setShowBulkSettings(true);
+  }
+
+  function toggleBulkWeekday(weekday: number) {
+    setBulkWeekdays((current) =>
+      current.includes(weekday)
+        ? current.filter((value) => value !== weekday)
+        : [...current, weekday],
+    );
+  }
+
+  function toggleBulkTimeSlot(time: string) {
+    setBulkTimeSlots((current) =>
+      current.includes(time)
+        ? current.filter((value) => value !== time)
+        : [...current, time],
+    );
+  }
+
+  function applyBulkSettings() {
+    if (
+      !bulkWeekdays.length ||
+      !bulkTimeSlots.length ||
+      !Number.isInteger(bulkCapacity) ||
+      bulkCapacity < 0 ||
+      bulkCapacity > 10
+    ) {
+      return;
+    }
+
+    setWeekly((current) => {
+      const next = { ...current };
+
+      for (const weekday of bulkWeekdays) {
+        const weekdayKey = String(weekday);
+        const nextDay = {
+          ...(current[weekdayKey] ?? createDefaultDay()),
+        };
+
+        for (const time of bulkTimeSlots) {
+          nextDay[time] = bulkCapacity;
+        }
+
+        next[weekdayKey] = nextDay;
+      }
+
+      return next;
+    });
+    setShowBulkSettings(false);
+  }
 
   async function loadSlots() {
     setLoadState({ status: "loading", message: "読み込み中です。" });
@@ -172,14 +233,24 @@ export function SlotSettings() {
                 0台は受付停止です。各時間帯は0〜10台で設定できます。
               </p>
             </div>
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => void saveWeekly()}
-              className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-            >
-              基本枠を保存
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={openBulkSettings}
+                className="h-10 rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                一括設定
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => void saveWeekly()}
+                className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                基本枠を保存
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[920px] border-collapse text-left text-sm">
@@ -322,6 +393,145 @@ export function SlotSettings() {
           </section>
         </section>
       </main>
+
+      {showBulkSettings ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/40 p-5"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-slot-settings-title"
+        >
+          <div className="my-auto w-full max-w-xl rounded-md border border-slate-200 bg-white p-6 shadow-xl">
+            <h2
+              id="bulk-slot-settings-title"
+              className="text-lg font-bold text-slate-950"
+            >
+              曜日別基本枠を一括設定
+            </h2>
+
+            <div className="mt-6 grid gap-6">
+              <fieldset>
+                <legend className="text-sm font-bold text-slate-800">
+                  対象曜日
+                </legend>
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={bulkWeekdays.length === allWeekdays.length}
+                      onChange={() =>
+                        setBulkWeekdays((current) =>
+                          current.length === allWeekdays.length
+                            ? []
+                            : allWeekdays,
+                        )
+                      }
+                      className="h-4 w-4 accent-blue-600"
+                    />
+                    全曜日
+                  </label>
+                  {weekdayLabels.map((label, weekday) => (
+                    <label
+                      key={label}
+                      className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={bulkWeekdays.includes(weekday)}
+                        onChange={() => toggleBulkWeekday(weekday)}
+                        className="h-4 w-4 accent-blue-600"
+                      />
+                      {label}曜日
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend className="text-sm font-bold text-slate-800">
+                  対象時間帯
+                </legend>
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={bulkTimeSlots.length === allTimeSlots.length}
+                      onChange={() =>
+                        setBulkTimeSlots((current) =>
+                          current.length === allTimeSlots.length
+                            ? []
+                            : allTimeSlots,
+                        )
+                      }
+                      className="h-4 w-4 accent-blue-600"
+                    />
+                    全時間帯
+                  </label>
+                  {reservationTimeSlots.map((time) => (
+                    <label
+                      key={time}
+                      className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={bulkTimeSlots.includes(time)}
+                        onChange={() => toggleBulkTimeSlot(time)}
+                        className="h-4 w-4 accent-blue-600"
+                      />
+                      {time}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <label className="grid gap-2 text-sm font-bold text-slate-800">
+                設定台数
+                <span className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={bulkCapacity}
+                    onChange={(event) =>
+                      setBulkCapacity(Number(event.target.value))
+                    }
+                    className="h-11 w-28 rounded-md border border-slate-300 px-3 text-base outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                  />
+                  <span className="font-semibold text-slate-600">台</span>
+                  <span className="text-xs font-semibold text-slate-500">
+                    0台は受付停止です。
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            <div className="mt-7 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setShowBulkSettings(false)}
+                className="h-11 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={
+                  !bulkWeekdays.length ||
+                  !bulkTimeSlots.length ||
+                  !Number.isInteger(bulkCapacity) ||
+                  bulkCapacity < 0 ||
+                  bulkCapacity > 10
+                }
+                onClick={applyBulkSettings}
+                className="h-11 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                反映する
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
