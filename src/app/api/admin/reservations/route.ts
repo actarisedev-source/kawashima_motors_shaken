@@ -93,6 +93,7 @@ export async function GET(request: NextRequest) {
       customerName: customer?.name ?? "未登録",
       phone: customer?.phone ?? "",
       vehicleModel: vehicle?.model_name ?? "未登録",
+      licensePlate: vehicle?.plate_number ?? "",
       createdAt: reservation.created_at,
     };
   });

@@ -16,3 +16,30 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.reservation-print-sheet {
+  display: none;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 15mm;
+}
+
+@media print {
+  html,
+  body {
+    min-height: auto;
+    background: #ffffff;
+  }
+
+  .admin-reservation-screen {
+    display: none !important;
+  }
+
+  .reservation-print-sheet {
+    display: block;
+    width: 100%;
+    color: #0f172a;
+  }
+}

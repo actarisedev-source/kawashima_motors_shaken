@@ -21,6 +21,7 @@ type ReservationItem = {
   customerName: string;
   phone: string;
   vehicleModel: string;
+  licensePlate: string;
   status: ReservationStatus;
   createdAt: string;
 };
@@ -126,6 +127,7 @@ export function AdminDashboard() {
     useState<ReservationItem | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [printedAt, setPrintedAt] = useState(() => new Date());
 
   const month = formatMonth(monthDate);
   const calendarDates = useMemo(() => getCalendarDates(monthDate), [monthDate]);
@@ -251,6 +253,11 @@ export function AdminDashboard() {
     selectDate(getJstDateKey(date));
   }
 
+  function printSelectedReservations() {
+    setPrintedAt(new Date());
+    window.setTimeout(() => window.print(), 0);
+  }
+
   useEffect(() => {
     void refreshAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -296,7 +303,8 @@ export function AdminDashboard() {
   }, [selectedDateItems]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
+    <>
+    <div className="admin-reservation-screen min-h-screen bg-slate-50 text-slate-950">
       <AdminHeader title="予約管理" onRefresh={refreshAll} />
 
       <main className="mx-auto grid max-w-7xl gap-6 px-5 py-6 sm:px-6 lg:px-8">
@@ -366,11 +374,20 @@ export function AdminDashboard() {
                     : `${selectedDateItems.length}件の予約があります。`}
                 </p>
               </div>
-              {selectedDateItems.length ? (
-                <span className="w-fit rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700 ring-1 ring-blue-100">
-                  {selectedDateItems.length}件
-                </span>
-              ) : null}
+              <div className="flex items-center gap-2">
+                {selectedDateItems.length ? (
+                  <span className="w-fit rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700 ring-1 ring-blue-100">
+                    {selectedDateItems.length}件
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={printSelectedReservations}
+                  className="h-9 cursor-pointer rounded-md border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
+                >
+                  印刷
+                </button>
+              </div>
             </div>
             <div className="grid gap-3 p-4 sm:p-5">
               {reservationTimeSlots.map((time) => {
@@ -424,7 +441,7 @@ export function AdminDashboard() {
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                               <div>
                                 <p className="font-semibold text-slate-950">
-                                  {item.customerName}
+                                  {item.customerName} 様
                                 </p>
                                 <p className="mt-1 text-sm text-slate-500">
                                   {item.vehicleModel} / {item.phone || "電話番号未登録"}
@@ -648,5 +665,56 @@ export function AdminDashboard() {
         </div>
       ) : null}
     </div>
+    <section className="reservation-print-sheet" aria-label="選択日の予約印刷一覧">
+      <header className="mb-7 border-b-2 border-slate-900 pb-4">
+        <h1 className="text-2xl font-bold">川島モータース 車検予約一覧</h1>
+        <div className="mt-3 flex justify-between gap-6 text-sm">
+          <p>
+            <span className="font-semibold">日付：</span>
+            {formatSelectedDate(selectedDate)}
+          </p>
+          <p>
+            <span className="font-semibold">印刷日時：</span>
+            {formatDateTime(printedAt.toISOString())}
+          </p>
+        </div>
+      </header>
+
+      {selectedDateItems.length ? (
+        <table className="w-full table-fixed border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-100 text-left">
+              <th className="w-[16%] border border-slate-400 px-3 py-2">時間</th>
+              <th className="w-[30%] border border-slate-400 px-3 py-2">お名前</th>
+              <th className="w-[27%] border border-slate-400 px-3 py-2">車種</th>
+              <th className="w-[27%] border border-slate-400 px-3 py-2">ナンバー</th>
+            </tr>
+          </thead>
+          <tbody>
+            {selectedDateItems.map((item) => (
+              <tr key={item.id}>
+                <td className="border border-slate-400 px-3 py-3 font-semibold">
+                  {getJstTimeKey(item.reservedAt)}
+                </td>
+                <td className="border border-slate-400 px-3 py-3">
+                  {item.customerName} 様
+                </td>
+                <td className="border border-slate-400 px-3 py-3">
+                  {item.vehicleModel}
+                </td>
+                <td className="border border-slate-400 px-3 py-3">
+                  {item.licensePlate || "未登録"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="border border-slate-300 px-5 py-8 text-center text-base font-semibold">
+          この日の予約はありません
+        </p>
+      )}
+    </section>
+    </>
   );
 }
