@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
+import { normalizePhone } from "@/lib/customers/phone";
 import { reservationTimeSlots } from "@/lib/reservations/slots";
 import { reservationCompletionStorageKey } from "@/lib/reservations/completion-storage";
 import {
@@ -48,8 +49,21 @@ type ReservationFormProps = {
   reservationLiffId?: string;
 };
 
+type FieldErrors = {
+  customerName: string;
+  phone: string;
+  vehicleModel: string;
+  reservationDateTime: string;
+};
+
 const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
 const baseYear = new Date().getFullYear();
+const emptyFieldErrors: FieldErrors = {
+  customerName: "",
+  phone: "",
+  vehicleModel: "",
+  reservationDateTime: "",
+};
 
 const formatMonth = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -97,6 +111,9 @@ export function ReservationForm({
   const [selectedTime, setSelectedTime] = useState("");
   const [customerKana, setCustomerKana] = useState("");
   const [customerKanaError, setCustomerKanaError] = useState("");
+  const [phone, setPhone] = useState("");
+  const [fieldErrors, setFieldErrors] =
+    useState<FieldErrors>(emptyFieldErrors);
   const [lineIdToken, setLineIdToken] = useState("");
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>(
     {},
@@ -196,20 +213,29 @@ export function ReservationForm({
       return;
     }
 
-    if (!selectedDate || !selectedTime) {
-      setSubmitState({
-        status: "error",
-        message: "予約表から予約日と時間を選択してください。",
-      });
-      return;
-    }
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const customerName = String(formData.get("customerName") ?? "").trim();
+    const normalizedPhone = normalizePhone(phone);
+    const vehicleModel = String(formData.get("vehicleModel") ?? "").trim();
+    const nextFieldErrors: FieldErrors = {
+      customerName: customerName ? "" : "お名前を入力してください。",
+      phone: normalizedPhone ? "" : "電話番号を入力してください。",
+      vehicleModel: vehicleModel ? "" : "車種を入力してください。",
+      reservationDateTime:
+        selectedDate && selectedTime ? "" : "予約日時を選択してください。",
+    };
+    const hasFieldError = Object.values(nextFieldErrors).some(Boolean);
+
+    setPhone(normalizedPhone);
+    setFieldErrors(nextFieldErrors);
 
     if (!isValidHiragana(customerKana)) {
       setCustomerKanaError(kanaErrorMessage);
-      setSubmitState({
-        status: "error",
-        message: kanaErrorMessage,
-      });
+    }
+
+    if (hasFieldError || !isValidHiragana(customerKana)) {
+      setSubmitState({ status: "idle", message: "" });
       return;
     }
 
@@ -226,14 +252,12 @@ export function ReservationForm({
     submissionInFlightRef.current = true;
     setSubmitState({ status: "submitting", message: "送信中です。" });
 
-    const form = event.currentTarget;
-    const formData = new FormData(form);
     const completedReservation = {
       reservedDate: selectedDate,
       reservedTime: selectedTime,
-      customerName: String(formData.get("customerName") ?? ""),
-      phone: String(formData.get("phone") ?? ""),
-      vehicleModel: String(formData.get("vehicleModel") ?? ""),
+      customerName,
+      phone: normalizedPhone,
+      vehicleModel,
     };
 
     try {
@@ -289,6 +313,8 @@ export function ReservationForm({
       setSelectedTime("");
       setCustomerKana("");
       setCustomerKanaError("");
+      setPhone("");
+      setFieldErrors(emptyFieldErrors);
       const successState: SubmitState = {
         status: "success",
         message: result.lineLinkWarning ?? "",
@@ -352,6 +378,7 @@ export function ReservationForm({
   return (
     <form
       onSubmit={handleSubmit}
+      noValidate
       className="grid gap-5 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm"
     >
       <section className="grid gap-5">
@@ -419,7 +446,13 @@ export function ReservationForm({
           </span>
         </div>
 
-        <div className="overflow-hidden rounded-[16px] border border-zinc-200 bg-white shadow-sm">
+        <div
+          className={`overflow-hidden rounded-[16px] border bg-white shadow-sm ${
+            fieldErrors.reservationDateTime
+              ? "border-red-400"
+              : "border-zinc-200"
+          }`}
+        >
           <div ref={scheduleScrollRef} className="overflow-x-auto">
             <table className="min-w-max border-collapse text-center">
               <thead>
@@ -484,6 +517,10 @@ export function ReservationForm({
                             onClick={() => {
                               setSelectedDate(dateKey);
                               setSelectedTime(time);
+                              setFieldErrors((current) => ({
+                                ...current,
+                                reservationDateTime: "",
+                              }));
                             }}
                             aria-label={`${date.getMonth() + 1}/${date.getDate()} ${time} ${status.label}`}
                             className={[
@@ -541,16 +578,40 @@ export function ReservationForm({
             {availabilityMessage}
           </p>
         ) : null}
+        {fieldErrors.reservationDateTime ? (
+          <p className="text-xs font-semibold text-red-600" role="alert">
+            {fieldErrors.reservationDateTime}
+          </p>
+        ) : null}
       </section>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="grid gap-2 text-sm font-medium text-zinc-800">
           お名前
           <input
-            required
             name="customerName"
-            className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+            aria-invalid={fieldErrors.customerName ? "true" : "false"}
+            aria-describedby="customer-name-error"
+            onChange={() =>
+              setFieldErrors((current) => ({
+                ...current,
+                customerName: "",
+              }))
+            }
+            className={
+              fieldErrors.customerName
+                ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
+                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+            }
           />
+          {fieldErrors.customerName ? (
+            <span
+              id="customer-name-error"
+              className="text-xs font-semibold text-red-600"
+            >
+              {fieldErrors.customerName}
+            </span>
+          ) : null}
         </label>
         <label className="grid gap-2 text-sm font-medium text-zinc-800">
           ふりがな
@@ -584,19 +645,57 @@ export function ReservationForm({
         <label className="grid gap-2 text-sm font-medium text-zinc-800">
           電話番号
           <input
-            required
             name="phone"
             type="tel"
-            className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+            inputMode="tel"
+            value={phone}
+            aria-invalid={fieldErrors.phone ? "true" : "false"}
+            aria-describedby="phone-error"
+            onChange={(event) => {
+              setPhone(normalizePhone(event.target.value));
+              setFieldErrors((current) => ({ ...current, phone: "" }));
+            }}
+            className={
+              fieldErrors.phone
+                ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
+                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+            }
           />
+          {fieldErrors.phone ? (
+            <span
+              id="phone-error"
+              className="text-xs font-semibold text-red-600"
+            >
+              {fieldErrors.phone}
+            </span>
+          ) : null}
         </label>
         <label className="grid gap-2 text-sm font-medium text-zinc-800">
           車種
           <input
-            required
             name="vehicleModel"
-            className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+            aria-invalid={fieldErrors.vehicleModel ? "true" : "false"}
+            aria-describedby="vehicle-model-error"
+            onChange={() =>
+              setFieldErrors((current) => ({
+                ...current,
+                vehicleModel: "",
+              }))
+            }
+            className={
+              fieldErrors.vehicleModel
+                ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
+                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+            }
           />
+          {fieldErrors.vehicleModel ? (
+            <span
+              id="vehicle-model-error"
+              className="text-xs font-semibold text-red-600"
+            >
+              {fieldErrors.vehicleModel}
+            </span>
+          ) : null}
         </label>
         <label className="grid gap-2 text-sm font-medium text-zinc-800">
           ナンバー
@@ -627,9 +726,7 @@ export function ReservationForm({
         type="submit"
         disabled={
           submitState.status === "submitting" ||
-          Boolean(customerKanaError) ||
-          !selectedDate ||
-          !selectedTime
+          Boolean(customerKanaError)
         }
         className="flex h-14 items-center justify-center rounded-[12px] bg-blue-600 px-5 text-lg font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-zinc-300"
       >
