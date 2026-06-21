@@ -308,13 +308,6 @@ export function ReservationForm({
         return;
       }
 
-      form.reset();
-      setSelectedDate("");
-      setSelectedTime("");
-      setCustomerKana("");
-      setCustomerKanaError("");
-      setPhone("");
-      setFieldErrors(emptyFieldErrors);
       const successState: SubmitState = {
         status: "success",
         message: result.lineLinkWarning ?? "",
@@ -324,7 +317,6 @@ export function ReservationForm({
         },
         showLineLinkGuide: !result.lineLinked,
       };
-      setSubmitState(successState);
 
       try {
         window.sessionStorage.setItem(
@@ -336,8 +328,10 @@ export function ReservationForm({
           }),
         );
         window.location.assign("/reservations/complete");
+        return;
       } catch {
-        // The in-page completion screen remains as a fallback.
+        // Show the same completion content only when page navigation is unavailable.
+        setSubmitState(successState);
       }
 
       void fetch(`/api/reservations/availability?month=${month}`, {
