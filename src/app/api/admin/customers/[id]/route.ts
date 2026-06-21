@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import {
   adminSessionCookieName,
+  verifyAdminPassword,
   verifyAdminSessionValue,
 } from "@/lib/auth/admin-session";
 import { normalizeBirthDateInput } from "@/lib/customers/birth-date";
@@ -514,5 +515,102 @@ export async function PATCH(
       id: data.id,
       shakenExpiryDate: data.shaken_expiry_date,
     },
+  });
+}
+
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  if (!isAuthenticated(request)) {
+    return unauthorizedResponse();
+  }
+
+  const body = (await request.json()) as { password?: unknown };
+
+  if (typeof body.password !== "string" || !body.password) {
+    return NextResponse.json(
+      { ok: false, message: "管理者パスワードを入力してください。" },
+      { status: 400 },
+    );
+  }
+
+  if (!process.env.ADMIN_PASSWORD) {
+    return NextResponse.json(
+      { ok: false, message: "ADMIN_PASSWORD が設定されていません。" },
+      { status: 500 },
+    );
+  }
+
+  if (!verifyAdminPassword(body.password)) {
+    return NextResponse.json(
+      { ok: false, message: "管理者パスワードが正しくありません" },
+      { status: 401 },
+    );
+  }
+
+  const { id } = await context.params;
+  const { data: customer, error: customerError } = await supabaseServer
+    .from("customers")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (customerError) {
+    return NextResponse.json(
+      { ok: false, message: customerError.message },
+      { status: 500 },
+    );
+  }
+
+  if (!customer) {
+    return NextResponse.json(
+      { ok: false, message: "対象の顧客が見つかりません。" },
+      { status: 404 },
+    );
+  }
+
+  const relatedDeletes = [
+    { table: "line_message_logs" as const, label: "LINE配信履歴" },
+    { table: "line_profiles" as const, label: "LINE連携情報" },
+    { table: "reservations" as const, label: "予約履歴" },
+    { table: "vehicles" as const, label: "車両情報" },
+  ];
+
+  for (const target of relatedDeletes) {
+    const { error } = await supabaseServer
+      .from(target.table)
+      .delete()
+      .eq("customer_id", id);
+
+    if (error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: `${target.label}の削除に失敗しました。${error.message}`,
+        },
+        { status: 500 },
+      );
+    }
+  }
+
+  const { error: deleteCustomerError } = await supabaseServer
+    .from("customers")
+    .delete()
+    .eq("id", id);
+
+  if (deleteCustomerError) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: `顧客情報の削除に失敗しました。${deleteCustomerError.message}`,
+      },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    message: "顧客情報を削除しました。",
   });
 }

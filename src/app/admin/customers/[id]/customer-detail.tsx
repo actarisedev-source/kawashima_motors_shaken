@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getAgeFromBirthDate } from "@/lib/customers/birth-date";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { AdminHeader } from "../../admin-header";
@@ -132,6 +133,7 @@ export function CustomerDetail({
   embedded = false,
   onCustomerUpdated,
 }: CustomerDetailProps) {
+  const router = useRouter();
   const [customer, setCustomer] = useState<CustomerDetailItem | null>(null);
   const [vehicleDrafts, setVehicleDrafts] = useState<VehicleDraft[]>([]);
   const [loadState, setLoadState] = useState<LoadState>({
@@ -149,6 +151,11 @@ export function CustomerDetail({
   const [lineUnlinkConfirmationStep, setLineUnlinkConfirmationStep] =
     useState<0 | 1 | 2>(0);
   const [unlinkingLine, setUnlinkingLine] = useState(false);
+  const [customerDeleteConfirmationStep, setCustomerDeleteConfirmationStep] =
+    useState<0 | 1 | 2 | 3>(0);
+  const [customerDeletePassword, setCustomerDeletePassword] = useState("");
+  const [customerDeleteError, setCustomerDeleteError] = useState("");
+  const [deletingCustomer, setDeletingCustomer] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
   const [customerKanaError, setCustomerKanaError] = useState("");
   const [showAllReservations, setShowAllReservations] = useState(false);
@@ -286,6 +293,9 @@ export function CustomerDetail({
     setPendingVehicleDeleteId(null);
     setVehicleDeleteConfirmationStep(1);
     setLineUnlinkConfirmationStep(0);
+    setCustomerDeleteConfirmationStep(0);
+    setCustomerDeletePassword("");
+    setCustomerDeleteError("");
     setUpdateMessage("");
     setCustomerKanaError("");
   }
@@ -386,6 +396,60 @@ export function CustomerDetail({
     setUnlinkingLine(false);
     setUpdateMessage("LINE連携情報を削除しました。");
     onCustomerUpdated?.();
+  }
+
+  function closeCustomerDeleteConfirmation() {
+    if (deletingCustomer) return;
+    setCustomerDeleteConfirmationStep(0);
+    setCustomerDeletePassword("");
+    setCustomerDeleteError("");
+  }
+
+  async function proceedCustomerDeleteConfirmation() {
+    if (customerDeleteConfirmationStep === 1) {
+      setCustomerDeleteConfirmationStep(2);
+      return;
+    }
+
+    if (customerDeleteConfirmationStep === 2) {
+      setCustomerDeleteConfirmationStep(3);
+      setCustomerDeleteError("");
+      return;
+    }
+
+    if (customerDeleteConfirmationStep !== 3 || deletingCustomer) return;
+
+    if (!customerDeletePassword) {
+      setCustomerDeleteError("管理者パスワードを入力してください。");
+      return;
+    }
+
+    setDeletingCustomer(true);
+    setCustomerDeleteError("");
+
+    const response = await fetch(`/api/admin/customers/${customerId}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password: customerDeletePassword }),
+    });
+    const result = (await response.json()) as {
+      ok: boolean;
+      message?: string;
+    };
+
+    if (!response.ok || !result.ok) {
+      setCustomerDeleteError(
+        result.message ?? "顧客情報の削除に失敗しました。",
+      );
+      setDeletingCustomer(false);
+      return;
+    }
+
+    setCustomerDeleteConfirmationStep(0);
+    router.push("/admin/customers");
+    router.refresh();
   }
 
   const content = (
@@ -576,6 +640,113 @@ export function CustomerDetail({
                         : unlinkingLine
                           ? "削除中..."
                           : "削除する"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {customerDeleteConfirmationStep > 0 ? (
+              <div
+                className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-5"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="customer-delete-confirm-title"
+                aria-describedby="customer-delete-confirm-description"
+              >
+                <div
+                  key={customerDeleteConfirmationStep}
+                  className="w-full max-w-md rounded-[5px] border border-slate-200 bg-white p-6 shadow-xl"
+                >
+                  <h2
+                    id="customer-delete-confirm-title"
+                    className="text-lg font-bold text-slate-950"
+                  >
+                    {customerDeleteConfirmationStep === 1
+                      ? "顧客情報を削除しますか？"
+                      : customerDeleteConfirmationStep === 2
+                        ? "最終確認"
+                        : "管理者確認"}
+                  </h2>
+                  {customerDeleteConfirmationStep === 2 ? (
+                    <div
+                      id="customer-delete-confirm-description"
+                      className="mt-3 text-sm leading-6 text-slate-600"
+                    >
+                      <p>この顧客を削除すると、以下の情報も削除されます。</p>
+                      <ul className="mt-2">
+                        <li>・顧客情報</li>
+                        <li>・車両情報</li>
+                        <li>・予約履歴</li>
+                        <li>・LINE連携情報</li>
+                        <li>・LINE配信履歴</li>
+                      </ul>
+                      <p className="mt-3 font-semibold text-red-700">
+                        この操作は元に戻せません。
+                      </p>
+                      <p className="mt-3">本当に削除しますか？</p>
+                    </div>
+                  ) : customerDeleteConfirmationStep === 3 ? (
+                    <div
+                      id="customer-delete-confirm-description"
+                      className="mt-3 grid gap-4 text-sm text-slate-600"
+                    >
+                      <p>
+                        削除を実行するには管理者パスワードを入力してください。
+                      </p>
+                      <label className="grid gap-2 font-semibold text-slate-800">
+                        管理者パスワード
+                        <input
+                          type="password"
+                          autoComplete="current-password"
+                          value={customerDeletePassword}
+                          disabled={deletingCustomer}
+                          onChange={(event) => {
+                            setCustomerDeletePassword(event.target.value);
+                            setCustomerDeleteError("");
+                          }}
+                          className="h-11 rounded-[5px] border border-slate-300 bg-white px-3 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:bg-slate-100"
+                        />
+                      </label>
+                      {customerDeleteError ? (
+                        <p className="font-semibold text-red-700" role="alert">
+                          {customerDeleteError}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p
+                      id="customer-delete-confirm-description"
+                      className="sr-only"
+                    >
+                      顧客情報削除の確認です。
+                    </p>
+                  )}
+                  <div className="mt-6 grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      autoFocus
+                      disabled={deletingCustomer}
+                      onClick={closeCustomerDeleteConfirmation}
+                      className="h-11 rounded-[5px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {customerDeleteConfirmationStep === 1
+                        ? "いいえ"
+                        : "キャンセル"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deletingCustomer}
+                      onClick={() => void proceedCustomerDeleteConfirmation()}
+                      className="h-11 rounded-[5px] bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                    >
+                      {customerDeleteConfirmationStep === 1
+                        ? "はい"
+                        : customerDeleteConfirmationStep === 2
+                          ? "削除"
+                          : deletingCustomer
+                            ? "削除中..."
+                            : "削除"}
                     </button>
                   </div>
                 </div>
@@ -907,6 +1078,24 @@ export function CustomerDetail({
                         </div>
                       ) : null}
                     </div>
+                  </section>
+
+                  <section className="grid gap-4 rounded-[5px] border border-red-200 bg-red-50 p-5">
+                    <div>
+                      <h3 className="text-base font-bold text-red-900">
+                        危険操作
+                      </h3>
+                      <p className="mt-1 text-sm text-red-700">
+                        顧客とすべての関連情報を完全に削除します。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCustomerDeleteConfirmationStep(1)}
+                      className="h-10 w-full rounded-[5px] border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-100 sm:w-fit"
+                    >
+                      顧客を削除
+                    </button>
                   </section>
                 </form>
               ) : (
