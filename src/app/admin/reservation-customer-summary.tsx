@@ -155,16 +155,6 @@ export function ReservationCustomerSummary({
             <dt className="text-slate-500">LINE連携</dt>
             <dd className="mt-1 font-semibold">{customer.lineStatus || "未連携"}</dd>
           </div>
-          <div>
-            <dt className="text-slate-500">LINE表示名</dt>
-            <dd className="mt-1 font-semibold">{customer.lineDisplayName || "未登録"}</dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-slate-500">顧客メモ</dt>
-            <dd className="mt-1 whitespace-pre-wrap font-semibold">
-              {customer.memo || "未登録"}
-            </dd>
-          </div>
         </dl>
       </section>
 

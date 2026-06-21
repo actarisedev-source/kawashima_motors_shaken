@@ -419,7 +419,7 @@ export function AdminDashboard() {
           </div>
         </section>
 
-        <section className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_440px]">
+        <section className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <div>
@@ -533,29 +533,11 @@ export function AdminDashboard() {
             </div>
             {selectedReservation ? (
               <div className="grid gap-5 p-4 sm:p-5">
-                <div>
-                  <p className="text-sm text-slate-500">予約日時</p>
-                  <p className="mt-1 text-lg font-bold text-slate-950">
-                    {formatDateTime(selectedReservation.reservedAt)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-500">顧客名</p>
-                  <p className="mt-1 font-semibold text-slate-950">
-                    {selectedReservation.customerName} 様
-                  </p>
-                </div>
                 <dl className="grid gap-4 text-sm">
                   <div>
-                    <dt className="text-slate-500">電話番号</dt>
-                    <dd className="mt-1 font-semibold text-slate-950">
-                      {selectedReservation.phone || "未登録"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-slate-500">車種</dt>
-                    <dd className="mt-1 font-semibold text-slate-950">
-                      {selectedReservation.vehicleModel}
+                    <dt className="text-slate-500">予約日時</dt>
+                    <dd className="mt-1 text-lg font-bold text-slate-950">
+                      {formatDateTime(selectedReservation.reservedAt)}
                     </dd>
                   </div>
                   <div>
@@ -565,8 +547,8 @@ export function AdminDashboard() {
                     </dd>
                   </div>
                 </dl>
-                <div>
-                  <label className="text-sm font-semibold text-slate-700">
+                <div className="text-sm">
+                  <label className="font-semibold text-slate-700">
                     ステータス
                     <select
                       value={selectedReservation.status}
