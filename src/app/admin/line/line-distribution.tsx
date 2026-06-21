@@ -125,7 +125,7 @@ const acceptedImageTypes = new Set([
   "image/png",
   "image/webp",
 ]);
-const maxSelectedImageBytes = 5 * 1024 * 1024;
+const maxSelectedImageBytes = 10 * 1024 * 1024;
 const maxPreparedImageBytes = 1024 * 1024;
 
 const loadBrowserImage = (file: File) =>
@@ -158,7 +158,7 @@ async function prepareLineImage(file: File) {
     throw new Error("jpg・jpeg・png・webp形式の画像を選択してください。");
   }
   if (file.size > maxSelectedImageBytes) {
-    throw new Error("画像は5MB以内で選択してください。");
+    throw new Error("画像は10MB以内で選択してください。");
   }
 
   const source = await loadBrowserImage(file);
@@ -431,7 +431,7 @@ export function LineDistribution() {
                 className="block w-full rounded-md border border-slate-300 bg-white text-sm text-slate-600 file:mr-4 file:h-11 file:cursor-pointer file:border-0 file:border-r file:border-slate-300 file:bg-slate-50 file:px-4 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-50 disabled:opacity-50"
               />
               <p className="text-xs text-slate-500">
-                jpg・jpeg・png・webp / 5MB以内 / 1枚
+                jpg・jpeg・png・webp / 10MB以内 / 1枚
               </p>
               {processingImage ? (
                 <p className="text-sm font-semibold text-blue-700">
