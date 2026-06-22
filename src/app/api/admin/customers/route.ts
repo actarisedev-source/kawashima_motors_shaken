@@ -4,7 +4,10 @@ import {
   adminSessionCookieName,
   verifyAdminSessionValue,
 } from "@/lib/auth/admin-session";
-import { normalizeBirthDateInput } from "@/lib/customers/birth-date";
+import {
+  getAgeFromBirthDate,
+  normalizeBirthDateInput,
+} from "@/lib/customers/birth-date";
 import { isValidNormalizedPhone, normalizePhone } from "@/lib/customers/phone";
 import { supabaseServer } from "@/lib/supabase/server";
 import {
@@ -61,6 +64,41 @@ const normalizeOptional = (value: unknown) => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+const createCustomerSummary = (
+  customers: Pick<CustomerRow, "birth_date" | "gender">[],
+) => {
+  const gender = { 男性: 0, 女性: 0, 未設定: 0 };
+  const ageGroup = {
+    "10代": 0,
+    "20代": 0,
+    "30代": 0,
+    "40代": 0,
+    "50代": 0,
+    "60代以上": 0,
+    未設定: 0,
+  };
+
+  for (const customer of customers) {
+    if (customer.gender === "男性" || customer.gender === "女性") {
+      gender[customer.gender] += 1;
+    } else {
+      gender.未設定 += 1;
+    }
+
+    const age = getAgeFromBirthDate(customer.birth_date);
+
+    if (age !== null && age >= 13 && age <= 19) ageGroup["10代"] += 1;
+    else if (age !== null && age >= 20 && age <= 29) ageGroup["20代"] += 1;
+    else if (age !== null && age >= 30 && age <= 39) ageGroup["30代"] += 1;
+    else if (age !== null && age >= 40 && age <= 49) ageGroup["40代"] += 1;
+    else if (age !== null && age >= 50 && age <= 59) ageGroup["50代"] += 1;
+    else if (age !== null && age >= 60) ageGroup["60代以上"] += 1;
+    else ageGroup.未設定 += 1;
+  }
+
+  return { total: customers.length, gender, ageGroup };
+};
+
 export async function GET(request: NextRequest) {
   if (!isAuthenticated(request)) {
     return unauthorizedResponse();
@@ -105,6 +143,17 @@ export async function GET(request: NextRequest) {
   if (customersError) {
     return NextResponse.json(
       { ok: false, message: customersError.message },
+      { status: 500 },
+    );
+  }
+
+  const { data: summaryCustomers, error: summaryError } = await supabaseServer
+    .from("customers")
+    .select("birth_date,gender");
+
+  if (summaryError) {
+    return NextResponse.json(
+      { ok: false, message: summaryError.message },
       { status: 500 },
     );
   }
@@ -184,7 +233,11 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  return NextResponse.json({ ok: true, items });
+  return NextResponse.json({
+    ok: true,
+    items,
+    summary: createCustomerSummary(summaryCustomers ?? []),
+  });
 }
 
 export async function POST(request: NextRequest) {

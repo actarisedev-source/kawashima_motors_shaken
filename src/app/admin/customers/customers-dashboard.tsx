@@ -18,12 +18,44 @@ type CustomerItem = {
   shakenExpiryLabel: string;
 };
 
+type CustomerSummary = {
+  total: number;
+  gender: Record<"男性" | "女性" | "未設定", number>;
+  ageGroup: Record<
+    "10代" | "20代" | "30代" | "40代" | "50代" | "60代以上" | "未設定",
+    number
+  >;
+};
+
 type LoadState =
   | { status: "loading"; message: "読み込み中です。" }
   | { status: "ready"; message: "" }
   | { status: "error"; message: string };
 
 const pageSize = 8;
+const genderLabels = ["男性", "女性", "未設定"] as const;
+const ageGroupLabels = [
+  "10代",
+  "20代",
+  "30代",
+  "40代",
+  "50代",
+  "60代以上",
+  "未設定",
+] as const;
+const emptySummary: CustomerSummary = {
+  total: 0,
+  gender: { 男性: 0, 女性: 0, 未設定: 0 },
+  ageGroup: {
+    "10代": 0,
+    "20代": 0,
+    "30代": 0,
+    "40代": 0,
+    "50代": 0,
+    "60代以上": 0,
+    未設定: 0,
+  },
+};
 
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("ja-JP", {
@@ -39,6 +71,7 @@ export function CustomersDashboard({
   initialCustomerId?: string;
 }) {
   const [items, setItems] = useState<CustomerItem[]>([]);
+  const [summary, setSummary] = useState<CustomerSummary>(emptySummary);
   const [selectedCustomerId, setSelectedCustomerId] = useState(
     initialCustomerId ?? "",
   );
@@ -72,6 +105,7 @@ export function CustomersDashboard({
     const result = (await response.json()) as {
       ok: boolean;
       items?: CustomerItem[];
+      summary?: CustomerSummary;
       message?: string;
     };
 
@@ -84,6 +118,7 @@ export function CustomersDashboard({
     }
 
     setItems(result.items);
+    setSummary(result.summary ?? emptySummary);
     setCurrentPage(1);
     setSelectedCustomerId((current) => {
       if (current && result.items?.some((item) => item.id === current)) {
@@ -124,6 +159,44 @@ export function CustomersDashboard({
             {loadState.message}
           </div>
         ) : null}
+
+        <section className="grid gap-3 rounded-[5px] border border-slate-200 bg-white px-4 py-3 shadow-sm sm:grid-cols-[140px_1fr] lg:col-span-2 lg:grid-cols-[150px_300px_minmax(0,1fr)] lg:items-center">
+          <div className="border-b border-slate-100 pb-3 sm:border-b-0 sm:border-r sm:pb-0 sm:pr-4">
+            <p className="text-xs font-semibold text-slate-500">総顧客数</p>
+            <p className="mt-1 text-2xl font-bold text-slate-950">
+              {summary.total}
+              <span className="ml-1 text-sm font-semibold text-slate-500">人</span>
+            </p>
+          </div>
+
+          <div className="sm:pl-1 lg:border-r lg:border-slate-100 lg:pr-4">
+            <p className="text-xs font-semibold text-slate-500">性別顧客数</p>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
+              {genderLabels.map((label) => (
+                <p key={label} className="text-xs text-slate-600">
+                  {label}
+                  <span className="ml-1 font-bold text-slate-950">
+                    {summary.gender[label]}
+                  </span>
+                </p>
+              ))}
+            </div>
+          </div>
+
+          <div className="sm:col-span-2 lg:col-span-1 lg:pl-1">
+            <p className="text-xs font-semibold text-slate-500">年代別顧客数</p>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
+              {ageGroupLabels.map((label) => (
+                <p key={label} className="text-xs text-slate-600">
+                  {label}
+                  <span className="ml-1 font-bold text-slate-950">
+                    {summary.ageGroup[label]}
+                  </span>
+                </p>
+              ))}
+            </div>
+          </div>
+        </section>
 
         <aside className="flex min-h-[calc(100vh-150px)] self-start flex-col overflow-hidden rounded-[5px] border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 p-5">
