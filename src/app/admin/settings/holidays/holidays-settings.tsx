@@ -454,7 +454,7 @@ export function HolidaysSettings() {
                 type="button"
                 disabled={loadState.status === "loading"}
                 onClick={openRangeConfirmation}
-                className="h-10 cursor-pointer rounded-md bg-red-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2 lg:col-span-1 lg:mt-[26px]"
+                className="h-10 cursor-pointer rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2 lg:col-span-1 lg:mt-[26px]"
               >
                 定休日に設定
               </button>
