@@ -213,6 +213,13 @@ export function LineDistribution() {
   const [message, setMessage] = useState("");
   const [logs, setLogs] = useState<MessageLog[]>([]);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [pendingDeleteLog, setPendingDeleteLog] =
+    useState<MessageLog | null>(null);
+  const [deleteConfirmationStep, setDeleteConfirmationStep] = useState<1 | 2>(1);
+  const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [historyMessage, setHistoryMessage] = useState("");
+  const deleteCancelButtonRef = useRef<HTMLButtonElement>(null);
 
   const loadLogs = useCallback(async () => {
     const response = await fetch("/api/admin/line/logs", { cache: "no-store" });
@@ -258,6 +265,10 @@ export function LineDistribution() {
   useEffect(() => {
     void loadLogs();
   }, [loadLogs]);
+
+  useEffect(() => {
+    if (pendingDeleteLog) deleteCancelButtonRef.current?.focus();
+  }, [pendingDeleteLog, deleteConfirmationStep]);
 
   useEffect(
     () => () => {
@@ -316,6 +327,58 @@ export function LineDistribution() {
     setImageFile(null);
     setImagePreviewUrl("");
     if (imageInputRef.current) imageInputRef.current.value = "";
+  }
+
+  function openDeleteConfirmation(log: MessageLog) {
+    setPendingDeleteLog(log);
+    setDeleteConfirmationStep(1);
+    setDeleteError("");
+  }
+
+  function closeDeleteConfirmation() {
+    if (deletingLogId) return;
+    setPendingDeleteLog(null);
+    setDeleteConfirmationStep(1);
+    setDeleteError("");
+  }
+
+  async function deleteMessageLog() {
+    if (!pendingDeleteLog || deletingLogId) return;
+
+    setDeletingLogId(pendingDeleteLog.id);
+    setDeleteError("");
+    setHistoryMessage("");
+
+    try {
+      const response = await fetch(
+        `/api/admin/line/logs/${pendingDeleteLog.id}`,
+        { method: "DELETE" },
+      );
+      const result = (await response.json()) as {
+        ok: boolean;
+        deletedId?: string;
+        message?: string;
+      };
+
+      if (!response.ok || !result.ok || !result.deletedId) {
+        setDeleteError(result.message ?? "配信履歴の削除に失敗しました。");
+        return;
+      }
+
+      setLogs((current) =>
+        current.filter((log) => log.id !== result.deletedId),
+      );
+      setExpandedLogId((current) =>
+        current === result.deletedId ? null : current,
+      );
+      setHistoryMessage("配信履歴を削除しました。");
+      setPendingDeleteLog(null);
+      setDeleteConfirmationStep(1);
+    } catch {
+      setDeleteError("通信に失敗しました。時間をおいてもう一度お試しください。");
+    } finally {
+      setDeletingLogId(null);
+    }
   }
 
   async function sendMessages() {
@@ -562,6 +625,11 @@ export function LineDistribution() {
                 手動配信・テスト送信・自動配信の最新20件を表示します。
               </p>
             </div>
+            {historyMessage ? (
+              <p className="rounded-[5px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                {historyMessage}
+              </p>
+            ) : null}
             <div className="grid gap-3">
               {logs.map((log) => (
                 <div
@@ -602,6 +670,13 @@ export function LineDistribution() {
                         className="h-9 rounded-[5px] border border-blue-200 bg-white px-3 text-xs font-bold text-blue-700 transition hover:bg-blue-50"
                       >
                         {expandedLogId === log.id ? "閉じる" : "詳細を見る"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openDeleteConfirmation(log)}
+                        className="h-9 cursor-pointer rounded-[5px] border border-red-200 bg-white px-3 text-xs font-bold text-red-700 transition hover:bg-red-50"
+                      >
+                        削除
                       </button>
                     </div>
                   </div>
@@ -702,6 +777,76 @@ export function LineDistribution() {
             <dl className="mt-5 grid gap-4 text-sm"><div><dt className="font-semibold text-slate-500">対象</dt><dd className="mt-1 font-bold">{targetLabel}</dd></div><div><dt className="font-semibold text-slate-500">配信内容</dt><dd className="mt-1 font-bold">{body.trim() ? "テキスト" : ""}{body.trim() && imageFile ? " ＋ " : ""}{imageFile ? "画像" : ""}</dd></div><div><dt className="font-semibold text-slate-500">対象件数</dt><dd className="mt-1 text-2xl font-black text-blue-700">{count}件</dd></div></dl>
             <p className="mt-5 font-semibold">この内容で送信しますか？</p>
             <div className="mt-6 flex justify-end gap-3"><button type="button" disabled={sending} onClick={() => setConfirming(false)} className="h-10 rounded-md border border-slate-300 px-4 text-sm font-semibold">キャンセル</button><button type="button" disabled={sending || deliveryCompleted} onClick={() => void sendMessages()} className="h-10 rounded-md bg-blue-600 px-5 text-sm font-bold text-white disabled:bg-slate-400">{sending ? "送信中..." : deliveryCompleted ? "配信済み" : "送信する"}</button></div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingDeleteLog ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-5"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="line-log-delete-title"
+          aria-describedby="line-log-delete-description"
+        >
+          <div className="w-full max-w-md rounded-[5px] border border-slate-200 bg-white p-6 shadow-xl">
+            <h2 id="line-log-delete-title" className="text-lg font-bold">
+              {deleteConfirmationStep === 1
+                ? "配信履歴を削除しますか？"
+                : "最終確認"}
+            </h2>
+            <div
+              id="line-log-delete-description"
+              className="mt-4 text-sm leading-7 text-slate-600"
+            >
+              {deleteConfirmationStep === 1 ? (
+                <p>この配信履歴を削除します。</p>
+              ) : (
+                <>
+                  <p>この操作は元に戻せません。</p>
+                  <p className="mt-2">
+                    配信履歴および添付画像も削除されます。
+                  </p>
+                  <p className="mt-2 font-semibold text-slate-900">
+                    本当に削除しますか？
+                  </p>
+                </>
+              )}
+            </div>
+            {deleteError ? (
+              <p className="mt-4 rounded-[5px] border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                {deleteError}
+              </p>
+            ) : null}
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                ref={deleteCancelButtonRef}
+                type="button"
+                disabled={Boolean(deletingLogId)}
+                onClick={closeDeleteConfirmation}
+                className="h-11 cursor-pointer rounded-[5px] border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleteConfirmationStep === 1 ? "いいえ" : "キャンセル"}
+              </button>
+              {deleteConfirmationStep === 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmationStep(2)}
+                  className="h-11 cursor-pointer rounded-[5px] bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700"
+                >
+                  はい
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={Boolean(deletingLogId)}
+                  onClick={() => void deleteMessageLog()}
+                  className="h-11 cursor-pointer rounded-[5px] bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                >
+                  {deletingLogId ? "削除中..." : "削除"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       ) : null}
