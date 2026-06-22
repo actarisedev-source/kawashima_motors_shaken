@@ -173,11 +173,11 @@ export function CustomersDashboard({
             <p className="text-xs font-semibold text-slate-500">性別顧客数</p>
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
               {genderLabels.map((label) => (
-                <p key={label} className="text-xs text-slate-600">
-                  {label}
-                  <span className="ml-1 font-bold text-slate-950">
-                    {summary.gender[label]}
-                  </span>
+                <p
+                  key={label}
+                  className="text-xs font-semibold text-slate-700"
+                >
+                  {label}：{summary.gender[label]}
                 </p>
               ))}
             </div>
@@ -187,11 +187,11 @@ export function CustomersDashboard({
             <p className="text-xs font-semibold text-slate-500">年代別顧客数</p>
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
               {ageGroupLabels.map((label) => (
-                <p key={label} className="text-xs text-slate-600">
-                  {label}
-                  <span className="ml-1 font-bold text-slate-950">
-                    {summary.ageGroup[label]}
-                  </span>
+                <p
+                  key={label}
+                  className="text-xs font-semibold text-slate-700"
+                >
+                  {label}：{summary.ageGroup[label]}
                 </p>
               ))}
             </div>
