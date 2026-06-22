@@ -96,14 +96,14 @@ https://<Vercelのドメイン>/api/line/health
 差し替えて再デプロイし、本番チャネル側のWebhook URLを設定します。コード変更は
 不要です。
 
-現在のWebhookは署名検証とイベント受信を行います。管理画面の手動配信と、
-Vercel Cronによる車検・予約リマインドの自動配信に対応しています。
+現在のWebhookは署名検証とイベント受信を行います。管理画面の手動配信、
+予約配信、車検・予約リマインドの自動配信に対応しています。
 
 ### LINE自動配信
 
 `/admin/line`の「自動配信設定」タブで通知ごとの有効状態、本文、配信時刻を設定します。
-Vercel HobbyではCronを日本時間09:00に1日1回起動し、設定時刻を過ぎた未実行の通知だけを処理します。
-細かな時刻指定を使う場合は、Proまたは外部スケジューラから15分間隔でAPIを起動してください。
+Vercel Hobbyの日次Cron制限を避けるため、Supabase Cronから毎時0分にAPIを起動し、
+設定時刻または予約配信日時を過ぎた未実行の通知を処理します。日時判定は日本時間です。
 同じ顧客・車両または予約・通知種別への同日重複送信は配信ログで防止します。
 
 VercelのProduction環境へ十分に長いランダム値の`CRON_SECRET`を設定してください。
@@ -114,6 +114,10 @@ GET /api/cron/line-automations
 POST /api/cron/line-automations
 Authorization: Bearer <CRON_SECRET>
 ```
+
+Supabase Vaultへ本番URLとVercelに設定したものと同じ`CRON_SECRET`を保存し、
+Supabase Cronから毎時このAPIを呼び出します。設定SQLは予約配信のmigration適用時に
+`supabase/setup_line_scheduled_messages_cron.sql`をSQL Editorで実行します。
 
 ### 顧客LINE連携
 

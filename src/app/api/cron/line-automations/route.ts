@@ -5,7 +5,10 @@ import {
   sendLineAutomation,
 } from "@/lib/line/automations";
 import { getLineConfig } from "@/lib/line/config";
+import { processDueScheduledMessages } from "@/lib/line/scheduled";
 import { supabaseServer } from "@/lib/supabase/server";
+
+export const maxDuration = 300;
 
 const isAuthorized = (request: NextRequest) => {
   const secret = process.env.CRON_SECRET?.trim();
@@ -35,6 +38,7 @@ async function run(request: NextRequest) {
     );
   }
 
+  const scheduledMessages = await processDueScheduledMessages(accessToken);
   const { data: settings, error } = await supabaseServer
     .from("line_automation_settings")
     .select("*")
@@ -71,7 +75,12 @@ async function run(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, executedCount: results.length, results });
+  return NextResponse.json({
+    ok: true,
+    executedCount: results.length,
+    results,
+    scheduledMessages,
+  });
 }
 
 export async function GET(request: NextRequest) {

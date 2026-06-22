@@ -71,12 +71,19 @@ export async function DELETE(
 
   let storageObjectPath: string | null = null;
   if (log.image_url) {
-    const { count, error: referenceError } = await supabaseServer
-      .from("line_message_logs")
-      .select("id", { count: "exact", head: true })
-      .eq("image_url", log.image_url)
-      .neq("id", id);
+    const [logReferences, scheduledReferences] = await Promise.all([
+      supabaseServer
+        .from("line_message_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("image_url", log.image_url)
+        .neq("id", id),
+      supabaseServer
+        .from("line_scheduled_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("image_url", log.image_url),
+    ]);
 
+    const referenceError = logReferences.error || scheduledReferences.error;
     if (referenceError) {
       return NextResponse.json(
         { ok: false, message: referenceError.message },
@@ -84,7 +91,10 @@ export async function DELETE(
       );
     }
 
-    if ((count ?? 0) === 0) {
+    if (
+      (logReferences.count ?? 0) === 0 &&
+      (scheduledReferences.count ?? 0) === 0
+    ) {
       storageObjectPath = getStorageObjectPath(log.image_url);
     }
   }

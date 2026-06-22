@@ -5,24 +5,15 @@ import {
   verifyAdminSessionValue,
 } from "@/lib/auth/admin-session";
 import {
-  getLineAudience,
-  renderLineMessage,
   type LineAudienceFilters,
 } from "@/lib/line/audience";
 import { getLineConfig } from "@/lib/line/config";
 import {
-  pushLineMessages,
-  type LinePushMessage,
-} from "@/lib/line/messaging";
-import { supabaseServer } from "@/lib/supabase/server";
-
-const lineImageBucket = "line-message-images";
-const maxImageBytes = 1024 * 1024;
-const allowedImageTypes = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
+  allowedLineImageTypes,
+  maxLineImageBytes,
+  sendLineDistribution,
+  uploadLineImage,
+} from "@/lib/line/distribution";
 
 const isAuthenticated = (request: NextRequest) =>
   verifyAdminSessionValue(request.cookies.get(adminSessionCookieName)?.value);
@@ -77,29 +68,6 @@ async function parsePayload(request: NextRequest): Promise<SendPayload> {
   };
 }
 
-async function uploadLineImage(image: File) {
-  const extension =
-    image.type === "image/png"
-      ? "png"
-      : image.type === "image/webp"
-        ? "webp"
-        : "jpg";
-  const objectPath = `manual/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${extension}`;
-  const { error } = await supabaseServer.storage
-    .from(lineImageBucket)
-    .upload(objectPath, image, {
-      contentType: image.type,
-      cacheControl: "31536000",
-      upsert: false,
-    });
-  if (error) {
-    throw new Error(`画像の保存に失敗しました: ${error.message}`);
-  }
-
-  return supabaseServer.storage.from(lineImageBucket).getPublicUrl(objectPath)
-    .data.publicUrl;
-}
-
 export async function POST(request: NextRequest) {
   if (!isAuthenticated(request)) {
     return NextResponse.json(
@@ -140,7 +108,7 @@ export async function POST(request: NextRequest) {
   }
   if (
     image &&
-    (!allowedImageTypes.has(image.type) || image.size > maxImageBytes)
+    (!allowedLineImageTypes.has(image.type) || image.size > maxLineImageBytes)
   ) {
     return NextResponse.json(
       {
@@ -160,89 +128,30 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const [audience, allMatches] = await Promise.all([
-      getLineAudience(filters),
-      getLineAudience(filters, false),
-    ]);
-    if (!audience.length) {
-      return NextResponse.json(
-        { ok: false, message: "配信対象のLINE連携済み顧客がいません。" },
-        { status: 400 },
-      );
-    }
-
-    const imageUrl = image ? await uploadLineImage(image) : null;
-
-    let successCount = 0;
-    let failureCount = 0;
-    let logSavedCount = 0;
-    let logFailureCount = 0;
-    for (const member of audience) {
-      const lineUserId = member.customer.line_user_id;
-      if (!lineUserId) continue;
-      const renderedBody = messageBody
-        ? renderLineMessage(messageBody, member)
-        : "";
-      let status: "成功" | "失敗" = "成功";
-      let errorMessage: string | null = null;
-      try {
-        const messages: LinePushMessage[] = [];
-        if (renderedBody) {
-          messages.push({ type: "text", text: renderedBody });
-        }
-        if (imageUrl) {
-          messages.push({
-            type: "image",
-            originalContentUrl: imageUrl,
-            previewImageUrl: imageUrl,
-          });
-        }
-        await pushLineMessages(accessToken, lineUserId, messages);
-        successCount += 1;
-      } catch (error) {
-        status = "失敗";
-        failureCount += 1;
-        errorMessage =
-          error instanceof Error ? error.message.slice(0, 1000) : "送信失敗";
-      }
-      const { error: logError } = await supabaseServer
-        .from("line_message_logs")
-        .insert({
-          customer_id: member.customer.id,
-          line_user_id: lineUserId,
-          target_type: targetLabel,
-          title,
-          body: renderedBody,
-          image_url: imageUrl,
-          status,
-          error_message: errorMessage,
-          sent_at: status === "成功" ? new Date().toISOString() : null,
-        });
-      if (logError) {
-        logFailureCount += 1;
-        console.error("Failed to save LINE message log", logError.message);
-      } else {
-        logSavedCount += 1;
-      }
-    }
+    const imageUrl = image ? await uploadLineImage(image, "manual") : null;
+    const result = await sendLineDistribution({
+      accessToken,
+      title,
+      messageBody,
+      imageUrl,
+      targetLabel,
+      filters,
+    });
 
     return NextResponse.json({
       ok: true,
-      successCount,
-      failureCount,
-      excludedCount: Math.max(allMatches.length - audience.length, 0),
-      logSavedCount,
-      logFailureCount,
+      ...result,
       imageUrl,
     });
   } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "LINE配信に失敗しました。";
     return NextResponse.json(
+      { ok: false, message },
       {
-        ok: false,
-        message:
-          error instanceof Error ? error.message : "LINE配信に失敗しました。",
+        status:
+          message === "配信対象のLINE連携済み顧客がいません。" ? 400 : 500,
       },
-      { status: 500 },
     );
   }
 }

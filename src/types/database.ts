@@ -194,6 +194,46 @@ export type Database = {
         >;
         Relationships: [];
       };
+      line_scheduled_messages: {
+        Row: {
+          id: string;
+          title: string;
+          body: string;
+          image_url: string | null;
+          target_label: string;
+          target_conditions: Json;
+          target_count: number;
+          scheduled_at: string;
+          status: "予約中" | "送信済み" | "取消済み" | "失敗";
+          error_message: string | null;
+          processing_started_at: string | null;
+          sent_at: string | null;
+          cancelled_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          body?: string;
+          image_url?: string | null;
+          target_label?: string;
+          target_conditions?: Json;
+          target_count?: number;
+          scheduled_at: string;
+          status?: "予約中" | "送信済み" | "取消済み" | "失敗";
+          error_message?: string | null;
+          processing_started_at?: string | null;
+          sent_at?: string | null;
+          cancelled_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["line_scheduled_messages"]["Insert"]
+        >;
+        Relationships: [];
+      };
       holidays: {
         Row: {
           id: string;
@@ -263,6 +303,10 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      claim_due_line_scheduled_messages: {
+        Args: { p_limit?: number };
+        Returns: Database["public"]["Tables"]["line_scheduled_messages"]["Row"][];
+      };
       create_reservation_atomic: {
         Args: {
           p_customer_name: string;
