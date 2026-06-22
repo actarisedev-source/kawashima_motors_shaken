@@ -4,6 +4,7 @@ import {
   adminSessionCookieName,
   verifyAdminSessionValue,
 } from "@/lib/auth/admin-session";
+import { getJstDateKey } from "@/lib/reservations/slots";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -122,6 +123,36 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(
       { ok: false, message: "Invalid reservation status." },
       { status: 400 },
+    );
+  }
+
+  const { data: existingReservation, error: reservationLookupError } =
+    await supabaseServer
+      .from("reservations")
+      .select("id,reserved_at")
+      .eq("id", body.reservationId)
+      .maybeSingle();
+
+  if (reservationLookupError) {
+    return NextResponse.json(
+      { ok: false, message: reservationLookupError.message },
+      { status: 500 },
+    );
+  }
+
+  if (!existingReservation) {
+    return NextResponse.json(
+      { ok: false, message: "予約が見つかりません。" },
+      { status: 404 },
+    );
+  }
+
+  if (
+    getJstDateKey(existingReservation.reserved_at) < getJstDateKey(new Date())
+  ) {
+    return NextResponse.json(
+      { ok: false, message: "過去の予約は変更できません。" },
+      { status: 409 },
     );
   }
 

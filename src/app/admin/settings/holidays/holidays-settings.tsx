@@ -357,7 +357,11 @@ export function HolidaysSettings() {
                   aria-label={`${formatDisplayDate(dateKey)}${holiday ? " 定休日" : " 営業日"}`}
                   className={[
                     "relative min-h-20 border-b border-r border-slate-200 p-1.5 text-left transition sm:min-h-28 sm:p-2",
-                    holiday ? "bg-red-50 text-red-800" : "bg-white",
+                    isPast
+                      ? "bg-gray-100 text-gray-400"
+                      : holiday
+                        ? "bg-red-50 text-red-800"
+                        : "bg-white",
                     isToday ? "z-[1] ring-2 ring-inset ring-blue-500" : "",
                     !isCurrentMonth ? "text-slate-300 opacity-50" : "",
                     isPast || !isCurrentMonth
@@ -369,7 +373,11 @@ export function HolidaysSettings() {
                 >
                   <span className="text-sm font-bold">{date.getDate()}</span>
                   {holiday && isCurrentMonth ? (
-                    <span className="mt-2 block text-[10px] font-bold sm:text-xs">
+                    <span
+                      className={`mt-2 block text-[10px] font-bold sm:text-xs ${
+                        isPast ? "text-red-500" : ""
+                      }`}
+                    >
                       定休日
                     </span>
                   ) : null}

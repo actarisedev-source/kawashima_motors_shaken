@@ -3,7 +3,10 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { normalizePhone } from "@/lib/customers/phone";
-import { reservationTimeSlots } from "@/lib/reservations/slots";
+import {
+  getJstDateKey,
+  reservationTimeSlots,
+} from "@/lib/reservations/slots";
 import { reservationCompletionStorageKey } from "@/lib/reservations/completion-storage";
 import {
   CompletedReservation,
@@ -131,6 +134,7 @@ export function ReservationForm({
   );
   const selectedYear = monthDate.getFullYear();
   const selectedMonth = monthDate.getMonth() + 1;
+  const currentTodayKey = getJstDateKey(new Date());
 
   useEffect(() => {
     if (!reservationLiffId) {
@@ -456,8 +460,16 @@ export function ReservationForm({
                   </th>
                   {monthDates.map((date) => {
                     const weekday = date.getDay();
+                    const dateKey = formatDate(date);
+                    const isPast = dateKey < currentTodayKey;
+                    const isToday = dateKey === currentTodayKey;
+                    const holiday = availability[dateKey]?.holiday;
                     const weekendClass =
-                      weekday === 0
+                      isPast
+                        ? "text-gray-400"
+                        : holiday
+                          ? "text-red-700"
+                        : weekday === 0
                         ? "text-red-600"
                         : weekday === 6
                           ? "text-blue-600"
@@ -465,8 +477,14 @@ export function ReservationForm({
 
                     return (
                       <th
-                        key={formatDate(date)}
-                        className={`w-24 min-w-24 border-b border-r border-zinc-200 bg-white px-3 py-4 text-lg font-black ${weekendClass}`}
+                        key={dateKey}
+                        className={`w-24 min-w-24 border-b border-r border-zinc-200 px-3 py-4 text-lg font-black ${
+                          isPast
+                            ? "bg-gray-100"
+                            : holiday
+                              ? "bg-red-50"
+                              : "bg-white"
+                        } ${isToday ? "ring-2 ring-inset ring-blue-500" : ""} ${weekendClass}`}
                       >
                         <span className="block">
                           {date.getMonth() + 1}/{date.getDate()}
@@ -487,6 +505,8 @@ export function ReservationForm({
                     </th>
                     {monthDates.map((date) => {
                       const dateKey = formatDate(date);
+                      const isPast = dateKey < currentTodayKey;
+                      const holiday = availability[dateKey]?.holiday;
                       const slot = availability[dateKey]?.slots[time];
                       const isLoadingAvailability =
                         availabilityMessage === "最新情報を取得中です";
@@ -503,11 +523,21 @@ export function ReservationForm({
                       return (
                         <td
                           key={`${dateKey}-${time}`}
-                          className="border-b border-r border-zinc-200 bg-white p-2"
+                          className={`border-b border-r border-zinc-200 p-2 ${
+                            isPast
+                              ? "bg-gray-100"
+                              : holiday
+                                ? "bg-red-50"
+                                : "bg-white"
+                          }`}
                         >
                           <button
                             type="button"
-                            disabled={isLoadingAvailability || !status.selectable}
+                            disabled={
+                              isPast ||
+                              isLoadingAvailability ||
+                              !status.selectable
+                            }
                             onClick={() => {
                               setSelectedDate(dateKey);
                               setSelectedTime(time);
@@ -516,24 +546,34 @@ export function ReservationForm({
                                 reservationDateTime: "",
                               }));
                             }}
-                            aria-label={`${date.getMonth() + 1}/${date.getDate()} ${time} ${status.label}`}
+                            aria-label={`${date.getMonth() + 1}/${date.getDate()} ${time} ${
+                              isPast ? "予約不可" : status.label
+                            }`}
                             className={[
                               "grid h-16 w-full place-items-center rounded-[12px] text-4xl font-black leading-none transition",
                               selected
                                 ? "bg-blue-600 text-white shadow-md ring-2 ring-blue-200"
                                 : symbolClass,
-                              status.selectable && !selected
+                              !isPast && status.selectable && !selected
                                 ? "hover:bg-blue-50 active:scale-95"
                                 : "",
-                              isLoadingAvailability
+                              !isPast && isLoadingAvailability
                                 ? "cursor-wait bg-white text-transparent"
                                 : "",
-                              !isLoadingAvailability && !status.selectable
+                              isPast
+                                ? "cursor-not-allowed bg-gray-100 text-gray-400"
+                                : "",
+                              !isPast && holiday
+                                ? "cursor-not-allowed bg-red-50 text-red-400"
+                                : "",
+                              !isPast &&
+                              !isLoadingAvailability &&
+                              !status.selectable
                                 ? "cursor-not-allowed bg-zinc-50 text-zinc-400"
                                 : "",
                             ].join(" ")}
                           >
-                            {isLoadingAvailability ? "" : status.mark}
+                            {isLoadingAvailability ? "" : isPast ? "×" : status.mark}
                           </button>
                         </td>
                       );

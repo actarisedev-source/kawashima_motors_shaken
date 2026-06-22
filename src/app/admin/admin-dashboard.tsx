@@ -348,6 +348,7 @@ export function AdminDashboard() {
   );
   const selectedAvailability = availability[selectedDate];
   const selectedHoliday = availability[selectedDate]?.holiday ?? null;
+  const selectedDateIsPast = selectedDate < getJstDateKey(new Date());
 
   const selectedItemsByTime = useMemo(() => {
     const map = new Map<string, ReservationItem[]>();
@@ -552,7 +553,10 @@ export function AdminDashboard() {
                     ステータス
                     <select
                       value={selectedReservation.status}
-                      disabled={updatingId === selectedReservation.id}
+                      disabled={
+                        selectedDateIsPast ||
+                        updatingId === selectedReservation.id
+                      }
                       onChange={(event) =>
                         void updateStatus(
                           selectedReservation.id,
@@ -567,6 +571,11 @@ export function AdminDashboard() {
                         </option>
                       ))}
                     </select>
+                    {selectedDateIsPast ? (
+                      <span className="mt-2 block text-xs font-medium text-slate-500">
+                        過去の予約は閲覧のみです。
+                      </span>
+                    ) : null}
                   </label>
                 </div>
                 <ReservationCustomerSummary
@@ -660,6 +669,8 @@ export function AdminDashboard() {
                   const isCurrentMonth =
                     date.getMonth() === monthDate.getMonth();
                   const isSelected = dateKey === selectedDate;
+                  const isToday = dateKey === getJstDateKey(new Date());
+                  const isPast = dateKey < getJstDateKey(new Date());
                   const holiday = availability[dateKey]?.holiday;
 
                   return (
@@ -669,12 +680,21 @@ export function AdminDashboard() {
                       onClick={() => selectDate(dateKey, true)}
                       className={[
                         "min-h-28 cursor-pointer border-b border-r border-slate-100 p-2 text-left transition",
-                        isSelected
+                        isToday
+                          ? "ring-2 ring-inset ring-blue-500"
+                          : "",
+                        isSelected && !isToday && !isPast
                           ? "bg-blue-50 ring-2 ring-inset ring-blue-500"
                           : "",
-                        holiday ? "bg-slate-100 text-slate-400" : "bg-white",
+                        isPast
+                          ? "bg-gray-100 text-gray-400"
+                          : holiday
+                            ? "bg-red-50 text-red-800"
+                            : "bg-white",
                         !isCurrentMonth ? "text-slate-300" : "",
-                        !holiday && !isSelected ? "hover:bg-blue-50/60" : "",
+                        !isPast && !holiday && !isSelected
+                          ? "hover:bg-blue-50/60"
+                          : "",
                       ].join(" ")}
                     >
                       <div className="flex items-start justify-between gap-1">
@@ -682,7 +702,13 @@ export function AdminDashboard() {
                           {date.getDate()}
                         </span>
                         {isCurrentMonth && holiday ? (
-                          <span className="text-[11px] font-semibold">休業</span>
+                          <span
+                            className={`text-[11px] font-semibold ${
+                              isPast ? "text-red-500" : ""
+                            }`}
+                          >
+                            休業
+                          </span>
                         ) : null}
                       </div>
                       {isCurrentMonth ? (
