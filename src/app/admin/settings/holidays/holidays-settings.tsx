@@ -31,8 +31,9 @@ type PendingAction =
       holiday: HolidayItem;
     }
   | {
-      kind: "set-weekly";
+      kind: "set-monthly-weekday";
       weekday: number;
+      dates: string[];
       reservedDayCount: number;
     };
 
@@ -76,10 +77,28 @@ const findHoliday = (dateKey: string, items: HolidayItem[]) => {
   );
 };
 
-const getOneYearEndKey = () => {
-  const end = new Date(`${todayKey()}T00:00:00+09:00`);
-  end.setFullYear(end.getFullYear() + 1);
-  return formatDateKey(end);
+const getMonthWeekdayDateKeys = (
+  monthDate: Date,
+  weekday: number,
+  minimumDateKey: string,
+) => {
+  const lastDay = new Date(
+    monthDate.getFullYear(),
+    monthDate.getMonth() + 1,
+    0,
+  ).getDate();
+
+  return Array.from({ length: lastDay }, (_, index) => {
+    const date = new Date(
+      monthDate.getFullYear(),
+      monthDate.getMonth(),
+      index + 1,
+    );
+    return date.getDay() === weekday ? formatDateKey(date) : null;
+  }).filter(
+    (dateKey): dateKey is string =>
+      dateKey !== null && dateKey >= minimumDateKey,
+  );
 };
 
 export function HolidaysSettings() {
@@ -104,12 +123,6 @@ export function HolidaysSettings() {
     [monthDate],
   );
   const currentTodayKey = todayKey();
-  const oneYearEndKey = getOneYearEndKey();
-  const weeklyHolidayWeekdays = new Set(
-    items
-      .filter((item) => item.type === "weekly" && item.weekday !== null)
-      .map((item) => item.weekday as number),
-  );
 
   async function loadHolidays() {
     setLoadState({ status: "loading", message: "読み込み中です。" });
@@ -158,18 +171,24 @@ export function HolidaysSettings() {
     });
   }
 
-  function openWeeklyConfirmation(weekday: number) {
-    if (weeklyHolidayWeekdays.has(weekday)) return;
+  function openMonthlyWeekdayConfirmation(weekday: number) {
+    const dates = getMonthWeekdayDateKeys(
+      monthDate,
+      weekday,
+      currentTodayKey,
+    ).filter((dateKey) => !findHoliday(dateKey, items));
+    if (!dates.length) return;
 
-    const reservedDayCount = Object.entries(reservationCounts).filter(
-      ([dateKey, count]) =>
-        count > 0 &&
-        dateKey >= currentTodayKey &&
-        dateKey <= oneYearEndKey &&
-        new Date(`${dateKey}T00:00:00+09:00`).getDay() === weekday,
+    const reservedDayCount = dates.filter(
+      (dateKey) => (reservationCounts[dateKey] ?? 0) > 0,
     ).length;
 
-    setPendingAction({ kind: "set-weekly", weekday, reservedDayCount });
+    setPendingAction({
+      kind: "set-monthly-weekday",
+      weekday,
+      dates,
+      reservedDayCount,
+    });
   }
 
   async function confirmAction() {
@@ -192,9 +211,8 @@ export function HolidaysSettings() {
                     label: null,
                   }
                 : {
-                    type: "weekly",
-                    weekday: pendingAction.weekday,
-                    label: null,
+                    type: "single-bulk",
+                    dates: pendingAction.dates,
                   },
             ),
           });
@@ -251,20 +269,31 @@ export function HolidaysSettings() {
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-base font-semibold">毎週定休日</h2>
+              <h2 className="text-base font-semibold">曜日一括設定</h2>
               <p className="mt-1 text-sm text-slate-500">
-                対象期間の予約を確認してから設定します。
+                表示中の月だけ、選択した曜日を定休日に設定します。
               </p>
             </div>
             <div className="grid grid-cols-7 gap-1.5 sm:flex sm:flex-wrap">
               {[1, 2, 3, 4, 5, 6, 0].map((weekday) => {
-                const active = weeklyHolidayWeekdays.has(weekday);
+                const targetDates = getMonthWeekdayDateKeys(
+                  monthDate,
+                  weekday,
+                  currentTodayKey,
+                );
+                const active =
+                  targetDates.length > 0 &&
+                  targetDates.every((dateKey) => findHoliday(dateKey, items));
                 return (
                   <button
                     key={weekday}
                     type="button"
-                    disabled={active || loadState.status === "loading"}
-                    onClick={() => openWeeklyConfirmation(weekday)}
+                    disabled={
+                      active ||
+                      !targetDates.length ||
+                      loadState.status === "loading"
+                    }
+                    onClick={() => openMonthlyWeekdayConfirmation(weekday)}
                     aria-pressed={active}
                     className={[
                       "grid h-10 min-w-10 cursor-pointer place-items-center rounded-md border px-2 text-sm font-bold transition",
@@ -369,7 +398,7 @@ export function HolidaysSettings() {
                 ? "定休日に設定しますか？"
                 : pendingAction.kind === "remove"
                   ? "営業日に戻しますか？"
-                  : `毎週${weekdayLabels[pendingAction.weekday]}曜日を定休日に設定しますか？`}
+                  : `${monthDate.getFullYear()}年${monthDate.getMonth() + 1}月の${weekdayLabels[pendingAction.weekday]}曜日を定休日に設定しますか？`}
             </h2>
 
             <div className="mt-4 grid gap-3 text-sm leading-6 text-slate-600">
@@ -408,7 +437,8 @@ export function HolidaysSettings() {
                   <p>
                     対象期間:
                     <br />
-                    本日から1年間
+                    {monthDate.getFullYear()}年{monthDate.getMonth() + 1}月
+                    （当月のみ）
                   </p>
                   {pendingAction.reservedDayCount > 0 ? (
                     <>

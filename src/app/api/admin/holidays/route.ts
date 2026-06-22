@@ -31,6 +31,17 @@ const normalizeOptional = (value: unknown) => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+const isDateKey = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+};
+
 export async function GET(request: NextRequest) {
   if (!isAuthenticated(request)) {
     return unauthorizedResponse();
@@ -82,9 +93,74 @@ export async function POST(request: NextRequest) {
   const body = (await request.json()) as {
     type?: unknown;
     date?: unknown;
+    dates?: unknown;
     weekday?: unknown;
     label?: unknown;
   };
+
+  if (body.type === "single-bulk") {
+    const dates = Array.isArray(body.dates)
+      ? [...new Set(body.dates.filter((date): date is string => typeof date === "string"))]
+      : [];
+    const today = getJstDateKey(new Date());
+
+    if (
+      !dates.length ||
+      dates.length > 31 ||
+      dates.some((date) => !isDateKey(date) || date < today)
+    ) {
+      return NextResponse.json(
+        { ok: false, message: "一括設定する日付が正しくありません。" },
+        { status: 400 },
+      );
+    }
+
+    const { data: existing, error: existingError } = await supabaseServer
+      .from("holidays")
+      .select("date")
+      .eq("type", "single")
+      .in("date", dates);
+
+    if (existingError) {
+      return NextResponse.json(
+        { ok: false, message: existingError.message },
+        { status: 500 },
+      );
+    }
+
+    const existingDates = new Set(
+      (existing ?? []).map((holiday) => holiday.date).filter(Boolean),
+    );
+    const insertDates = dates.filter((date) => !existingDates.has(date));
+
+    if (!insertDates.length) {
+      return NextResponse.json({ ok: true, holidays: [] });
+    }
+
+    const { data, error } = await supabaseServer
+      .from("holidays")
+      .insert(
+        insertDates.map((date) => ({
+          type: "single" as const,
+          date,
+          weekday: null,
+          label: null,
+        })),
+      )
+      .select("*");
+
+    if (error) {
+      return NextResponse.json(
+        { ok: false, message: error.message },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      holidays: (data ?? []).map(normalizeHoliday),
+    });
+  }
 
   if (!isHolidayType(body.type)) {
     return NextResponse.json(
