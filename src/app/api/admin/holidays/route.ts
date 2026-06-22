@@ -117,9 +117,7 @@ export async function POST(request: NextRequest) {
 
     const { data: existing, error: existingError } = await supabaseServer
       .from("holidays")
-      .select("date")
-      .eq("type", "single")
-      .in("date", dates);
+      .select("type,date,weekday");
 
     if (existingError) {
       return NextResponse.json(
@@ -129,9 +127,22 @@ export async function POST(request: NextRequest) {
     }
 
     const existingDates = new Set(
-      (existing ?? []).map((holiday) => holiday.date).filter(Boolean),
+      (existing ?? [])
+        .filter((holiday) => holiday.type === "single")
+        .map((holiday) => holiday.date)
+        .filter(Boolean),
     );
-    const insertDates = dates.filter((date) => !existingDates.has(date));
+    const existingWeekdays = new Set(
+      (existing ?? [])
+        .filter((holiday) => holiday.type === "weekly")
+        .map((holiday) => holiday.weekday)
+        .filter((weekday): weekday is number => weekday !== null),
+    );
+    const insertDates = dates.filter(
+      (date) =>
+        !existingDates.has(date) &&
+        !existingWeekdays.has(new Date(`${date}T00:00:00+09:00`).getDay()),
+    );
 
     if (!insertDates.length) {
       return NextResponse.json({ ok: true, holidays: [] });

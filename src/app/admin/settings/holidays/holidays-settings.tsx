@@ -35,7 +35,19 @@ type PendingAction =
       weekday: number;
       dates: string[];
       reservedDayCount: number;
+    }
+  | {
+      kind: "set-range";
+      startDate: string;
+      endDate: string;
+      dates: string[];
+      reservationCount: number;
     };
+
+type RangeErrors = {
+  startDate: string;
+  endDate: string;
+};
 
 const todayKey = () => getJstDateKey(new Date());
 
@@ -52,6 +64,22 @@ const formatDisplayDate = (dateKey: string) =>
     weekday: "short",
     timeZone: "Asia/Tokyo",
   }).format(new Date(`${dateKey}T00:00:00+09:00`));
+
+const formatShortDate = (dateKey: string) => dateKey.replaceAll("-", "/");
+
+const getDateRange = (startDate: string, endDate: string) => {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+
+  const dates: string[] = [];
+  for (const date = start; date <= end; date.setUTCDate(date.getUTCDate() + 1)) {
+    dates.push(date.toISOString().slice(0, 10));
+  }
+
+  return dates;
+};
 
 const getCalendarDates = (monthDate: Date) => {
   const firstDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
@@ -115,6 +143,12 @@ export function HolidaysSettings() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [rangeStartDate, setRangeStartDate] = useState("");
+  const [rangeEndDate, setRangeEndDate] = useState("");
+  const [rangeErrors, setRangeErrors] = useState<RangeErrors>({
+    startDate: "",
+    endDate: "",
+  });
   const [submitting, setSubmitting] = useState(false);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -191,6 +225,50 @@ export function HolidaysSettings() {
     });
   }
 
+  function openRangeConfirmation() {
+    const errors: RangeErrors = { startDate: "", endDate: "" };
+
+    if (!rangeStartDate) errors.startDate = "開始日を選択してください。";
+    if (!rangeEndDate) errors.endDate = "終了日を選択してください。";
+
+    if (rangeStartDate && rangeStartDate < currentTodayKey) {
+      errors.startDate = "過去日は設定できません。";
+    }
+
+    if (rangeEndDate && rangeEndDate < currentTodayKey) {
+      errors.endDate = "過去日は設定できません。";
+    }
+
+    if (rangeStartDate && rangeEndDate && rangeEndDate < rangeStartDate) {
+      errors.endDate = "終了日は開始日以降の日付を選択してください。";
+    }
+
+    const dates =
+      !errors.startDate && !errors.endDate
+        ? getDateRange(rangeStartDate, rangeEndDate)
+        : [];
+
+    if (dates.length > 31) {
+      errors.endDate = "一度に設定できる期間は31日までです。";
+    }
+
+    setRangeErrors(errors);
+    if (errors.startDate || errors.endDate || !dates.length) return;
+
+    const reservationCount = dates.reduce(
+      (total, dateKey) => total + (reservationCounts[dateKey] ?? 0),
+      0,
+    );
+
+    setPendingAction({
+      kind: "set-range",
+      startDate: rangeStartDate,
+      endDate: rangeEndDate,
+      dates,
+      reservationCount,
+    });
+  }
+
   async function confirmAction() {
     if (!pendingAction || submitting) return;
     setSubmitting(true);
@@ -234,6 +312,11 @@ export function HolidaysSettings() {
 
     setPendingAction(null);
     setSubmitting(false);
+    if (pendingAction.kind === "set-range") {
+      setRangeStartDate("");
+      setRangeEndDate("");
+      setRangeErrors({ startDate: "", endDate: "" });
+    }
     await loadHolidays();
   }
 
@@ -266,8 +349,8 @@ export function HolidaysSettings() {
           </div>
         ) : null}
 
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:min-h-[130px]">
+          <div className="flex h-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-base font-semibold">曜日一括設定</h2>
               <p className="mt-1 text-sm text-slate-500">
@@ -306,6 +389,75 @@ export function HolidaysSettings() {
                   </button>
                 );
               })}
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:min-h-[130px]">
+          <div className="flex h-full flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="lg:self-center">
+              <h2 className="text-base font-semibold">連休設定</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                開始日と終了日を選択して、連続した定休日をまとめて設定できます。
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[180px_180px_auto] lg:items-start">
+              <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                開始日
+                <input
+                  type="date"
+                  min={currentTodayKey}
+                  value={rangeStartDate}
+                  aria-invalid={rangeErrors.startDate ? "true" : "false"}
+                  onChange={(event) => {
+                    setRangeStartDate(event.target.value);
+                    setRangeErrors((current) => ({
+                      ...current,
+                      startDate: "",
+                    }));
+                  }}
+                  className={`h-10 rounded-md border bg-white px-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-100 ${
+                    rangeErrors.startDate
+                      ? "border-red-400 focus:border-red-500"
+                      : "border-slate-300 focus:border-blue-500"
+                  }`}
+                />
+                <span className="min-h-4 text-xs font-semibold leading-4 text-red-600">
+                  {rangeErrors.startDate}
+                </span>
+              </label>
+              <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                終了日
+                <input
+                  type="date"
+                  min={rangeStartDate || currentTodayKey}
+                  value={rangeEndDate}
+                  aria-invalid={rangeErrors.endDate ? "true" : "false"}
+                  onChange={(event) => {
+                    setRangeEndDate(event.target.value);
+                    setRangeErrors((current) => ({
+                      ...current,
+                      endDate: "",
+                    }));
+                  }}
+                  className={`h-10 rounded-md border bg-white px-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-100 ${
+                    rangeErrors.endDate
+                      ? "border-red-400 focus:border-red-500"
+                      : "border-slate-300 focus:border-blue-500"
+                  }`}
+                />
+                <span className="min-h-4 text-xs font-semibold leading-4 text-red-600">
+                  {rangeErrors.endDate}
+                </span>
+              </label>
+              <button
+                type="button"
+                disabled={loadState.status === "loading"}
+                onClick={openRangeConfirmation}
+                className="h-10 cursor-pointer rounded-md bg-red-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2 lg:col-span-1 lg:mt-[26px]"
+              >
+                定休日に設定
+              </button>
             </div>
           </div>
         </section>
@@ -406,7 +558,11 @@ export function HolidaysSettings() {
                 ? "定休日に設定しますか？"
                 : pendingAction.kind === "remove"
                   ? "営業日に戻しますか？"
-                  : `${monthDate.getFullYear()}年${monthDate.getMonth() + 1}月の${weekdayLabels[pendingAction.weekday]}曜日を定休日に設定しますか？`}
+                  : pendingAction.kind === "set-range"
+                    ? pendingAction.reservationCount > 0
+                      ? "予約がある日が含まれています"
+                      : "連休を定休日に設定しますか？"
+                    : `${monthDate.getFullYear()}年${monthDate.getMonth() + 1}月の${weekdayLabels[pendingAction.weekday]}曜日を定休日に設定しますか？`}
             </h2>
 
             <div className="mt-4 grid gap-3 text-sm leading-6 text-slate-600">
@@ -440,7 +596,7 @@ export function HolidaysSettings() {
                     </p>
                   ) : null}
                 </>
-              ) : (
+              ) : pendingAction.kind === "set-monthly-weekday" ? (
                 <>
                   <p>
                     対象期間:
@@ -461,6 +617,38 @@ export function HolidaysSettings() {
                       </p>
                     </>
                   ) : null}
+                </>
+              ) : pendingAction.reservationCount > 0 ? (
+                <>
+                  <p className="font-semibold text-amber-700">
+                    対象期間内に既存予約が{pendingAction.reservationCount}件あります。
+                  </p>
+                  <p>
+                    定休日に設定すると新規予約は停止されます。
+                    <br />
+                    既存予約は自動キャンセルされません。
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    本当に定休日に設定しますか？
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>以下の期間を定休日に設定します。</p>
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                    <dt>開始日:</dt>
+                    <dd className="font-semibold text-slate-900">
+                      {formatShortDate(pendingAction.startDate)}
+                    </dd>
+                    <dt>終了日:</dt>
+                    <dd className="font-semibold text-slate-900">
+                      {formatShortDate(pendingAction.endDate)}
+                    </dd>
+                    <dt>対象日数:</dt>
+                    <dd className="font-semibold text-slate-900">
+                      {pendingAction.dates.length}日間
+                    </dd>
+                  </dl>
                 </>
               )}
             </div>
