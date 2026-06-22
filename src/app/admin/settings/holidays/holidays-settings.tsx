@@ -37,6 +37,12 @@ type PendingAction =
       reservedDayCount: number;
     }
   | {
+      kind: "remove-monthly-weekday";
+      weekday: number;
+      dates: string[];
+      weeklyHoliday: HolidayItem | null;
+    }
+  | {
       kind: "set-range";
       startDate: string;
       endDate: string;
@@ -206,12 +212,30 @@ export function HolidaysSettings() {
   }
 
   function openMonthlyWeekdayConfirmation(weekday: number) {
-    const dates = getMonthWeekdayDateKeys(
+    const targetDates = getMonthWeekdayDateKeys(
       monthDate,
       weekday,
       currentTodayKey,
-    ).filter((dateKey) => !findHoliday(dateKey, items));
-    if (!dates.length) return;
+    );
+    if (!targetDates.length) return;
+
+    const active = targetDates.every((dateKey) => findHoliday(dateKey, items));
+    if (active) {
+      setPendingAction({
+        kind: "remove-monthly-weekday",
+        weekday,
+        dates: targetDates,
+        weeklyHoliday:
+          items.find(
+            (item) => item.type === "weekly" && item.weekday === weekday,
+          ) ?? null,
+      });
+      return;
+    }
+
+    const dates = targetDates.filter(
+      (dateKey) => !findHoliday(dateKey, items),
+    );
 
     const reservedDayCount = dates.filter(
       (dateKey) => (reservationCounts[dateKey] ?? 0) > 0,
@@ -274,10 +298,25 @@ export function HolidaysSettings() {
     setSubmitting(true);
 
     const response =
-      pendingAction.kind === "remove"
-        ? await fetch(`/api/admin/holidays?id=${pendingAction.holiday.id}`, {
-            method: "DELETE",
-          })
+      pendingAction.kind === "remove" ||
+      pendingAction.kind === "remove-monthly-weekday"
+        ? await fetch(
+            pendingAction.kind === "remove"
+              ? `/api/admin/holidays?id=${pendingAction.holiday.id}`
+              : (() => {
+                  const searchParams = new URLSearchParams();
+                  pendingAction.dates.forEach((date) =>
+                    searchParams.append("date", date),
+                  );
+                  if (pendingAction.weeklyHoliday) {
+                    searchParams.set("id", pendingAction.weeklyHoliday.id);
+                  }
+                  return `/api/admin/holidays?${searchParams.toString()}`;
+                })(),
+            {
+              method: "DELETE",
+            },
+          )
         : await fetch("/api/admin/holidays", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -372,16 +411,15 @@ export function HolidaysSettings() {
                     key={weekday}
                     type="button"
                     disabled={
-                      active ||
-                      !targetDates.length ||
-                      loadState.status === "loading"
+                      !targetDates.length || loadState.status === "loading"
                     }
                     onClick={() => openMonthlyWeekdayConfirmation(weekday)}
                     aria-pressed={active}
+                    aria-label={`${weekdayLabels[weekday]}曜日を${active ? "一括解除" : "一括設定"}`}
                     className={[
                       "grid h-10 min-w-10 cursor-pointer place-items-center rounded-md border px-2 text-sm font-bold transition",
                       active
-                        ? "cursor-default border-red-300 bg-red-100 text-red-700"
+                        ? "border-red-300 bg-red-100 text-red-700 hover:border-red-400 hover:bg-red-200"
                         : "border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700",
                     ].join(" ")}
                   >
@@ -558,6 +596,8 @@ export function HolidaysSettings() {
                 ? "定休日に設定しますか？"
                 : pendingAction.kind === "remove"
                   ? "営業日に戻しますか？"
+                  : pendingAction.kind === "remove-monthly-weekday"
+                    ? `${monthDate.getFullYear()}年${monthDate.getMonth() + 1}月の${weekdayLabels[pendingAction.weekday]}曜日を一括解除しますか？`
                   : pendingAction.kind === "set-range"
                     ? pendingAction.reservationCount > 0
                       ? "予約がある日が含まれています"
@@ -593,6 +633,26 @@ export function HolidaysSettings() {
                     <p className="font-semibold text-amber-700">
                       毎週{weekdayLabels[pendingAction.holiday.weekday ?? 0]}
                       曜日の定休日設定を解除します。
+                    </p>
+                  ) : null}
+                </>
+              ) : pendingAction.kind === "remove-monthly-weekday" ? (
+                <>
+                  <p>
+                    対象期間:
+                    <br />
+                    {monthDate.getFullYear()}年{monthDate.getMonth() + 1}月
+                    （当月のみ）
+                  </p>
+                  <p>
+                    表示中の月に設定されている
+                    {weekdayLabels[pendingAction.weekday]}
+                    曜日の定休日をまとめて営業日に戻します。
+                  </p>
+                  {pendingAction.weeklyHoliday ? (
+                    <p className="font-semibold text-amber-700">
+                      毎週{weekdayLabels[pendingAction.weekday]}
+                      曜日の旧設定もあわせて解除します。
                     </p>
                   ) : null}
                 </>
@@ -669,7 +729,8 @@ export function HolidaysSettings() {
                 onClick={() => void confirmAction()}
                 className={[
                   "h-11 cursor-pointer rounded-md px-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50",
-                  pendingAction.kind === "remove"
+                  pendingAction.kind === "remove" ||
+                  pendingAction.kind === "remove-monthly-weekday"
                     ? "bg-blue-600 hover:bg-blue-700"
                     : "bg-red-600 hover:bg-red-700",
                 ].join(" ")}
@@ -680,6 +741,8 @@ export function HolidaysSettings() {
                     ? "定休日にする"
                     : pendingAction.kind === "remove"
                       ? "営業日に戻す"
+                      : pendingAction.kind === "remove-monthly-weekday"
+                        ? "一括解除する"
                       : "設定する"}
               </button>
             </div>

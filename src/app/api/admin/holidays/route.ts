@@ -237,21 +237,53 @@ export async function DELETE(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
+  const dates = [...new Set(searchParams.getAll("date"))];
+  const today = getJstDateKey(new Date());
 
-  if (!id) {
+  if (!id && !dates.length) {
     return NextResponse.json(
-      { ok: false, message: "id is required." },
+      { ok: false, message: "削除する定休日を指定してください。" },
       { status: 400 },
     );
   }
 
-  const { error } = await supabaseServer.from("holidays").delete().eq("id", id);
-
-  if (error) {
+  if (
+    dates.length > 31 ||
+    dates.some((date) => !isDateKey(date) || date < today)
+  ) {
     return NextResponse.json(
-      { ok: false, message: error.message },
-      { status: 500 },
+      { ok: false, message: "一括解除する日付が正しくありません。" },
+      { status: 400 },
     );
+  }
+
+  if (id) {
+    const { error } = await supabaseServer
+      .from("holidays")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      return NextResponse.json(
+        { ok: false, message: error.message },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (dates.length) {
+    const { error } = await supabaseServer
+      .from("holidays")
+      .delete()
+      .eq("type", "single")
+      .in("date", dates);
+
+    if (error) {
+      return NextResponse.json(
+        { ok: false, message: error.message },
+        { status: 500 },
+      );
+    }
   }
 
   return NextResponse.json({ ok: true });
