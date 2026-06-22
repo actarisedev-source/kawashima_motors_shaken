@@ -31,12 +31,22 @@ const parseFilters = (value: FormDataEntryValue | null) => {
   }
 };
 
+const allowedScheduledTimes = new Set(
+  Array.from(
+    { length: 13 },
+    (_, index) => `${String(index + 8).padStart(2, "0")}:00`,
+  ),
+);
+
 const parseScheduledAt = (date: string, time: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new Error("配信日を選択してください。");
   }
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+  if (!time) {
     throw new Error("配信時刻を選択してください。");
+  }
+  if (!allowedScheduledTimes.has(time)) {
+    throw new Error("配信時刻は08:00から20:00までの1時間単位で選択してください。");
   }
   const scheduledAt = new Date(`${date}T${time}:00+09:00`);
   if (Number.isNaN(scheduledAt.getTime())) {

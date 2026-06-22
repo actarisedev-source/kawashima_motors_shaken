@@ -104,6 +104,11 @@ const todayInJapan = () =>
     timeZone: "Asia/Tokyo",
   }).format(new Date());
 
+const scheduledTimeOptions = Array.from(
+  { length: 13 },
+  (_, index) => `${String(index + 8).padStart(2, "0")}:00`,
+);
+
 const formatDateTime = (value: string) =>
   new Intl.DateTimeFormat("ja-JP", {
     year: "numeric",
@@ -392,19 +397,28 @@ export function LineScheduledDistribution() {
             </label>
             <label className="grid gap-2 text-sm font-semibold text-slate-700">
               配信時刻
-              <input
-                type="time"
+              <select
                 value={scheduledTime}
                 onChange={(event) => {
                   setScheduledTime(event.target.value);
                   setErrors((current) => ({ ...current, time: "" }));
                 }}
                 className={`h-11 rounded-md border px-3 text-base font-normal outline-none focus:border-blue-500 ${errors.time ? "border-red-400" : "border-slate-300"}`}
-              />
+              >
+                <option value="">時刻を選択</option>
+                {scheduledTimeOptions.map((time) => (
+                  <option key={time} value={time}>
+                    {time}
+                  </option>
+                ))}
+              </select>
               <span className="min-h-5 text-xs font-semibold text-red-600">{errors.time}</span>
             </label>
           </div>
-          <p className="text-xs text-slate-500">日本時間で指定してください。毎時のCron実行時に、予定時刻を過ぎた配信を処理します。</p>
+          <p className="text-xs leading-5 text-slate-500">
+            日本時間で指定してください。<br />
+            予約配信は毎時0分に確認し、指定時刻以降に送信されます。
+          </p>
         </section>
 
         <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
