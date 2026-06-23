@@ -431,15 +431,15 @@ export function ReservationForm({
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 text-sm font-bold text-zinc-800 sm:gap-x-7 sm:gap-y-3 sm:text-base">
           <span className="inline-flex items-center gap-1.5 sm:gap-2">
-            <span className="text-2xl leading-none text-blue-600 sm:text-3xl">○</span>
+            <span className="inline-flex w-6 justify-center text-2xl leading-none text-blue-600 sm:w-8 sm:text-3xl">○</span>
             予約可能
           </span>
           <span className="inline-flex items-center gap-1.5 sm:gap-2">
-            <span className="text-2xl leading-none text-orange-500 sm:text-3xl">△</span>
+            <span className="inline-flex w-6 justify-center text-2xl leading-none text-blue-600 sm:w-8 sm:text-3xl">△</span>
             残りわずか
           </span>
           <span className="inline-flex items-center gap-1.5 sm:gap-2">
-            <span className="text-2xl leading-none text-zinc-500 sm:text-3xl">×</span>
+            <span className="inline-flex w-6 justify-center text-2xl leading-none text-blue-600 sm:w-8 sm:text-3xl">×</span>
             予約不可
           </span>
         </div>
