@@ -377,29 +377,29 @@ export function ReservationForm({
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="grid gap-5 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm"
+      className="grid gap-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm sm:gap-5 sm:p-5"
     >
-      <section className="grid gap-5">
+      <section className="grid gap-4 sm:gap-5">
         <div className="text-center">
-          <h2 className="text-3xl font-black tracking-tight text-zinc-950">
+          <h2 className="text-2xl font-black tracking-tight text-zinc-950 sm:text-3xl">
             車検の予約
           </h2>
-          <p className="mt-2 text-base font-medium text-zinc-500">
+          <p className="mt-1 text-sm font-medium text-zinc-500 sm:mt-2 sm:text-base">
             ご希望の日時を選択してください
           </p>
         </div>
 
-        <div className="grid gap-4 rounded-[16px] border border-zinc-200 bg-white p-5 shadow-sm">
-          <h3 className="text-xl font-black text-zinc-950">年月を選択</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="grid gap-2 text-sm font-bold text-zinc-700">
+        <div className="grid gap-3 rounded-md border border-zinc-200 bg-white p-3 shadow-sm sm:gap-4 sm:rounded-[16px] sm:p-5">
+          <h3 className="text-lg font-black text-zinc-950 sm:text-xl">年月を選択</h3>
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
+            <label className="grid gap-1.5 text-xs font-bold text-zinc-700 sm:gap-2 sm:text-sm">
               年
               <select
                 value={selectedYear}
                 onChange={(event) =>
                   updateMonth(Number(event.target.value), selectedMonth)
                 }
-                className="h-14 rounded-[12px] border border-zinc-200 bg-white px-4 text-xl font-black text-zinc-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="h-11 rounded-md border border-zinc-200 bg-white px-3 text-base font-black text-zinc-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:h-14 sm:rounded-[12px] sm:px-4 sm:text-xl"
               >
                 {yearOptions.map((year) => (
                   <option key={year} value={year}>
@@ -408,14 +408,14 @@ export function ReservationForm({
                 ))}
               </select>
             </label>
-            <label className="grid gap-2 text-sm font-bold text-zinc-700">
+            <label className="grid gap-1.5 text-xs font-bold text-zinc-700 sm:gap-2 sm:text-sm">
               月
               <select
                 value={selectedMonth}
                 onChange={(event) =>
                   updateMonth(selectedYear, Number(event.target.value))
                 }
-                className="h-14 rounded-[12px] border border-zinc-200 bg-white px-4 text-xl font-black text-zinc-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="h-11 rounded-md border border-zinc-200 bg-white px-3 text-base font-black text-zinc-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:h-14 sm:rounded-[12px] sm:px-4 sm:text-xl"
               >
                 {Array.from({ length: 12 }, (_, index) => index + 1).map(
                   (monthNumber) => (
@@ -429,23 +429,23 @@ export function ReservationForm({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-7 gap-y-3 px-1 text-base font-bold text-zinc-800">
-          <span className="inline-flex items-center gap-2">
-            <span className="text-3xl leading-none text-blue-600">○</span>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 text-sm font-bold text-zinc-800 sm:gap-x-7 sm:gap-y-3 sm:text-base">
+          <span className="inline-flex items-center gap-1.5 sm:gap-2">
+            <span className="text-2xl leading-none text-blue-600 sm:text-3xl">○</span>
             予約可能
           </span>
-          <span className="inline-flex items-center gap-2">
-            <span className="text-3xl leading-none text-orange-500">△</span>
+          <span className="inline-flex items-center gap-1.5 sm:gap-2">
+            <span className="text-2xl leading-none text-orange-500 sm:text-3xl">△</span>
             残りわずか
           </span>
-          <span className="inline-flex items-center gap-2">
-            <span className="text-3xl leading-none text-zinc-500">×</span>
+          <span className="inline-flex items-center gap-1.5 sm:gap-2">
+            <span className="text-2xl leading-none text-zinc-500 sm:text-3xl">×</span>
             予約不可
           </span>
         </div>
 
         <div
-          className={`overflow-hidden rounded-[16px] border bg-white shadow-sm ${
+          className={`overflow-hidden rounded-md border bg-white shadow-sm sm:rounded-[16px] ${
             fieldErrors.reservationDateTime
               ? "border-red-400"
               : "border-zinc-200"
@@ -455,7 +455,7 @@ export function ReservationForm({
             <table className="min-w-max border-collapse text-center">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-20 w-20 min-w-20 border-b border-r border-zinc-200 bg-white px-3 py-5 text-base font-black text-zinc-950">
+                  <th className="sticky left-0 z-20 w-14 min-w-14 border-b border-r border-zinc-200 bg-white px-1.5 py-3 text-sm font-black text-zinc-950 sm:w-20 sm:min-w-20 sm:px-3 sm:py-5 sm:text-base">
                     時間
                   </th>
                   {monthDates.map((date) => {
@@ -478,7 +478,7 @@ export function ReservationForm({
                     return (
                       <th
                         key={dateKey}
-                        className={`w-24 min-w-24 border-b border-r border-zinc-200 px-3 py-4 text-lg font-black ${
+                        className={`w-20 min-w-20 border-b border-r border-zinc-200 px-1.5 py-2 text-sm font-black sm:w-24 sm:min-w-24 sm:px-3 sm:py-4 sm:text-lg ${
                           isPast
                             ? "bg-gray-100"
                             : holiday
@@ -489,7 +489,7 @@ export function ReservationForm({
                         <span className="block">
                           {date.getMonth() + 1}/{date.getDate()}
                         </span>
-                        <span className="mt-1 block">
+                        <span className="mt-0.5 block sm:mt-1">
                           （{weekdayLabels[weekday]}）
                         </span>
                       </th>
@@ -500,7 +500,7 @@ export function ReservationForm({
               <tbody>
                 {reservationTimeSlots.map((time) => (
                   <tr key={time}>
-                    <th className="sticky left-0 z-10 w-20 min-w-20 border-b border-r border-zinc-200 bg-white px-3 py-5 text-lg font-black text-zinc-950">
+                    <th className="sticky left-0 z-10 w-14 min-w-14 border-b border-r border-zinc-200 bg-white px-1.5 py-3 text-sm font-black text-zinc-950 sm:w-20 sm:min-w-20 sm:px-3 sm:py-5 sm:text-lg">
                       {time.replace(/^0/, "")}
                     </th>
                     {monthDates.map((date) => {
@@ -523,7 +523,7 @@ export function ReservationForm({
                       return (
                         <td
                           key={`${dateKey}-${time}`}
-                          className={`border-b border-r border-zinc-200 p-2 ${
+                          className={`border-b border-r border-zinc-200 p-1 sm:p-2 ${
                             isPast
                               ? "bg-gray-100"
                               : holiday
@@ -550,7 +550,7 @@ export function ReservationForm({
                               isPast ? "予約不可" : status.label
                             }`}
                             className={[
-                              "grid h-16 w-full place-items-center rounded-[12px] text-4xl font-black leading-none transition",
+                              "grid h-12 w-full place-items-center rounded-md text-2xl font-black leading-none transition sm:h-16 sm:rounded-[12px] sm:text-4xl",
                               selected
                                 ? "bg-blue-600 text-white shadow-md ring-2 ring-blue-200"
                                 : symbolClass,
@@ -589,18 +589,18 @@ export function ReservationForm({
           <button
             type="button"
             onClick={() => scrollSchedule(-280)}
-            className="grid h-10 w-10 place-items-center rounded-full bg-white text-2xl font-black text-zinc-950 shadow-sm ring-1 ring-zinc-200"
+            className="grid h-8 w-8 place-items-center rounded-full bg-white text-xl font-black text-zinc-950 shadow-sm ring-1 ring-zinc-200 sm:h-10 sm:w-10 sm:text-2xl"
             aria-label="予約表を左へスクロール"
           >
             ‹
           </button>
-          <div className="h-3 flex-1 rounded-full bg-zinc-200">
-            <div className="h-3 w-1/3 rounded-full bg-zinc-400" />
+          <div className="h-2 flex-1 rounded-full bg-zinc-200 sm:h-3">
+            <div className="h-2 w-1/3 rounded-full bg-zinc-400 sm:h-3" />
           </div>
           <button
             type="button"
             onClick={() => scrollSchedule(280)}
-            className="grid h-10 w-10 place-items-center rounded-full bg-white text-2xl font-black text-zinc-950 shadow-sm ring-1 ring-zinc-200"
+            className="grid h-8 w-8 place-items-center rounded-full bg-white text-xl font-black text-zinc-950 shadow-sm ring-1 ring-zinc-200 sm:h-10 sm:w-10 sm:text-2xl"
             aria-label="予約表を右へスクロール"
           >
             ›
