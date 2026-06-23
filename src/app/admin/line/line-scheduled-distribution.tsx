@@ -529,9 +529,9 @@ export function LineScheduledDistribution() {
                   <div className="col-span-2"><p className="text-xs font-semibold text-slate-500">作成日時</p><p className="mt-1 font-bold">{formatDateTime(item.created_at)}</p></div>
                   {item.error_message ? <p className="col-span-2 text-xs font-semibold text-red-700">{item.error_message}</p> : null}
                 </div>
-                <div className="flex min-h-9 flex-nowrap items-center gap-2 md:w-36 md:justify-end md:self-center">
-                  <span className={`inline-flex h-9 min-w-[72px] items-center justify-center rounded-md px-2.5 text-xs font-bold ${statusClasses[item.status]}`}>{item.status}</span>
-                  {item.status === "予約中" ? <button type="button" onClick={() => setPendingCancel(item)} className="h-9 min-w-[72px] rounded-md border border-red-300 bg-white px-3 text-sm font-bold text-red-600 hover:bg-red-50">取消</button> : null}
+                <div className="flex min-h-9 flex-nowrap items-center gap-2 md:w-40 md:justify-end md:self-center">
+                  <span className={`inline-flex h-9 min-w-[72px] shrink-0 items-center justify-center rounded-md px-2.5 text-xs font-bold ${statusClasses[item.status]}`}>{item.status}</span>
+                  {item.status === "予約中" ? <button type="button" onClick={() => setPendingCancel(item)} className="relative z-10 h-9 min-w-[72px] shrink-0 rounded-md border border-red-300 bg-white px-3 text-sm font-bold text-red-600 hover:bg-red-50">取消</button> : null}
                 </div>
               </article>
             ))}
