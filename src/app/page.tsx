@@ -21,12 +21,11 @@ export default function Home() {
             className="h-auto w-52 sm:w-72"
           />
           <div className="mt-8 max-w-[18rem] sm:mt-12 sm:max-w-xl">
-            <h1 className="text-3xl font-black leading-tight text-sky-950 drop-shadow-sm sm:text-5xl">
-              川島モータース車検予約
+            <h1 className="text-2xl font-black leading-tight text-[#0070A8] drop-shadow-sm sm:text-4xl">
+              川島モータース
+              <br />
+              車検予約
             </h1>
-            <p className="mt-4 max-w-md text-sm font-semibold leading-7 text-slate-700 sm:text-base sm:leading-8">
-              お車の情報とご希望日時を入力してください。内容を確認後、担当者よりご連絡します。
-            </p>
           </div>
         </div>
       </section>
