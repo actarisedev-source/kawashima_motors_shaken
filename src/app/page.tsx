@@ -1,5 +1,64 @@
 import Image from "next/image";
+import { Fragment } from "react";
 import { ReservationForm } from "./reservation-form";
+
+const flowSteps = [
+  {
+    label: "日時を選ぶ",
+    icon: (
+      <svg viewBox="0 0 48 48" aria-hidden="true" className="h-10 w-10 sm:h-12 sm:w-12">
+        <rect x="8" y="10" width="32" height="30" rx="3" fill="none" stroke="currentColor" strokeWidth="3" />
+        <path d="M8 18h32M17 7v7M31 7v7" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="3" />
+        <path d="M17 27h4M27 27h4M17 34h4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="3" />
+      </svg>
+    ),
+  },
+  {
+    label: "お客様情報入力",
+    icon: (
+      <svg viewBox="0 0 48 48" aria-hidden="true" className="h-10 w-10 sm:h-12 sm:w-12">
+        <path d="M13 35l3-10L34 7l7 7-18 18-10 3Z" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="3" />
+        <path d="M29 12l7 7M16 25l7 7" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="3" />
+      </svg>
+    ),
+  },
+  {
+    label: "予約完了",
+    icon: (
+      <svg viewBox="0 0 48 48" aria-hidden="true" className="h-10 w-10 sm:h-12 sm:w-12">
+        <rect x="10" y="8" width="28" height="32" rx="3" fill="none" stroke="currentColor" strokeWidth="3" />
+        <path d="M17 24l6 6 10-13" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
+      </svg>
+    ),
+  },
+];
+
+function ReservationFlow() {
+  return (
+    <section className="rounded-md border border-sky-100 bg-white/95 px-4 py-5 text-center shadow-sm sm:px-8 sm:py-7">
+      <h2 className="text-base font-black text-slate-950 sm:text-xl">ご予約の流れ</h2>
+      <div className="mt-4 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-start gap-2 sm:mt-6 sm:gap-4">
+        {flowSteps.map((step, index) => (
+          <Fragment key={step.label}>
+            <div className="grid justify-items-center gap-2 text-[#0070A8] sm:gap-3">
+              <div className="grid h-12 w-12 place-items-center rounded-md bg-sky-50 sm:h-16 sm:w-16">
+                {step.icon}
+              </div>
+              <p className="text-xs font-black leading-snug text-slate-950 sm:text-base">
+                {step.label}
+              </p>
+            </div>
+            {index < flowSteps.length - 1 ? (
+              <div className="pt-4 text-2xl font-bold text-slate-300 sm:pt-5 sm:text-3xl">
+                &gt;
+              </div>
+            ) : null}
+          </Fragment>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function Home() {
   const reservationLiffId =
@@ -31,6 +90,7 @@ export default function Home() {
       </section>
 
       <section className="mx-auto grid w-full max-w-5xl gap-8 px-6 py-8 sm:py-10">
+        <ReservationFlow />
         <ReservationForm reservationLiffId={reservationLiffId} />
       </section>
     </main>
