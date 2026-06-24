@@ -374,9 +374,9 @@ export function ReservationForm({
       className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-3 shadow-sm sm:gap-5 sm:p-5"
     >
       <section className="grid gap-3 sm:gap-5">
-        <div className="flex items-center gap-3 rounded-md border border-blue-100 bg-blue-50/70 px-3 py-3 shadow-sm sm:gap-4 sm:px-5 sm:py-4">
-          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-white text-blue-600 ring-1 ring-blue-100 sm:h-14 sm:w-14">
-            <svg viewBox="0 0 48 48" aria-hidden="true" className="h-8 w-8 sm:h-10 sm:w-10">
+        <div className="flex items-center gap-3 rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2.5 shadow-sm sm:gap-4 sm:px-5 sm:py-3.5">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-white text-blue-600 ring-1 ring-blue-100 sm:h-12 sm:w-12">
+            <svg viewBox="0 0 48 48" aria-hidden="true" className="h-7 w-7 sm:h-9 sm:w-9">
               <path
                 d="M24 7a17 17 0 1 0 0 34 17 17 0 0 0 0-34Z"
                 fill="none"
@@ -403,55 +403,55 @@ export function ReservationForm({
             </svg>
           </div>
           <div className="min-w-0">
-            <h2 className="text-base font-black leading-tight text-blue-600 sm:text-xl">
+            <h2 className="text-sm font-black leading-tight text-blue-600 sm:text-lg">
               24時間いつでも予約可能
             </h2>
-            <p className="mt-1 text-xs font-semibold leading-relaxed text-zinc-600 sm:text-base">
+            <p className="mt-0.5 text-[11px] font-semibold leading-relaxed text-zinc-600 sm:text-sm">
               ご希望の日時を選択して、簡単にご予約いただけます。
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-3 shadow-sm sm:px-8 sm:py-6">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2.5 shadow-sm sm:px-8 sm:py-4">
           <button
             type="button"
             onClick={() => moveMonth(-1)}
-            className="grid h-11 w-11 place-items-center rounded-md border border-blue-100 bg-white text-3xl font-black leading-none text-blue-600 shadow-sm transition hover:bg-blue-50 active:scale-95 sm:h-14 sm:w-14"
+            className="grid h-9 w-9 place-items-center rounded-md border border-blue-100 bg-white text-2xl font-black leading-none text-blue-600 shadow-sm transition hover:bg-blue-50 active:scale-95 sm:h-12 sm:w-12 sm:text-3xl"
             aria-label="前の月を表示"
           >
             ‹
           </button>
           <div className="flex items-center justify-center gap-2 text-blue-600 sm:gap-4">
-            <svg viewBox="0 0 48 48" aria-hidden="true" className="h-8 w-8 sm:h-11 sm:w-11">
+            <svg viewBox="0 0 48 48" aria-hidden="true" className="h-7 w-7 sm:h-9 sm:w-9">
               <rect x="8" y="10" width="32" height="30" rx="3" fill="none" stroke="currentColor" strokeWidth="3" />
               <path d="M8 18h32M17 7v7M31 7v7" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="3" />
               <path d="M17 27h4M27 27h4M17 34h4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="3" />
             </svg>
-            <span className="text-2xl font-black tracking-tight sm:text-4xl">
+            <span className="text-[22px] font-black tracking-tight sm:text-3xl">
               {formatDisplayMonth(monthDate)}
             </span>
           </div>
           <button
             type="button"
             onClick={() => moveMonth(1)}
-            className="grid h-11 w-11 place-items-center rounded-md border border-blue-100 bg-white text-3xl font-black leading-none text-blue-600 shadow-sm transition hover:bg-blue-50 active:scale-95 sm:h-14 sm:w-14"
+            className="grid h-9 w-9 place-items-center rounded-md border border-blue-100 bg-white text-2xl font-black leading-none text-blue-600 shadow-sm transition hover:bg-blue-50 active:scale-95 sm:h-12 sm:w-12 sm:text-3xl"
             aria-label="次の月を表示"
           >
             ›
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-0.5 text-sm font-bold text-zinc-800 sm:gap-x-8 sm:px-1 sm:text-xl">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-0.5 text-sm font-bold text-zinc-800 sm:gap-x-8 sm:px-1 sm:text-lg">
           <span className="inline-flex items-center gap-1 sm:gap-2">
-            <span className="inline-flex w-5 justify-center text-2xl leading-none text-blue-600 sm:w-8 sm:text-4xl">○</span>
+            <span className="inline-flex w-5 justify-center text-xl leading-none text-blue-600 sm:w-7 sm:text-2xl">○</span>
             予約可能
           </span>
           <span className="inline-flex items-center gap-1 sm:gap-2">
-            <span className="inline-flex w-5 justify-center text-2xl leading-none text-blue-600 sm:w-8 sm:text-4xl">△</span>
+            <span className="inline-flex w-5 justify-center text-xl leading-none text-blue-600 sm:w-7 sm:text-2xl">△</span>
             残りわずか
           </span>
           <span className="inline-flex items-center gap-1 sm:gap-2">
-            <span className="inline-flex w-5 justify-center text-2xl leading-none text-gray-400 sm:w-8 sm:text-4xl">×</span>
+            <span className="inline-flex w-5 justify-center text-xl leading-none text-gray-400 sm:w-7 sm:text-2xl">×</span>
             予約不可
           </span>
         </div>
@@ -467,7 +467,7 @@ export function ReservationForm({
             <table className="min-w-max border-collapse text-center">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-20 w-12 min-w-12 border-b border-r border-zinc-200 bg-white px-1 py-4 text-sm font-black text-zinc-950 sm:w-24 sm:min-w-24 sm:px-3 sm:py-6 sm:text-xl">
+                  <th className="sticky left-0 z-20 w-11 min-w-11 border-b border-r border-zinc-200 bg-white px-1 py-3 text-sm font-black text-zinc-950 sm:w-20 sm:min-w-20 sm:px-3 sm:py-5 sm:text-lg">
                     時間
                   </th>
                   {monthDates.map((date) => {
@@ -490,7 +490,7 @@ export function ReservationForm({
                     return (
                       <th
                         key={dateKey}
-                        className={`w-[54px] min-w-[54px] border-b border-r border-zinc-200 px-1 py-3 text-sm font-black leading-tight sm:w-28 sm:min-w-28 sm:px-4 sm:py-5 sm:text-xl sm:leading-normal ${
+                        className={`w-[48px] min-w-[48px] border-b border-r border-zinc-200 px-1 py-2.5 text-[13px] font-black leading-tight sm:w-24 sm:min-w-24 sm:px-3 sm:py-4 sm:text-lg sm:leading-normal ${
                           isPast
                             ? "bg-gray-100"
                             : holiday
@@ -512,7 +512,7 @@ export function ReservationForm({
               <tbody>
                 {reservationTimeSlots.map((time) => (
                   <tr key={time}>
-                    <th className="sticky left-0 z-10 w-12 min-w-12 border-b border-r border-zinc-200 bg-white px-1 py-2 text-sm font-black text-zinc-950 sm:w-24 sm:min-w-24 sm:px-3 sm:py-4 sm:text-xl">
+                    <th className="sticky left-0 z-10 w-11 min-w-11 border-b border-r border-zinc-200 bg-white px-1 py-2 text-sm font-black text-zinc-950 sm:w-20 sm:min-w-20 sm:px-3 sm:py-4 sm:text-lg">
                       {time.replace(/^0/, "")}
                     </th>
                     {monthDates.map((date) => {
@@ -533,7 +533,7 @@ export function ReservationForm({
                       return (
                         <td
                           key={`${dateKey}-${time}`}
-                          className={`border-b border-r border-zinc-200 p-1 sm:p-2 ${
+                          className={`border-b border-r border-zinc-200 p-0.5 sm:p-1.5 ${
                             isPast
                               ? "bg-gray-100"
                               : holiday
@@ -560,26 +560,26 @@ export function ReservationForm({
                               isPast ? "予約不可" : status.label
                             }`}
                             className={[
-                              "grid h-11 w-full place-items-center rounded-md text-2xl font-black leading-none transition sm:h-16 sm:text-4xl",
+                              "grid h-10 w-full place-items-center rounded-md border text-[20px] font-bold leading-none transition sm:h-14 sm:text-[24px]",
                               selected
-                                ? "bg-blue-600 text-white shadow-md ring-2 ring-blue-200"
+                                ? "border-blue-600 bg-blue-600 text-white shadow-md ring-2 ring-blue-200"
                                 : symbolClass,
                               !isPast && status.selectable && !selected
-                                ? "bg-blue-50/80 hover:bg-blue-100 active:scale-95"
+                                ? "border-[#dbeafe] bg-[#f8fbff] hover:bg-blue-50 active:scale-95"
                                 : "",
                               !isPast && isLoadingAvailability
-                                ? "cursor-wait bg-white text-transparent"
+                                ? "cursor-wait border-transparent bg-white text-transparent"
                                 : "",
                               isPast
-                                ? "cursor-not-allowed bg-gray-100 text-gray-400"
+                                ? "cursor-not-allowed border-[#e5e7eb] bg-[#f9fafb] text-gray-400"
                                 : "",
                               !isPast && holiday
-                                ? "cursor-not-allowed bg-gray-50 text-gray-400"
+                                ? "cursor-not-allowed border-[#e5e7eb] bg-[#f9fafb] text-gray-400"
                                 : "",
                               !isPast &&
                               !isLoadingAvailability &&
                               !status.selectable
-                                ? "cursor-not-allowed bg-gray-50 text-gray-500"
+                                ? "cursor-not-allowed border-[#e5e7eb] bg-[#f9fafb] text-gray-500"
                                 : "",
                             ].join(" ")}
                           >
