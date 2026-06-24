@@ -59,6 +59,8 @@ type FieldErrors = {
   reservationDateTime: string;
 };
 
+type SlotMark = "○" | "△" | "×";
+
 const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
 const emptyFieldErrors: FieldErrors = {
   customerName: "",
@@ -87,7 +89,9 @@ const getMonthDates = (monthDate: Date) => {
 const formatDisplayMonth = (date: Date) =>
   `${date.getFullYear()}年${date.getMonth() + 1}月`;
 
-const getSlotMark = (slot?: SlotAvailability) => {
+const getSlotMark = (
+  slot?: SlotAvailability,
+): { mark: SlotMark; label: string; selectable: boolean; tone: string } => {
   const remaining = slot ? Math.max(slot.capacity - slot.reservedCount, 0) : 0;
 
   if (remaining >= 2) {
@@ -100,6 +104,42 @@ const getSlotMark = (slot?: SlotAvailability) => {
 
   return { mark: "×", label: "予約不可", selectable: false, tone: "unavailable" };
 };
+
+function SlotSymbol({ mark }: { mark: SlotMark }) {
+  if (mark === "○") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[22px] w-[22px] sm:h-6 sm:w-6">
+        <circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" strokeWidth="2.2" />
+      </svg>
+    );
+  }
+
+  if (mark === "△") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[22px] w-[22px] sm:h-6 sm:w-6">
+        <path
+          d="M12 4.6 20 18.5H4L12 4.6Z"
+          fill="none"
+          stroke="currentColor"
+          strokeLinejoin="round"
+          strokeWidth="2.2"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[22px] w-[22px] sm:h-6 sm:w-6">
+      <path
+        d="M7 7 17 17M17 7 7 17"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="3"
+      />
+    </svg>
+  );
+}
 
 export function ReservationForm({
   reservationLiffId = "",
@@ -443,15 +483,21 @@ export function ReservationForm({
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-0.5 text-sm font-bold text-zinc-800 sm:gap-x-8 sm:px-1 sm:text-lg">
           <span className="inline-flex items-center gap-1 sm:gap-2">
-            <span className="inline-flex w-5 justify-center text-xl leading-none text-blue-600 sm:w-7 sm:text-2xl">○</span>
+            <span className="inline-flex w-6 justify-center text-blue-600">
+              <SlotSymbol mark="○" />
+            </span>
             予約可能
           </span>
           <span className="inline-flex items-center gap-1 sm:gap-2">
-            <span className="inline-flex w-5 justify-center text-xl leading-none text-blue-600 sm:w-7 sm:text-2xl">△</span>
+            <span className="inline-flex w-6 justify-center text-blue-600">
+              <SlotSymbol mark="△" />
+            </span>
             残りわずか
           </span>
           <span className="inline-flex items-center gap-1 sm:gap-2">
-            <span className="inline-flex w-5 justify-center text-xl leading-none text-gray-400 sm:w-7 sm:text-2xl">×</span>
+            <span className="inline-flex w-6 justify-center text-gray-400">
+              <SlotSymbol mark="×" />
+            </span>
             予約不可
           </span>
         </div>
@@ -560,7 +606,7 @@ export function ReservationForm({
                               isPast ? "予約不可" : status.label
                             }`}
                             className={[
-                              "grid h-10 w-full place-items-center rounded-md border text-[20px] font-bold leading-none transition sm:h-14 sm:text-[24px]",
+                              "grid h-10 w-full place-items-center rounded-md border transition sm:h-14",
                               selected
                                 ? "border-blue-600 bg-blue-600 text-white shadow-md ring-2 ring-blue-200"
                                 : symbolClass,
@@ -583,7 +629,13 @@ export function ReservationForm({
                                 : "",
                             ].join(" ")}
                           >
-                            {isLoadingAvailability ? "" : isPast ? "×" : status.mark}
+                            {isLoadingAvailability ? (
+                              ""
+                            ) : isPast ? (
+                              <SlotSymbol mark="×" />
+                            ) : (
+                              <SlotSymbol mark={status.mark} />
+                            )}
                           </button>
                         </td>
                       );
