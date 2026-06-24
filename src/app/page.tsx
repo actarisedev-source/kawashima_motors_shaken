@@ -37,14 +37,14 @@ function ReservationFlow() {
   return (
     <section className="rounded-md border border-sky-100 bg-white/95 px-4 py-5 text-center shadow-sm sm:px-8 sm:py-7">
       <h2 className="text-base font-black text-slate-950 sm:text-xl">ご予約の流れ</h2>
-      <div className="mt-4 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-start gap-2 sm:mt-6 sm:gap-4">
+      <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-1.5 sm:mt-6 sm:gap-4">
         {flowSteps.map((step, index) => (
           <Fragment key={step.label}>
             <div className="grid justify-items-center gap-2 text-[#0070A8] sm:gap-3">
               <div className="grid h-12 w-12 place-items-center rounded-md bg-sky-50 sm:h-16 sm:w-16">
                 {step.icon}
               </div>
-              <p className="text-xs font-black leading-snug text-slate-950 sm:text-base">
+              <p className="whitespace-nowrap text-[11px] font-black leading-none text-slate-950 sm:text-base sm:leading-snug">
                 {step.label}
               </p>
             </div>
