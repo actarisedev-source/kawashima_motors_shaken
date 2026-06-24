@@ -68,9 +68,8 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-sky-50">
-      <section className="relative min-h-[360px] overflow-hidden bg-[url('/images/reservation-hero.png')] bg-cover bg-[position:38%_center] sm:min-h-[460px] sm:bg-center">
-        <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/70 to-sky-100/5" />
-        <div className="relative mx-auto flex min-h-[360px] w-full max-w-6xl flex-col px-5 py-5 sm:min-h-[460px] sm:px-8 sm:py-8">
+      <section className="bg-white">
+        <div className="mx-auto flex w-full max-w-5xl flex-col px-6 py-8 sm:px-8 sm:py-10">
           <Image
             src="/images/kawashima-logo.png"
             alt="有限会社 川島モータース"
@@ -79,8 +78,8 @@ export default function Home() {
             priority
             className="h-auto w-52 sm:w-72"
           />
-          <div className="mt-8 max-w-[18rem] sm:mt-12 sm:max-w-xl">
-            <h1 className="text-2xl font-black leading-tight text-[#0070A8] drop-shadow-sm sm:text-4xl">
+          <div className="mt-6 max-w-[18rem] sm:mt-8 sm:max-w-xl">
+            <h1 className="text-2xl font-black leading-tight text-[#0070A8] sm:text-4xl">
               川島モータース
               <br />
               車検予約
