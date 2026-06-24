@@ -88,7 +88,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto grid w-full max-w-5xl gap-8 px-6 py-8 sm:py-10">
+      <section className="mx-auto grid w-full max-w-5xl gap-8 px-3 py-8 sm:px-6 sm:py-10">
         <ReservationFlow />
         <ReservationForm reservationLiffId={reservationLiffId} />
       </section>
