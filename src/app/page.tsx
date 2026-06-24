@@ -15,8 +15,8 @@ export default function Home() {
           <Image
             src="/images/kawashima-logo.png"
             alt="有限会社 川島モータース"
-            width={626}
-            height={166}
+            width={951}
+            height={241}
             priority
             className="h-auto w-52 sm:w-72"
           />
