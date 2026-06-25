@@ -80,10 +80,9 @@ function ReservationIntro() {
             priority
             className="h-auto w-44 sm:w-60"
           />
-          <h1 className="mt-7 text-3xl font-black leading-tight text-[#005CA8] sm:text-5xl">
-            川島モータース
-            <br />
-            車検予約
+          <h1 className="mt-7 font-black leading-tight text-[#005CA8]">
+            <span className="block text-xl sm:text-[33px]">川島モータース</span>
+            <span className="block text-3xl sm:text-5xl">車検予約</span>
           </h1>
         </div>
         <div className="relative hidden min-h-44 overflow-hidden rounded-md bg-gradient-to-br from-blue-50 via-white to-sky-100 md:block">
