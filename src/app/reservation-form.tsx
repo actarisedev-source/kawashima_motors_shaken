@@ -669,8 +669,8 @@ export function ReservationForm({
         ) : null}
       </section>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="grid gap-2 text-sm font-medium text-zinc-800">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
           お名前
           <input
             name="customerName"
@@ -695,7 +695,7 @@ export function ReservationForm({
             {fieldErrors.customerName}
           </span>
         </label>
-        <label className="grid gap-2 text-sm font-medium text-zinc-800">
+        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
           ふりがな
           <input
             name="customerKana"
@@ -722,7 +722,7 @@ export function ReservationForm({
             {customerKanaError}
           </span>
         </label>
-        <label className="grid gap-2 text-sm font-medium text-zinc-800">
+        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
           電話番号
           <input
             name="phone"
@@ -748,7 +748,7 @@ export function ReservationForm({
             {fieldErrors.phone}
           </span>
         </label>
-        <label className="grid gap-2 text-sm font-medium text-zinc-800">
+        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
           車種
           <input
             name="vehicleModel"
@@ -773,7 +773,7 @@ export function ReservationForm({
             {fieldErrors.vehicleModel}
           </span>
         </label>
-        <label className="grid gap-2 text-sm font-medium text-zinc-800">
+        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
           ナンバー
           <input
             name="licensePlate"
@@ -781,7 +781,7 @@ export function ReservationForm({
           />
           <span aria-hidden="true" className="min-h-4" />
         </label>
-        <label className="grid gap-2 text-sm font-medium text-zinc-800">
+        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
           車検満了日
           <input
             name="inspectionExpiresOn"
@@ -792,7 +792,7 @@ export function ReservationForm({
         </label>
       </div>
 
-      <label className="grid gap-2 text-sm font-medium text-zinc-800">
+      <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
         ご要望
         <textarea
           name="note"
