@@ -552,7 +552,7 @@ export function ReservationForm({
         </div>
 
         <div
-          className={`overflow-hidden rounded-md border bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] ${
+          className={`relative overflow-hidden rounded-md border bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] ${
             fieldErrors.reservationDateTime
               ? "border-red-400"
               : "border-zinc-200"
@@ -692,13 +692,14 @@ export function ReservationForm({
               </tbody>
             </table>
           </div>
+          {availabilityMessage ? (
+            <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-white/70 px-4 text-center backdrop-blur-[1px]">
+              <p className="rounded-md border border-blue-100 bg-white px-4 py-2 text-sm font-bold text-blue-600 shadow-sm">
+                {availabilityMessage}
+              </p>
+            </div>
+          ) : null}
         </div>
-
-        {availabilityMessage ? (
-          <p className="text-sm font-semibold text-zinc-500">
-            {availabilityMessage}
-          </p>
-        ) : null}
         {fieldErrors.reservationDateTime ? (
           <p className="text-xs font-semibold text-red-600" role="alert">
             {fieldErrors.reservationDateTime}
