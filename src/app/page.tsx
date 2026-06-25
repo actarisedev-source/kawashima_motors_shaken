@@ -70,40 +70,40 @@ function ReservationFlow() {
 function ReservationIntro() {
   return (
     <section className="rounded-md border border-blue-100 bg-white px-4 py-4 shadow-sm sm:px-6 sm:py-5">
-      <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_280px] md:items-center">
-        <div>
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(120px,36vw)] items-start gap-3 md:grid-cols-[minmax(0,1fr)_280px] md:items-center md:gap-5">
+        <div className="min-w-0">
           <Image
             src="/images/kawashima-logo.png"
             alt="有限会社 川島モータース"
             width={951}
             height={241}
             priority
-            className="h-auto w-44 sm:w-60"
+            className="h-auto w-36 sm:w-60"
           />
-          <h1 className="mt-7 font-black leading-tight text-[#005CA8]">
+          <h1 className="mt-5 font-black leading-tight text-[#005CA8] sm:mt-7">
             <span className="block text-xl sm:text-[33px]">川島モータース</span>
             <span className="block text-3xl sm:text-5xl">車検予約</span>
           </h1>
         </div>
-        <div className="relative hidden min-h-44 overflow-hidden rounded-md bg-gradient-to-br from-blue-50 via-white to-sky-100 md:block">
-          <div className="absolute -right-8 -top-10 h-44 w-44 rounded-full bg-blue-100/70" />
-          <div className="absolute right-10 top-8 h-28 w-36 rounded-md bg-white shadow-[0_14px_35px_rgba(37,99,235,0.18)]">
-            <div className="h-8 rounded-t-md bg-gradient-to-r from-blue-500 to-sky-400" />
-            <div className="absolute left-7 top-0 h-8 w-3 -translate-y-3 rounded-full bg-blue-200" />
-            <div className="absolute right-7 top-0 h-8 w-3 -translate-y-3 rounded-full bg-blue-200" />
-            <div className="grid grid-cols-4 gap-2 px-5 py-4">
+        <div className="relative min-h-36 overflow-hidden rounded-md bg-gradient-to-br from-blue-50 via-white to-sky-100 md:min-h-44">
+          <div className="absolute -right-10 -top-12 h-40 w-40 rounded-full bg-blue-100/70 md:-right-8 md:-top-10 md:h-44 md:w-44" />
+          <div className="absolute right-6 top-9 h-20 w-28 rounded-md bg-white shadow-[0_14px_35px_rgba(37,99,235,0.18)] md:right-10 md:top-8 md:h-28 md:w-36">
+            <div className="h-6 rounded-t-md bg-gradient-to-r from-blue-500 to-sky-400 md:h-8" />
+            <div className="absolute left-5 top-0 h-7 w-2.5 -translate-y-3 rounded-full bg-blue-200 md:left-7 md:h-8 md:w-3" />
+            <div className="absolute right-5 top-0 h-7 w-2.5 -translate-y-3 rounded-full bg-blue-200 md:right-7 md:h-8 md:w-3" />
+            <div className="grid grid-cols-4 gap-1.5 px-4 py-3 md:gap-2 md:px-5 md:py-4">
               {Array.from({ length: 12 }, (_, index) => (
-                <span key={index} className="h-3 rounded-sm bg-blue-100" />
+                <span key={index} className="h-2.5 rounded-sm bg-blue-100 md:h-3" />
               ))}
             </div>
           </div>
-          <div className="absolute bottom-7 right-5 grid h-20 w-20 place-items-center rounded-full border-[6px] border-blue-500 bg-white text-blue-600 shadow-lg">
-            <svg viewBox="0 0 48 48" aria-hidden="true" className="h-10 w-10">
+          <div className="absolute bottom-6 right-3 grid h-16 w-16 place-items-center rounded-full border-4 border-blue-500 bg-white text-blue-600 shadow-lg md:bottom-7 md:right-5 md:h-20 md:w-20 md:border-[6px]">
+            <svg viewBox="0 0 48 48" aria-hidden="true" className="h-8 w-8 md:h-10 md:w-10">
               <path d="M24 11v15l10 6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="4" />
             </svg>
           </div>
-          <span className="absolute left-10 top-8 h-4 w-4 rounded-full bg-blue-200" />
-          <span className="absolute left-28 bottom-9 h-2.5 w-2.5 rounded-full border-2 border-blue-200" />
+          <span className="absolute left-5 top-8 h-3.5 w-3.5 rounded-full bg-blue-200 md:left-10 md:h-4 md:w-4" />
+          <span className="absolute bottom-7 left-16 h-2.5 w-2.5 rounded-full border-2 border-blue-200 md:left-28 md:bottom-9" />
         </div>
       </div>
 
