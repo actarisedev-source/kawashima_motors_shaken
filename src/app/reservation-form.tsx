@@ -462,44 +462,6 @@ export function ReservationForm({
       className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-3 shadow-sm sm:gap-5 sm:p-5"
     >
       <section className="grid gap-3 sm:gap-5">
-        <div className="flex items-center gap-3 rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2.5 shadow-sm sm:gap-4 sm:px-5 sm:py-3.5">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-white text-blue-600 ring-1 ring-blue-100 sm:h-12 sm:w-12">
-            <svg viewBox="0 0 48 48" aria-hidden="true" className="h-7 w-7 sm:h-9 sm:w-9">
-              <path
-                d="M24 7a17 17 0 1 0 0 34 17 17 0 0 0 0-34Z"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="3"
-              />
-              <path
-                d="M24 13v12l8 5M11 24h5M32 24h5M24 11v5M24 32v5"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeWidth="3"
-              />
-              <rect
-                x="29"
-                y="29"
-                width="12"
-                height="12"
-                rx="2"
-                fill="#eff6ff"
-                stroke="currentColor"
-                strokeWidth="3"
-              />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-black leading-tight text-blue-600 sm:text-lg">
-              24時間いつでも予約可能
-            </h2>
-            <p className="mt-0.5 text-[11px] font-semibold leading-relaxed text-zinc-600 sm:text-sm">
-              ご希望の日時を選択して、簡単にご予約いただけます。
-            </p>
-          </div>
-        </div>
-
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2.5 shadow-sm sm:px-8 sm:py-4">
           <button
             type="button"
