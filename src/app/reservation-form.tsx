@@ -77,17 +77,56 @@ const formatDate = (date: Date) =>
     date.getDate(),
   ).padStart(2, "0")}`;
 
-const getMonthDates = (monthDate: Date) => {
-  const lastDate = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+const formatDisplayMonth = (date: Date) =>
+  `${date.getFullYear()}年${date.getMonth() + 1}月`;
 
-  return Array.from({ length: lastDate.getDate() }, (_, index) => {
-    const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), index + 1);
+const getDateFromKey = (dateKey: string) => {
+  const [year, month, date] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, date);
+};
+
+const getVisibleDates = (monthDate: Date, todayKey: string) => {
+  const today = getDateFromKey(todayKey);
+  const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const requestedMonthStart = new Date(
+    monthDate.getFullYear(),
+    monthDate.getMonth(),
+    1,
+  );
+  const startDate =
+    requestedMonthStart.getTime() <= currentMonthStart.getTime()
+      ? today
+      : requestedMonthStart;
+
+  return Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + index);
     return date;
   });
 };
 
-const formatDisplayMonth = (date: Date) =>
-  `${date.getFullYear()}年${date.getMonth() + 1}月`;
+const fetchAvailabilityForMonths = async (months: string[]) => {
+  const responses = await Promise.all(
+    months.map(async (targetMonth) => {
+      const response = await fetch(
+        `/api/reservations/availability?month=${targetMonth}`,
+        { cache: "no-store" },
+      );
+      const result = (await response.json()) as AvailabilityResponse;
+
+      if (!response.ok || !result.ok || !result.days) {
+        throw new Error(result.message ?? "空き状況の取得に失敗しました。");
+      }
+
+      return result.days;
+    }),
+  );
+
+  return responses.reduce<Record<string, DayAvailability>>(
+    (merged, days) => ({ ...merged, ...days }),
+    {},
+  );
+};
 
 const getSlotMark = (
   slot?: SlotAvailability,
@@ -168,9 +207,25 @@ export function ReservationForm({
   const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
   const submissionInFlightRef = useRef(false);
 
-  const month = formatMonth(monthDate);
-  const monthDates = useMemo(() => getMonthDates(monthDate), [monthDate]);
   const currentTodayKey = getJstDateKey(new Date());
+  const currentMonthStart = useMemo(
+    () => {
+      const today = getDateFromKey(currentTodayKey);
+      return new Date(today.getFullYear(), today.getMonth(), 1);
+    },
+    [currentTodayKey],
+  );
+  const visibleDates = useMemo(
+    () => getVisibleDates(monthDate, currentTodayKey),
+    [currentTodayKey, monthDate],
+  );
+  const availabilityMonths = useMemo(
+    () => Array.from(new Set(visibleDates.map((date) => formatMonth(date)))),
+    [visibleDates],
+  );
+  const availabilityMonthsKey = availabilityMonths.join(",");
+  const canMoveToPreviousMonth =
+    monthDate.getTime() > currentMonthStart.getTime();
 
   useEffect(() => {
     if (!reservationLiffId) {
@@ -210,22 +265,27 @@ export function ReservationForm({
     async function loadAvailability() {
       setAvailabilityMessage("最新情報を取得中です");
 
-      const response = await fetch(`/api/reservations/availability?month=${month}`, {
-        cache: "no-store",
-      });
-      const result = (await response.json()) as AvailabilityResponse;
+      try {
+        const days = await fetchAvailabilityForMonths(availabilityMonths);
 
-      if (cancelled) {
-        return;
-      }
+        if (cancelled) {
+          return;
+        }
 
-      if (!response.ok || !result.ok || !result.days) {
+        setAvailability(days);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
         setAvailability({});
-        setAvailabilityMessage(result.message ?? "空き状況の取得に失敗しました。");
+        setAvailabilityMessage(
+          error instanceof Error
+            ? error.message
+            : "空き状況の取得に失敗しました。",
+        );
         return;
       }
-
-      setAvailability(result.days);
       setAvailabilityMessage("");
     }
 
@@ -234,11 +294,17 @@ export function ReservationForm({
     return () => {
       cancelled = true;
     };
-  }, [month]);
+  }, [availabilityMonths, availabilityMonthsKey]);
 
   function moveMonth(amount: number) {
     setMonthDate(
-      (current) => new Date(current.getFullYear(), current.getMonth() + amount, 1),
+      (current) => {
+        const next = new Date(current.getFullYear(), current.getMonth() + amount, 1);
+
+        return next.getTime() < currentMonthStart.getTime()
+          ? currentMonthStart
+          : next;
+      },
     );
     setSelectedDate("");
     setSelectedTime("");
@@ -372,18 +438,8 @@ export function ReservationForm({
         setSubmitState(successState);
       }
 
-      void fetch(`/api/reservations/availability?month=${month}`, {
-        cache: "no-store",
-      })
-        .then(async (refreshed) => ({
-          refreshed,
-          result: (await refreshed.json()) as AvailabilityResponse,
-        }))
-        .then(({ refreshed, result: refreshedResult }) => {
-          if (refreshed.ok && refreshedResult.ok && refreshedResult.days) {
-            setAvailability(refreshedResult.days);
-          }
-        })
+      void fetchAvailabilityForMonths(availabilityMonths)
+        .then((days) => setAvailability(days))
         .catch(() => undefined);
     } catch {
       setSubmitState({
@@ -456,7 +512,8 @@ export function ReservationForm({
           <button
             type="button"
             onClick={() => moveMonth(-1)}
-            className="grid h-9 w-9 place-items-center rounded-md border border-blue-100 bg-white text-2xl font-black leading-none text-blue-600 shadow-sm transition hover:bg-blue-50 active:scale-95 sm:h-12 sm:w-12 sm:text-3xl"
+            disabled={!canMoveToPreviousMonth}
+            className="grid h-9 w-9 place-items-center rounded-md border border-blue-100 bg-white text-2xl font-black leading-none text-blue-600 shadow-sm transition hover:bg-blue-50 active:scale-95 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:text-zinc-300 sm:h-12 sm:w-12 sm:text-3xl"
             aria-label="前の月を表示"
           >
             ‹
@@ -516,22 +573,11 @@ export function ReservationForm({
                   <th className="sticky left-0 z-20 w-11 min-w-11 border-b border-r border-zinc-200 bg-white px-1 py-3 text-sm font-black text-zinc-950 sm:w-20 sm:min-w-20 sm:px-3 sm:py-5 sm:text-lg">
                     時間
                   </th>
-                  {monthDates.map((date) => {
+                  {visibleDates.map((date) => {
                     const weekday = date.getDay();
                     const dateKey = formatDate(date);
                     const isPast = dateKey < currentTodayKey;
                     const isToday = dateKey === currentTodayKey;
-                    const holiday = availability[dateKey]?.holiday;
-                    const weekendClass =
-                      isPast
-                        ? "text-gray-400"
-                        : holiday
-                          ? "text-red-700"
-                        : weekday === 0
-                        ? "text-red-600"
-                        : weekday === 6
-                          ? "text-blue-600"
-                          : "text-zinc-950";
 
                     return (
                       <th
@@ -539,10 +585,8 @@ export function ReservationForm({
                         className={`w-[48px] min-w-[48px] border-b border-r border-zinc-200 px-1 py-2.5 text-[13px] font-black leading-tight sm:w-24 sm:min-w-24 sm:px-3 sm:py-4 sm:text-lg sm:leading-normal ${
                           isPast
                             ? "bg-gray-100"
-                            : holiday
-                              ? "bg-red-50"
-                              : "bg-white"
-                        } ${isToday ? "ring-2 ring-inset ring-blue-500" : ""} ${weekendClass}`}
+                            : "bg-white"
+                        } ${isToday ? "ring-2 ring-inset ring-blue-500" : ""} text-zinc-950`}
                       >
                         <span className="block">
                           {date.getMonth() + 1}/{date.getDate()}
@@ -561,7 +605,7 @@ export function ReservationForm({
                     <th className="sticky left-0 z-10 w-11 min-w-11 border-b border-r border-zinc-200 bg-white px-1 py-2 text-sm font-black text-zinc-950 sm:w-20 sm:min-w-20 sm:px-3 sm:py-4 sm:text-lg">
                       {time.replace(/^0/, "")}
                     </th>
-                    {monthDates.map((date) => {
+                    {visibleDates.map((date) => {
                       const dateKey = formatDate(date);
                       const isPast = dateKey < currentTodayKey;
                       const holiday = availability[dateKey]?.holiday;
