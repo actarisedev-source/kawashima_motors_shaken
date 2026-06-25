@@ -85,19 +85,7 @@ const getDateFromKey = (dateKey: string) => {
   return new Date(year, month - 1, date);
 };
 
-const getVisibleDates = (monthDate: Date, todayKey: string) => {
-  const today = getDateFromKey(todayKey);
-  const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const requestedMonthStart = new Date(
-    monthDate.getFullYear(),
-    monthDate.getMonth(),
-    1,
-  );
-  const startDate =
-    requestedMonthStart.getTime() <= currentMonthStart.getTime()
-      ? today
-      : requestedMonthStart;
-
+const getVisibleDates = (startDate: Date) => {
   return Array.from({ length: 6 }, (_, index) => {
     const date = new Date(startDate);
     date.setDate(startDate.getDate() + index);
@@ -187,10 +175,9 @@ export function ReservationForm({
     status: "idle",
     message: "",
   });
-  const [monthDate, setMonthDate] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
+  const [visibleStartDate, setVisibleStartDate] = useState(() =>
+    getDateFromKey(getJstDateKey(new Date())),
+  );
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
   const [customerKana, setCustomerKana] = useState("");
@@ -208,24 +195,18 @@ export function ReservationForm({
   const submissionInFlightRef = useRef(false);
 
   const currentTodayKey = getJstDateKey(new Date());
-  const currentMonthStart = useMemo(
-    () => {
-      const today = getDateFromKey(currentTodayKey);
-      return new Date(today.getFullYear(), today.getMonth(), 1);
-    },
-    [currentTodayKey],
-  );
+  const todayDate = useMemo(() => getDateFromKey(currentTodayKey), [currentTodayKey]);
   const visibleDates = useMemo(
-    () => getVisibleDates(monthDate, currentTodayKey),
-    [currentTodayKey, monthDate],
+    () => getVisibleDates(visibleStartDate),
+    [visibleStartDate],
   );
   const availabilityMonths = useMemo(
     () => Array.from(new Set(visibleDates.map((date) => formatMonth(date)))),
     [visibleDates],
   );
   const availabilityMonthsKey = availabilityMonths.join(",");
-  const canMoveToPreviousMonth =
-    monthDate.getTime() > currentMonthStart.getTime();
+  const canMoveToPreviousRange =
+    formatDate(visibleStartDate) > currentTodayKey;
 
   useEffect(() => {
     if (!reservationLiffId) {
@@ -296,16 +277,13 @@ export function ReservationForm({
     };
   }, [availabilityMonths, availabilityMonthsKey]);
 
-  function moveMonth(amount: number) {
-    setMonthDate(
-      (current) => {
-        const next = new Date(current.getFullYear(), current.getMonth() + amount, 1);
+  function moveDateRange(amount: number) {
+    setVisibleStartDate((current) => {
+      const next = new Date(current);
+      next.setDate(current.getDate() + amount);
 
-        return next.getTime() < currentMonthStart.getTime()
-          ? currentMonthStart
-          : next;
-      },
-    );
+      return next.getTime() < todayDate.getTime() ? todayDate : next;
+    });
     setSelectedDate("");
     setSelectedTime("");
   }
@@ -511,10 +489,10 @@ export function ReservationForm({
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2.5 shadow-sm sm:px-8 sm:py-4">
           <button
             type="button"
-            onClick={() => moveMonth(-1)}
-            disabled={!canMoveToPreviousMonth}
+            onClick={() => moveDateRange(-6)}
+            disabled={!canMoveToPreviousRange}
             className="grid h-9 w-9 place-items-center rounded-md border border-blue-100 bg-white text-2xl font-black leading-none text-blue-600 shadow-sm transition hover:bg-blue-50 active:scale-95 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:text-zinc-300 sm:h-12 sm:w-12 sm:text-3xl"
-            aria-label="前の月を表示"
+            aria-label="前の6日分を表示"
           >
             ‹
           </button>
@@ -525,14 +503,14 @@ export function ReservationForm({
               <path d="M17 27h4M27 27h4M17 34h4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="3" />
             </svg>
             <span className="text-[22px] font-black tracking-tight sm:text-3xl">
-              {formatDisplayMonth(monthDate)}
+              {formatDisplayMonth(visibleStartDate)}
             </span>
           </div>
           <button
             type="button"
-            onClick={() => moveMonth(1)}
+            onClick={() => moveDateRange(6)}
             className="grid h-9 w-9 place-items-center rounded-md border border-blue-100 bg-white text-2xl font-black leading-none text-blue-600 shadow-sm transition hover:bg-blue-50 active:scale-95 sm:h-12 sm:w-12 sm:text-3xl"
-            aria-label="次の月を表示"
+            aria-label="次の6日分を表示"
           >
             ›
           </button>
