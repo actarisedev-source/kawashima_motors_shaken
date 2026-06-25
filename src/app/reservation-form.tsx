@@ -85,8 +85,8 @@ const getDateFromKey = (dateKey: string) => {
   return new Date(year, month - 1, date);
 };
 
-const getVisibleDates = (startDate: Date) => {
-  return Array.from({ length: 6 }, (_, index) => {
+const getFutureDates = (startDate: Date) => {
+  return Array.from({ length: 90 }, (_, index) => {
     const date = new Date(startDate);
     date.setDate(startDate.getDate() + index);
     return date;
@@ -175,9 +175,6 @@ export function ReservationForm({
     status: "idle",
     message: "",
   });
-  const [visibleStartDate, setVisibleStartDate] = useState(() =>
-    getDateFromKey(getJstDateKey(new Date())),
-  );
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
   const [customerKana, setCustomerKana] = useState("");
@@ -186,6 +183,10 @@ export function ReservationForm({
   const [fieldErrors, setFieldErrors] =
     useState<FieldErrors>(emptyFieldErrors);
   const [lineIdToken, setLineIdToken] = useState("");
+  const [calendarViewDate, setCalendarViewDate] = useState(() =>
+    getDateFromKey(getJstDateKey(new Date())),
+  );
+  const [canScrollBackward, setCanScrollBackward] = useState(false);
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>(
     {},
   );
@@ -196,17 +197,15 @@ export function ReservationForm({
 
   const currentTodayKey = getJstDateKey(new Date());
   const todayDate = useMemo(() => getDateFromKey(currentTodayKey), [currentTodayKey]);
-  const visibleDates = useMemo(
-    () => getVisibleDates(visibleStartDate),
-    [visibleStartDate],
+  const futureDates = useMemo(
+    () => getFutureDates(todayDate),
+    [todayDate],
   );
   const availabilityMonths = useMemo(
-    () => Array.from(new Set(visibleDates.map((date) => formatMonth(date)))),
-    [visibleDates],
+    () => Array.from(new Set(futureDates.map((date) => formatMonth(date)))),
+    [futureDates],
   );
   const availabilityMonthsKey = availabilityMonths.join(",");
-  const canMoveToPreviousRange =
-    formatDate(visibleStartDate) > currentTodayKey;
 
   useEffect(() => {
     if (!reservationLiffId) {
@@ -277,13 +276,30 @@ export function ReservationForm({
     };
   }, [availabilityMonths, availabilityMonthsKey]);
 
-  function moveDateRange(amount: number) {
-    setVisibleStartDate((current) => {
-      const next = new Date(current);
-      next.setDate(current.getDate() + amount);
+  function updateCalendarScrollState() {
+    const container = scheduleScrollRef.current;
+    const firstDateCell = container?.querySelector("thead th:nth-child(2)");
 
-      return next.getTime() < todayDate.getTime() ? todayDate : next;
-    });
+    if (!container || !firstDateCell) {
+      return;
+    }
+
+    const columnWidth = firstDateCell.getBoundingClientRect().width || 48;
+    const index = Math.max(
+      0,
+      Math.min(futureDates.length - 1, Math.round(container.scrollLeft / columnWidth)),
+    );
+
+    setCanScrollBackward(container.scrollLeft > 2);
+    setCalendarViewDate(futureDates[index] ?? todayDate);
+  }
+
+  function scrollDateRange(amount: number) {
+    const container = scheduleScrollRef.current;
+    const firstDateCell = container?.querySelector("thead th:nth-child(2)");
+    const columnWidth = firstDateCell?.getBoundingClientRect().width ?? 48;
+
+    container?.scrollBy({ left: columnWidth * amount, behavior: "smooth" });
     setSelectedDate("");
     setSelectedTime("");
   }
@@ -489,8 +505,8 @@ export function ReservationForm({
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2.5 shadow-sm sm:px-8 sm:py-4">
           <button
             type="button"
-            onClick={() => moveDateRange(-6)}
-            disabled={!canMoveToPreviousRange}
+            onClick={() => scrollDateRange(-6)}
+            disabled={!canScrollBackward}
             className="grid h-9 w-9 place-items-center rounded-md border border-blue-100 bg-white text-2xl font-black leading-none text-blue-600 shadow-sm transition hover:bg-blue-50 active:scale-95 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:text-zinc-300 sm:h-12 sm:w-12 sm:text-3xl"
             aria-label="前の6日分を表示"
           >
@@ -503,12 +519,12 @@ export function ReservationForm({
               <path d="M17 27h4M27 27h4M17 34h4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="3" />
             </svg>
             <span className="text-[22px] font-black tracking-tight sm:text-3xl">
-              {formatDisplayMonth(visibleStartDate)}
+              {formatDisplayMonth(calendarViewDate)}
             </span>
           </div>
           <button
             type="button"
-            onClick={() => moveDateRange(6)}
+            onClick={() => scrollDateRange(6)}
             className="grid h-9 w-9 place-items-center rounded-md border border-blue-100 bg-white text-2xl font-black leading-none text-blue-600 shadow-sm transition hover:bg-blue-50 active:scale-95 sm:h-12 sm:w-12 sm:text-3xl"
             aria-label="次の6日分を表示"
           >
@@ -544,18 +560,30 @@ export function ReservationForm({
               : "border-zinc-200"
           }`}
         >
-          <div ref={scheduleScrollRef} className="overflow-x-auto">
+          <div
+            ref={scheduleScrollRef}
+            className="overflow-x-auto"
+            onScroll={updateCalendarScrollState}
+          >
             <table className="min-w-max border-collapse text-center">
               <thead>
                 <tr>
                   <th className="sticky left-0 z-20 w-11 min-w-11 border-b border-r border-zinc-200 bg-white px-1 py-3 text-sm font-black text-zinc-950 sm:w-20 sm:min-w-20 sm:px-3 sm:py-5 sm:text-lg">
                     時間
                   </th>
-                  {visibleDates.map((date) => {
+                  {futureDates.map((date) => {
                     const weekday = date.getDay();
                     const dateKey = formatDate(date);
                     const isPast = dateKey < currentTodayKey;
                     const isToday = dateKey === currentTodayKey;
+                    const holiday = availability[dateKey]?.holiday;
+                    const dateTextClass = holiday
+                      ? "text-zinc-950"
+                      : weekday === 0
+                        ? "text-red-600"
+                        : weekday === 6
+                          ? "text-blue-600"
+                          : "text-zinc-950";
 
                     return (
                       <th
@@ -564,7 +592,7 @@ export function ReservationForm({
                           isPast
                             ? "bg-gray-100"
                             : "bg-white"
-                        } ${isToday ? "ring-2 ring-inset ring-blue-500" : ""} text-zinc-950`}
+                        } ${isToday ? "ring-2 ring-inset ring-blue-500" : ""} ${dateTextClass}`}
                       >
                         <span className="block">
                           {date.getMonth() + 1}/{date.getDate()}
@@ -583,7 +611,7 @@ export function ReservationForm({
                     <th className="sticky left-0 z-10 w-11 min-w-11 border-b border-r border-zinc-200 bg-white px-1 py-2 text-sm font-black text-zinc-950 sm:w-20 sm:min-w-20 sm:px-3 sm:py-4 sm:text-lg">
                       {time.replace(/^0/, "")}
                     </th>
-                    {visibleDates.map((date) => {
+                    {futureDates.map((date) => {
                       const dateKey = formatDate(date);
                       const isPast = dateKey < currentTodayKey;
                       const holiday = availability[dateKey]?.holiday;
