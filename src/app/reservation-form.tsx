@@ -85,8 +85,18 @@ const getDateFromKey = (dateKey: string) => {
   return new Date(year, month - 1, date);
 };
 
-const getFutureDates = (startDate: Date) => {
-  return Array.from({ length: 90 }, (_, index) => {
+const getMonthStart = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), 1);
+
+const getMonthDates = (monthDate: Date, todayDate: Date) => {
+  const monthStart = getMonthStart(monthDate);
+  const todayMonthStart = getMonthStart(todayDate);
+  const startDate =
+    monthStart.getTime() === todayMonthStart.getTime() ? todayDate : monthStart;
+  const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+  const dateCount = monthEnd.getDate() - startDate.getDate() + 1;
+
+  return Array.from({ length: dateCount }, (_, index) => {
     const date = new Date(startDate);
     date.setDate(startDate.getDate() + index);
     return date;
@@ -184,9 +194,8 @@ export function ReservationForm({
     useState<FieldErrors>(emptyFieldErrors);
   const [lineIdToken, setLineIdToken] = useState("");
   const [calendarViewDate, setCalendarViewDate] = useState(() =>
-    getDateFromKey(getJstDateKey(new Date())),
+    getMonthStart(getDateFromKey(getJstDateKey(new Date()))),
   );
-  const [canScrollBackward, setCanScrollBackward] = useState(false);
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>(
     {},
   );
@@ -197,15 +206,14 @@ export function ReservationForm({
 
   const currentTodayKey = getJstDateKey(new Date());
   const todayDate = useMemo(() => getDateFromKey(currentTodayKey), [currentTodayKey]);
-  const futureDates = useMemo(
-    () => getFutureDates(todayDate),
-    [todayDate],
+  const visibleDates = useMemo(
+    () => getMonthDates(calendarViewDate, todayDate),
+    [calendarViewDate, todayDate],
   );
-  const availabilityMonths = useMemo(
-    () => Array.from(new Set(futureDates.map((date) => formatMonth(date)))),
-    [futureDates],
-  );
+  const availabilityMonths = useMemo(() => [formatMonth(calendarViewDate)], [calendarViewDate]);
   const availabilityMonthsKey = availabilityMonths.join(",");
+  const canMoveToPreviousMonth =
+    getMonthStart(calendarViewDate).getTime() > getMonthStart(todayDate).getTime();
 
   useEffect(() => {
     if (!reservationLiffId) {
@@ -276,30 +284,20 @@ export function ReservationForm({
     };
   }, [availabilityMonths, availabilityMonthsKey]);
 
-  function updateCalendarScrollState() {
-    const container = scheduleScrollRef.current;
-    const firstDateCell = container?.querySelector("thead th:nth-child(2)");
-
-    if (!container || !firstDateCell) {
-      return;
+  useEffect(() => {
+    if (scheduleScrollRef.current) {
+      scheduleScrollRef.current.scrollLeft = 0;
     }
+  }, [calendarViewDate]);
 
-    const columnWidth = firstDateCell.getBoundingClientRect().width || 48;
-    const index = Math.max(
-      0,
-      Math.min(futureDates.length - 1, Math.round(container.scrollLeft / columnWidth)),
-    );
+  function moveCalendarMonth(amount: number) {
+    setCalendarViewDate((current) => {
+      const next = new Date(current);
+      next.setMonth(current.getMonth() + amount, 1);
+      const todayMonthStart = getMonthStart(todayDate);
 
-    setCanScrollBackward(container.scrollLeft > 2);
-    setCalendarViewDate(futureDates[index] ?? todayDate);
-  }
-
-  function scrollDateRange(amount: number) {
-    const container = scheduleScrollRef.current;
-    const firstDateCell = container?.querySelector("thead th:nth-child(2)");
-    const columnWidth = firstDateCell?.getBoundingClientRect().width ?? 48;
-
-    container?.scrollBy({ left: columnWidth * amount, behavior: "smooth" });
+      return next.getTime() < todayMonthStart.getTime() ? todayMonthStart : next;
+    });
     setSelectedDate("");
     setSelectedTime("");
   }
@@ -505,10 +503,10 @@ export function ReservationForm({
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2.5 shadow-sm sm:px-8 sm:py-4">
           <button
             type="button"
-            onClick={() => scrollDateRange(-6)}
-            disabled={!canScrollBackward}
+            onClick={() => moveCalendarMonth(-1)}
+            disabled={!canMoveToPreviousMonth}
             className="grid h-9 w-9 place-items-center rounded-md border border-blue-100 bg-white text-2xl font-black leading-none text-blue-600 shadow-sm transition hover:bg-blue-50 active:scale-95 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:text-zinc-300 sm:h-12 sm:w-12 sm:text-3xl"
-            aria-label="前の6日分を表示"
+            aria-label="前月を表示"
           >
             ‹
           </button>
@@ -524,9 +522,9 @@ export function ReservationForm({
           </div>
           <button
             type="button"
-            onClick={() => scrollDateRange(6)}
+            onClick={() => moveCalendarMonth(1)}
             className="grid h-9 w-9 place-items-center rounded-md border border-blue-100 bg-white text-2xl font-black leading-none text-blue-600 shadow-sm transition hover:bg-blue-50 active:scale-95 sm:h-12 sm:w-12 sm:text-3xl"
-            aria-label="次の6日分を表示"
+            aria-label="翌月を表示"
           >
             ›
           </button>
@@ -563,7 +561,6 @@ export function ReservationForm({
           <div
             ref={scheduleScrollRef}
             className="overflow-x-auto"
-            onScroll={updateCalendarScrollState}
           >
             <table className="min-w-max border-collapse text-center">
               <thead>
@@ -571,7 +568,7 @@ export function ReservationForm({
                   <th className="sticky left-0 z-20 w-11 min-w-11 border-b border-r border-zinc-200 bg-white px-1 py-3 text-sm font-black text-zinc-950 sm:w-20 sm:min-w-20 sm:px-3 sm:py-5 sm:text-lg">
                     時間
                   </th>
-                  {futureDates.map((date) => {
+                  {visibleDates.map((date) => {
                     const weekday = date.getDay();
                     const dateKey = formatDate(date);
                     const isPast = dateKey < currentTodayKey;
@@ -611,7 +608,7 @@ export function ReservationForm({
                     <th className="sticky left-0 z-10 w-11 min-w-11 border-b border-r border-zinc-200 bg-white px-1 py-2 text-sm font-black text-zinc-950 sm:w-20 sm:min-w-20 sm:px-3 sm:py-4 sm:text-lg">
                       {time.replace(/^0/, "")}
                     </th>
-                    {futureDates.map((date) => {
+                    {visibleDates.map((date) => {
                       const dateKey = formatDate(date);
                       const isPast = dateKey < currentTodayKey;
                       const holiday = availability[dateKey]?.holiday;
