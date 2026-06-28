@@ -6,7 +6,10 @@ import {
   verifyLineIdToken,
   type LineIdTokenProfile,
 } from "@/lib/line/id-token";
-import { isReservationTimeSlot } from "@/lib/reservations/slots";
+import {
+  getJstDateKey,
+  isReservationTimeSlot,
+} from "@/lib/reservations/slots";
 import { supabaseServer } from "@/lib/supabase/server";
 import { normalizeDateInput } from "@/lib/vehicles/shaken-expiry";
 
@@ -82,6 +85,13 @@ export async function POST(request: Request) {
   if (Number.isNaN(reservedDate.getTime())) {
     return NextResponse.json(
       { ok: false, message: "予約日時の形式が正しくありません。" },
+      { status: 400 },
+    );
+  }
+
+  if (getJstDateKey(reservedDate) <= getJstDateKey(new Date())) {
+    return NextResponse.json(
+      { ok: false, message: "予約は翌日以降の日付を選択してください。" },
       { status: 400 },
     );
   }

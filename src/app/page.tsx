@@ -127,10 +127,10 @@ function ReservationIntro() {
         </div>
         <div className="min-w-0">
           <h2 className="text-base font-black leading-tight text-blue-600 sm:text-xl">
-            24時間いつでも予約可能
+            24時間受付中
           </h2>
           <p className="mt-1 text-xs font-semibold leading-relaxed text-zinc-600 sm:text-sm">
-            24時間365日、お好きな時間にご予約いただけます。
+            営業時間外でも予約できます。
           </p>
         </div>
       </div>

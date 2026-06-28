@@ -88,13 +88,22 @@ const getDateFromKey = (dateKey: string) => {
 const getMonthStart = (date: Date) =>
   new Date(date.getFullYear(), date.getMonth(), 1);
 
-const getMonthDates = (monthDate: Date, todayDate: Date) => {
+const addCalendarDays = (date: Date, amount: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+};
+
+const getMonthDates = (monthDate: Date, earliestBookableDate: Date) => {
   const monthStart = getMonthStart(monthDate);
-  const todayMonthStart = getMonthStart(todayDate);
+  const earliestBookableMonthStart = getMonthStart(earliestBookableDate);
   const startDate =
-    monthStart.getTime() === todayMonthStart.getTime() ? todayDate : monthStart;
+    monthStart.getTime() === earliestBookableMonthStart.getTime()
+      ? earliestBookableDate
+      : monthStart;
   const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
-  const dateCount = monthEnd.getDate() - startDate.getDate() + 1;
+  const datesRemainingInMonth = monthEnd.getDate() - startDate.getDate() + 1;
+  const dateCount = Math.max(datesRemainingInMonth, 6);
 
   return Array.from({ length: dateCount }, (_, index) => {
     const date = new Date(startDate);
@@ -194,7 +203,7 @@ export function ReservationForm({
     useState<FieldErrors>(emptyFieldErrors);
   const [lineIdToken, setLineIdToken] = useState("");
   const [calendarViewDate, setCalendarViewDate] = useState(() =>
-    getMonthStart(getDateFromKey(getJstDateKey(new Date()))),
+    getMonthStart(addCalendarDays(getDateFromKey(getJstDateKey(new Date())), 1)),
   );
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>(
     {},
@@ -206,14 +215,20 @@ export function ReservationForm({
 
   const currentTodayKey = getJstDateKey(new Date());
   const todayDate = useMemo(() => getDateFromKey(currentTodayKey), [currentTodayKey]);
+  const earliestBookableDate = useMemo(() => addCalendarDays(todayDate, 1), [todayDate]);
+  const earliestBookableDateKey = formatDate(earliestBookableDate);
   const visibleDates = useMemo(
-    () => getMonthDates(calendarViewDate, todayDate),
-    [calendarViewDate, todayDate],
+    () => getMonthDates(calendarViewDate, earliestBookableDate),
+    [calendarViewDate, earliestBookableDate],
   );
-  const availabilityMonths = useMemo(() => [formatMonth(calendarViewDate)], [calendarViewDate]);
+  const availabilityMonths = useMemo(
+    () => [...new Set(visibleDates.map(formatMonth))],
+    [visibleDates],
+  );
   const availabilityMonthsKey = availabilityMonths.join(",");
   const canMoveToPreviousMonth =
-    getMonthStart(calendarViewDate).getTime() > getMonthStart(todayDate).getTime();
+    getMonthStart(calendarViewDate).getTime() >
+    getMonthStart(earliestBookableDate).getTime();
 
   useEffect(() => {
     if (!reservationLiffId) {
@@ -294,9 +309,11 @@ export function ReservationForm({
     setCalendarViewDate((current) => {
       const next = new Date(current);
       next.setMonth(current.getMonth() + amount, 1);
-      const todayMonthStart = getMonthStart(todayDate);
+      const earliestBookableMonthStart = getMonthStart(earliestBookableDate);
 
-      return next.getTime() < todayMonthStart.getTime() ? todayMonthStart : next;
+      return next.getTime() < earliestBookableMonthStart.getTime()
+        ? earliestBookableMonthStart
+        : next;
     });
     setSelectedDate("");
     setSelectedTime("");
@@ -533,7 +550,7 @@ export function ReservationForm({
                   {visibleDates.map((date) => {
                     const weekday = date.getDay();
                     const dateKey = formatDate(date);
-                    const isPast = dateKey < currentTodayKey;
+                    const isPast = dateKey < earliestBookableDateKey;
                     const isToday = dateKey === currentTodayKey;
                     const holiday = availability[dateKey]?.holiday;
                     const dateTextClass = holiday
@@ -572,7 +589,7 @@ export function ReservationForm({
                     </th>
                     {visibleDates.map((date) => {
                       const dateKey = formatDate(date);
-                      const isPast = dateKey < currentTodayKey;
+                      const isPast = dateKey < earliestBookableDateKey;
                       const holiday = availability[dateKey]?.holiday;
                       const slot = availability[dateKey]?.slots[time];
                       const isLoadingAvailability =
