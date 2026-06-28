@@ -52,6 +52,18 @@ type ReservationFormProps = {
   reservationLiffId?: string;
 };
 
+type ReservationDraft = {
+  reservedDate: string;
+  reservedTime: string;
+  customerName: string;
+  customerKana: string;
+  phone: string;
+  vehicleModel: string;
+  licensePlate: string;
+  inspectionExpiresOn: string;
+  note: string;
+};
+
 type FieldErrors = {
   customerName: string;
   phone: string;
@@ -79,6 +91,11 @@ const formatDate = (date: Date) =>
 
 const formatDisplayMonth = (date: Date) =>
   `${date.getFullYear()}年${date.getMonth() + 1}月`;
+
+const formatConfirmationDate = (dateKey: string) => {
+  const date = getDateFromKey(dateKey);
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日（${weekdayLabels[date.getDay()]}）`;
+};
 
 const getDateFromKey = (dateKey: string) => {
   const [year, month, date] = dateKey.split("-").map(Number);
@@ -202,6 +219,9 @@ export function ReservationForm({
   const [fieldErrors, setFieldErrors] =
     useState<FieldErrors>(emptyFieldErrors);
   const [lineIdToken, setLineIdToken] = useState("");
+  const [reservationDraft, setReservationDraft] =
+    useState<ReservationDraft | null>(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const [calendarViewDate, setCalendarViewDate] = useState(() =>
     getMonthStart(addCalendarDays(getDateFromKey(getJstDateKey(new Date())), 1)),
   );
@@ -319,7 +339,7 @@ export function ReservationForm({
     setSelectedTime("");
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (submissionInFlightRef.current) {
@@ -362,15 +382,38 @@ export function ReservationForm({
       return;
     }
 
+    setReservationDraft({
+      reservedDate: selectedDate,
+      reservedTime: selectedTime,
+      customerName,
+      customerKana: String(formData.get("customerKana") ?? "").trim(),
+      phone: normalizedPhone,
+      vehicleModel,
+      licensePlate: String(formData.get("licensePlate") ?? "").trim(),
+      inspectionExpiresOn: String(
+        formData.get("inspectionExpiresOn") ?? "",
+      ).trim(),
+      note: String(formData.get("note") ?? "").trim(),
+    });
+    setSubmitState({ status: "idle", message: "" });
+    setShowConfirmation(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function handleConfirmReservation() {
+    if (!reservationDraft || submissionInFlightRef.current) {
+      return;
+    }
+
     submissionInFlightRef.current = true;
     setSubmitState({ status: "submitting", message: "送信中です。" });
 
     const completedReservation = {
-      reservedDate: selectedDate,
-      reservedTime: selectedTime,
-      customerName,
-      phone: normalizedPhone,
-      vehicleModel,
+      reservedDate: reservationDraft.reservedDate,
+      reservedTime: reservationDraft.reservedTime,
+      customerName: reservationDraft.customerName,
+      phone: reservationDraft.phone,
+      vehicleModel: reservationDraft.vehicleModel,
     };
 
     try {
@@ -383,13 +426,13 @@ export function ReservationForm({
         },
         body: JSON.stringify({
           customerName: completedReservation.customerName,
-          customerKana: formData.get("customerKana"),
+          customerKana: reservationDraft.customerKana,
           phone: completedReservation.phone,
           vehicleModel: completedReservation.vehicleModel,
-          licensePlate: formData.get("licensePlate"),
-          inspectionExpiresOn: formData.get("inspectionExpiresOn"),
-          reservedAt: `${selectedDate}T${selectedTime}:00+09:00`,
-          note: formData.get("note"),
+          licensePlate: reservationDraft.licensePlate,
+          inspectionExpiresOn: reservationDraft.inspectionExpiresOn,
+          reservedAt: `${reservationDraft.reservedDate}T${reservationDraft.reservedTime}:00+09:00`,
+          note: reservationDraft.note,
           lineIdToken: lineIdToken || undefined,
         }),
         signal: controller.signal,
@@ -469,6 +512,79 @@ export function ReservationForm({
           submitState.showLineLinkGuide ? <ReservationLineLinkGuide /> : null
         }
       />
+    );
+  }
+
+  if (showConfirmation && reservationDraft) {
+    const confirmationItems = [
+      ["予約日", formatConfirmationDate(reservationDraft.reservedDate)],
+      ["予約時間", reservationDraft.reservedTime],
+      ["お名前", reservationDraft.customerName],
+      ["ふりがな", reservationDraft.customerKana || "未入力"],
+      ["電話番号", reservationDraft.phone],
+      ["車種", reservationDraft.vehicleModel],
+      ["ナンバー", reservationDraft.licensePlate || "未入力"],
+      ["車検満了日", reservationDraft.inspectionExpiresOn || "未入力"],
+    ];
+
+    return (
+      <section className="grid gap-5 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm sm:p-6">
+        <header className="border-b border-zinc-200 pb-4 text-center">
+          <p className="text-sm font-bold text-blue-600">ご予約内容</p>
+          <h2 className="mt-1 text-2xl font-black text-zinc-950">
+            入力内容をご確認ください
+          </h2>
+          <p className="mt-2 text-sm text-zinc-600">
+            内容に間違いがなければ「予約する」を押してください。
+          </p>
+        </header>
+
+        <dl className="grid gap-3 sm:grid-cols-2">
+          {confirmationItems.map(([label, value]) => (
+            <div key={label} className="grid gap-1">
+              <dt className="text-xs font-bold text-zinc-500">{label}</dt>
+              <dd className="min-h-11 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-base font-bold text-zinc-900">
+                {value}
+              </dd>
+            </div>
+          ))}
+          <div className="grid gap-1 sm:col-span-2">
+            <dt className="text-xs font-bold text-zinc-500">ご要望</dt>
+            <dd className="min-h-20 whitespace-pre-wrap rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-base font-medium text-zinc-900">
+              {reservationDraft.note || "未入力"}
+            </dd>
+          </div>
+        </dl>
+
+        {submitState.status === "error" ? (
+          <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            {submitState.message}
+          </div>
+        ) : null}
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            disabled={submitState.status === "submitting"}
+            onClick={() => {
+              setShowConfirmation(false);
+              setSubmitState({ status: "idle", message: "" });
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            className="flex h-13 items-center justify-center rounded-[12px] border border-zinc-300 bg-white px-5 text-base font-bold text-zinc-800 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            入力内容を修正
+          </button>
+          <button
+            type="button"
+            disabled={submitState.status === "submitting"}
+            onClick={handleConfirmReservation}
+            className="flex h-13 items-center justify-center rounded-[12px] bg-blue-600 px-5 text-lg font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-zinc-300"
+          >
+            {submitState.status === "submitting" ? "送信中..." : "予約する"}
+          </button>
+        </div>
+      </section>
     );
   }
 
@@ -691,6 +807,7 @@ export function ReservationForm({
           お名前
           <input
             name="customerName"
+            defaultValue={reservationDraft?.customerName ?? ""}
             aria-invalid={fieldErrors.customerName ? "true" : "false"}
             aria-describedby="customer-name-error"
             onChange={() =>
@@ -769,6 +886,7 @@ export function ReservationForm({
           車種
           <input
             name="vehicleModel"
+            defaultValue={reservationDraft?.vehicleModel ?? ""}
             aria-invalid={fieldErrors.vehicleModel ? "true" : "false"}
             aria-describedby="vehicle-model-error"
             onChange={() =>
@@ -794,6 +912,7 @@ export function ReservationForm({
           ナンバー
           <input
             name="licensePlate"
+            defaultValue={reservationDraft?.licensePlate ?? ""}
             className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
           />
           <span aria-hidden="true" className="min-h-4" />
@@ -803,6 +922,7 @@ export function ReservationForm({
           <input
             name="inspectionExpiresOn"
             type="date"
+            defaultValue={reservationDraft?.inspectionExpiresOn ?? ""}
             className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
           />
           <span aria-hidden="true" className="min-h-4" />
@@ -814,6 +934,7 @@ export function ReservationForm({
         <textarea
           name="note"
           rows={4}
+          defaultValue={reservationDraft?.note ?? ""}
           className="rounded-md border border-zinc-300 px-3 py-2 text-base font-normal outline-none focus:border-emerald-600"
         />
       </label>
