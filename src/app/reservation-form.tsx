@@ -553,8 +553,8 @@ export function ReservationForm({
           <h2 className="mt-1 text-2xl font-black text-zinc-950">
             入力内容をご確認ください
           </h2>
-          <p className="mt-2 text-sm text-zinc-600">
-            内容に間違いがなければ「予約する」を押してください。
+          <p className="mt-2 whitespace-nowrap text-[13px] text-zinc-600 sm:text-sm">
+            内容をご確認のうえ、「予約する」を押してください。
           </p>
         </header>
 
