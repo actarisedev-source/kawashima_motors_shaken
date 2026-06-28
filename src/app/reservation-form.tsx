@@ -103,7 +103,7 @@ const getMonthDates = (monthDate: Date, earliestBookableDate: Date) => {
       : monthStart;
   const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
   const datesRemainingInMonth = monthEnd.getDate() - startDate.getDate() + 1;
-  const dateCount = Math.max(datesRemainingInMonth, 6);
+  const dateCount = Math.max(datesRemainingInMonth, 7);
 
   return Array.from({ length: dateCount }, (_, index) => {
     const date = new Date(startDate);
@@ -541,7 +541,7 @@ export function ReservationForm({
             ref={scheduleScrollRef}
             className="overflow-x-auto"
           >
-            <table className="min-w-max border-collapse text-center">
+            <table className="w-max min-w-full border-collapse text-center">
               <thead>
                 <tr>
                   <th className="sticky left-0 z-20 w-11 min-w-11 border-b border-r border-zinc-200 bg-white px-1 py-3 text-sm font-black text-zinc-950 sm:w-20 sm:min-w-20 sm:px-3 sm:py-5 sm:text-lg">
