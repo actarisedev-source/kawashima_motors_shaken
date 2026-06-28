@@ -34,6 +34,13 @@ const descriptions: Record<AutomationType, string> = {
   reservation_completion: "予約フォームで予約が正常に登録された直後に配信します。",
 };
 
+const automationDisplayOrder: AutomationType[] = [
+  "reservation_completion",
+  "reservation_previous_day",
+  "shaken_30_days",
+  "shaken_60_days",
+];
+
 const formatDateTime = (value: string | null) =>
   value
     ? new Intl.DateTimeFormat("ja-JP", {
@@ -66,7 +73,14 @@ export function LineAutomationSettings() {
         setMessage(result.message ?? "自動配信設定の取得に失敗しました。");
         return;
       }
-      setSettings(result.settings ?? []);
+      const loadedSettings = (result.settings ?? []) as AutomationSetting[];
+      setSettings(
+        [...loadedSettings].sort(
+          (left, right) =>
+            automationDisplayOrder.indexOf(left.automation_type) -
+            automationDisplayOrder.indexOf(right.automation_type),
+        ),
+      );
     } catch {
       setMessage("自動配信設定の取得に失敗しました。");
     } finally {
