@@ -38,10 +38,12 @@ export function ReservationComplete({
           <h2 className="text-2xl font-black text-zinc-950 sm:text-3xl">
             予約が完了しました
           </h2>
-          <p className="mt-3 text-base font-medium leading-7 text-zinc-600">
+          <p className="mt-3 text-sm font-medium leading-7 text-zinc-600 sm:text-base">
             ご予約ありがとうございます。
             <br />
-            ご予約内容を確認のうえ、ご来店ください。
+            <span className="whitespace-nowrap">
+              内容をご確認のうえ、ご来店ください。
+            </span>
           </p>
         </div>
       </header>
