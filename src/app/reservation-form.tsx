@@ -103,7 +103,7 @@ const getMonthDates = (monthDate: Date, earliestBookableDate: Date) => {
       : monthStart;
   const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
   const datesRemainingInMonth = monthEnd.getDate() - startDate.getDate() + 1;
-  const dateCount = Math.max(datesRemainingInMonth, 7);
+  const dateCount = Math.max(datesRemainingInMonth, 9);
 
   return Array.from({ length: dateCount }, (_, index) => {
     const date = new Date(startDate);
