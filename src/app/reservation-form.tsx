@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { normalizePhone } from "@/lib/customers/phone";
 import {
@@ -50,6 +57,7 @@ type AvailabilityResponse = {
 
 type ReservationFormProps = {
   reservationLiffId?: string;
+  onConfirmationChange?: (isConfirming: boolean) => void;
 };
 
 type ReservationDraft = {
@@ -206,6 +214,7 @@ function SlotSymbol({ mark }: { mark: SlotMark }) {
 
 export function ReservationForm({
   reservationLiffId = "",
+  onConfirmationChange,
 }: ReservationFormProps) {
   const [submitState, setSubmitState] = useState<SubmitState>({
     status: "idle",
@@ -325,6 +334,16 @@ export function ReservationForm({
     }
   }, [calendarViewDate]);
 
+  useLayoutEffect(() => {
+    if (!showConfirmation) {
+      return;
+    }
+
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [showConfirmation]);
+
   function moveCalendarMonth(amount: number) {
     setCalendarViewDate((current) => {
       const next = new Date(current);
@@ -397,7 +416,7 @@ export function ReservationForm({
     });
     setSubmitState({ status: "idle", message: "" });
     setShowConfirmation(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    onConfirmationChange?.(true);
   }
 
   async function handleConfirmReservation() {
@@ -568,8 +587,9 @@ export function ReservationForm({
             disabled={submitState.status === "submitting"}
             onClick={() => {
               setShowConfirmation(false);
+              onConfirmationChange?.(false);
               setSubmitState({ status: "idle", message: "" });
-              window.scrollTo({ top: 0, behavior: "smooth" });
+              window.scrollTo({ top: 0, left: 0, behavior: "auto" });
             }}
             className="flex h-13 items-center justify-center rounded-[12px] border border-zinc-300 bg-white px-5 text-base font-bold text-zinc-800 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
           >

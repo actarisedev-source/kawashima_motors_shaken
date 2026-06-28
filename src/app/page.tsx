@@ -1,5 +1,7 @@
+"use client";
+
 import Image from "next/image";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { ReservationForm } from "./reservation-form";
 
 const flowSteps = [
@@ -67,7 +69,7 @@ function ReservationFlow() {
   );
 }
 
-function ReservationIntro() {
+function ReservationIntro({ showGuidance }: { showGuidance: boolean }) {
   return (
     <section className="rounded-md border border-blue-100 bg-white px-4 py-4 shadow-sm sm:px-6 sm:py-5">
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(120px,36vw)] items-start gap-3 md:grid-cols-[minmax(0,1fr)_280px] md:items-center md:gap-5">
@@ -107,42 +109,47 @@ function ReservationIntro() {
         </div>
       </div>
 
-      <div className="mt-6 flex items-center gap-3 rounded-md border border-blue-100 bg-blue-50/60 px-3 py-3 shadow-sm sm:gap-4 sm:px-5">
-        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-white text-blue-600 ring-1 ring-blue-100 sm:h-14 sm:w-14">
-          <svg viewBox="0 0 48 48" aria-hidden="true" className="h-8 w-8 sm:h-9 sm:w-9">
-            <path
-              d="M24 7a17 17 0 1 0 0 34 17 17 0 0 0 0-34Z"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-            />
-            <path
-              d="M24 13v12l8 5M11 24h5M32 24h5M24 11v5M24 32v5"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeWidth="3"
-            />
-          </svg>
-        </div>
-        <div className="min-w-0">
-          <h2 className="text-base font-black leading-tight text-blue-600 sm:text-xl">
-            24時間受付中
-          </h2>
-          <p className="mt-1 text-xs font-semibold leading-relaxed text-zinc-600 sm:text-sm">
-            営業時間外でも予約できます。
-          </p>
-        </div>
-      </div>
+      {showGuidance ? (
+        <>
+          <div className="mt-6 flex items-center gap-3 rounded-md border border-blue-100 bg-blue-50/60 px-3 py-3 shadow-sm sm:gap-4 sm:px-5">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-white text-blue-600 ring-1 ring-blue-100 sm:h-14 sm:w-14">
+              <svg viewBox="0 0 48 48" aria-hidden="true" className="h-8 w-8 sm:h-9 sm:w-9">
+                <path
+                  d="M24 7a17 17 0 1 0 0 34 17 17 0 0 0 0-34Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                />
+                <path
+                  d="M24 13v12l8 5M11 24h5M32 24h5M24 11v5M24 32v5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="3"
+                />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base font-black leading-tight text-blue-600 sm:text-xl">
+                24時間受付中
+              </h2>
+              <p className="mt-1 text-xs font-semibold leading-relaxed text-zinc-600 sm:text-sm">
+                営業時間外でも予約できます。
+              </p>
+            </div>
+          </div>
 
-      <div className="mt-5">
-        <ReservationFlow />
-      </div>
+          <div className="mt-5">
+            <ReservationFlow />
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }
 
 export default function Home() {
+  const [isConfirming, setIsConfirming] = useState(false);
   const reservationLiffId =
     process.env.NEXT_PUBLIC_RESERVATION_LIFF_ID?.trim() ||
     process.env.NEXT_PUBLIC_LIFF_ID?.trim() ||
@@ -151,8 +158,11 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-sky-50">
       <section className="mx-auto grid w-full max-w-5xl gap-4 px-2 py-3 sm:gap-5 sm:px-6 sm:py-8">
-        <ReservationIntro />
-        <ReservationForm reservationLiffId={reservationLiffId} />
+        <ReservationIntro showGuidance={!isConfirming} />
+        <ReservationForm
+          reservationLiffId={reservationLiffId}
+          onConfirmationChange={setIsConfirming}
+        />
       </section>
     </main>
   );
