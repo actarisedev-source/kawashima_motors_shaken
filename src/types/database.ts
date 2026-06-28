@@ -6,6 +6,24 @@ export type Database = {
       reservation_status: "受付中" | "確定" | "完了" | "キャンセル";
     };
     Tables: {
+      admin_credentials: {
+        Row: {
+          id: string;
+          password_hash: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          password_hash: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["admin_credentials"]["Insert"]
+        >;
+        Relationships: [];
+      };
       customers: {
         Row: {
           id: string;
