@@ -6,6 +6,7 @@ import {
   verifyLineIdToken,
   type LineIdTokenProfile,
 } from "@/lib/line/id-token";
+import { sendReservationCompletionNotification } from "@/lib/line/reservation-completion";
 import {
   getJstDateKey,
   isReservationTimeSlot,
@@ -190,6 +191,15 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+
+  await sendReservationCompletionNotification({
+    customerId: reservation.customer_id,
+    vehicleId: reservation.vehicle_id,
+    reservationId: reservation.reservation_id,
+    reservedAt: reservedDate,
+    vehicleModel,
+    licensePlate,
+  });
 
   return NextResponse.json({
     ok: true,
