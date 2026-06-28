@@ -184,7 +184,8 @@ export type Database = {
           automation_type:
             | "shaken_60_days"
             | "shaken_30_days"
-            | "reservation_previous_day";
+            | "reservation_previous_day"
+            | "reservation_completion";
           enabled: boolean;
           title: string;
           body: string;
@@ -198,7 +199,8 @@ export type Database = {
           automation_type:
             | "shaken_60_days"
             | "shaken_30_days"
-            | "reservation_previous_day";
+            | "reservation_previous_day"
+            | "reservation_completion";
           enabled?: boolean;
           title: string;
           body: string;

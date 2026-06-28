@@ -33,6 +33,15 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+  if (payload.automationType === "reservation_completion") {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "予約完了通知は実際の予約完了時に送信されます。",
+      },
+      { status: 400 },
+    );
+  }
   const accessToken = getLineConfig().channelAccessToken;
   if (!accessToken) {
     return NextResponse.json(

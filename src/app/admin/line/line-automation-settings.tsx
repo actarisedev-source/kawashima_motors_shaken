@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 type AutomationType =
   | "shaken_60_days"
   | "shaken_30_days"
-  | "reservation_previous_day";
+  | "reservation_previous_day"
+  | "reservation_completion";
 
 type AutomationSetting = {
   id: string;
@@ -23,12 +24,14 @@ const labels: Record<AutomationType, string> = {
   shaken_60_days: "車検満了60日前通知",
   shaken_30_days: "車検満了30日前通知",
   reservation_previous_day: "予約前日リマインド",
+  reservation_completion: "予約完了通知",
 };
 
 const descriptions: Record<AutomationType, string> = {
   shaken_60_days: "今日から60日後が車検満了日の車両へ配信します。",
   shaken_30_days: "今日から30日後が車検満了日の車両へ配信します。",
   reservation_previous_day: "翌日の受付中・確定予約へ配信します。",
+  reservation_completion: "予約フォームで予約が正常に登録された直後に配信します。",
 };
 
 const formatDateTime = (value: string | null) =>
@@ -171,7 +174,7 @@ export function LineAutomationSettings() {
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-bold">自動配信設定</h2>
         <p className="text-sm text-slate-500">
-          有効な設定のみ、指定時刻以降のCron実行時に配信されます。
+          予約完了通知は予約直後に、それ以外は指定時刻以降のCron実行時に配信されます。
         </p>
       </div>
       <div className="grid gap-5">
@@ -205,24 +208,34 @@ export function LineAutomationSettings() {
               </label>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div
+              className={
+                setting.automation_type === "reservation_completion"
+                  ? "grid gap-4"
+                  : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]"
+              }
+            >
               <div className="grid gap-4">
+                {setting.automation_type !== "reservation_completion" ? (
+                  <label className="grid gap-2 text-sm font-semibold text-slate-700">
+                    配信タイトル
+                    <input
+                      value={setting.title}
+                      onChange={(event) =>
+                        updateSetting(
+                          setting.automation_type,
+                          "title",
+                          event.target.value,
+                        )
+                      }
+                      className="h-11 rounded-[5px] border border-slate-300 px-3 text-base font-normal outline-none focus:border-blue-500"
+                    />
+                  </label>
+                ) : null}
                 <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                  配信タイトル
-                  <input
-                    value={setting.title}
-                    onChange={(event) =>
-                      updateSetting(
-                        setting.automation_type,
-                        "title",
-                        event.target.value,
-                      )
-                    }
-                    className="h-11 rounded-[5px] border border-slate-300 px-3 text-base font-normal outline-none focus:border-blue-500"
-                  />
-                </label>
-                <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                  配信本文
+                  {setting.automation_type === "reservation_completion"
+                    ? "メッセージ本文"
+                    : "配信本文"}
                   <textarea
                     value={setting.body}
                     onChange={(event) =>
@@ -238,11 +251,14 @@ export function LineAutomationSettings() {
                   />
                 </label>
                 <p className="text-xs leading-6 text-slate-500">
-                  使用可能: {"{{name}} {{phone}} {{vehicle_name}} {{plate_number}} {{shaken_expiry_date}} {{reservation_date}}"}
+                  使用可能: {setting.automation_type === "reservation_completion"
+                    ? "{{reservation_datetime}} {{customer_name}} {{vehicle_name}} {{plate_number}}"
+                    : "{{name}} {{phone}} {{vehicle_name}} {{plate_number}} {{shaken_expiry_date}} {{reservation_date}}"}
                 </p>
               </div>
 
-              <aside className="grid content-start gap-4">
+              {setting.automation_type !== "reservation_completion" ? (
+                <aside className="grid content-start gap-4">
                 <label className="grid gap-2 text-sm font-semibold text-slate-700">
                   配信時刻
                   <input
@@ -302,7 +318,19 @@ export function LineAutomationSettings() {
                 >
                   {savingType === setting.automation_type ? "保存中..." : "保存"}
                 </button>
-              </aside>
+                </aside>
+              ) : (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    disabled={savingType === setting.automation_type}
+                    onClick={() => void saveSetting(setting)}
+                    className="h-11 min-w-32 rounded-[5px] bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:bg-slate-300"
+                  >
+                    {savingType === setting.automation_type ? "保存中..." : "保存"}
+                  </button>
+                </div>
+              )}
             </div>
           </section>
         ))}

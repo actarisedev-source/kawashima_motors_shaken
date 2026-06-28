@@ -87,6 +87,8 @@ export async function PUT(request: NextRequest) {
   const body = typeof payload.body === "string" ? payload.body.trim() : "";
   const sendTime =
     typeof payload.sendTime === "string" ? payload.sendTime.trim() : "";
+  const isReservationCompletion =
+    payload.automationType === "reservation_completion";
   if (!title || !body) {
     return NextResponse.json(
       { ok: false, message: "配信タイトルと配信本文を入力してください。" },
@@ -99,7 +101,10 @@ export async function PUT(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(sendTime)) {
+  if (
+    !isReservationCompletion &&
+    !/^([01]\d|2[0-3]):[0-5]\d$/.test(sendTime)
+  ) {
     return NextResponse.json(
       { ok: false, message: "配信時刻を正しく入力してください。" },
       { status: 400 },
@@ -112,7 +117,7 @@ export async function PUT(request: NextRequest) {
       enabled: payload.enabled === true,
       title,
       body,
-      send_time: sendTime,
+      ...(isReservationCompletion ? {} : { send_time: sendTime }),
       updated_at: new Date().toISOString(),
     })
     .eq("automation_type", payload.automationType)

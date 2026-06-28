@@ -34,6 +34,10 @@ export const lineAutomationDefinitions: Record<
     label: "予約前日リマインド",
     description: "翌日の受付中・確定予約が対象です。",
   },
+  reservation_completion: {
+    label: "予約完了通知",
+    description: "予約フォームで予約が正常に登録された直後に配信します。",
+  },
 };
 
 export const lineAutomationTypes = Object.keys(
@@ -71,6 +75,10 @@ export async function getLineAutomationTargets(
   const today = japanDateKey(now);
   const customers = await linkedCustomers();
   const targets: LineAutomationTarget[] = [];
+
+  if (automationType === "reservation_completion") {
+    return targets;
+  }
 
   if (automationType === "reservation_previous_day") {
     const targetDate = addDays(today, 1);
@@ -222,6 +230,9 @@ export async function getLineAutomationPreview(
   automationType: LineAutomationType,
   now = new Date(),
 ) {
+  if (automationType === "reservation_completion") {
+    return { count: 0, duplicateCount: 0 };
+  }
   const targets = await getLineAutomationTargets(automationType, now);
   if (!targets.length) return { count: 0, duplicateCount: 0 };
   const sent = await successfulTargetKeys(automationType, targets[0].targetDate);
@@ -305,6 +316,7 @@ export const isLineAutomationDue = (
   setting: LineAutomationSetting,
   now = new Date(),
 ) => {
+  if (setting.automation_type === "reservation_completion") return false;
   if (!setting.enabled) return false;
   const today = japanDateKey(now);
   if (setting.last_run_at && japanDateKey(new Date(setting.last_run_at)) === today) {
@@ -320,9 +332,13 @@ export const isLineAutomationDue = (
 };
 
 export const getNextRunAt = (
-  setting: Pick<LineAutomationSetting, "enabled" | "send_time" | "last_run_at">,
+  setting: Pick<
+    LineAutomationSetting,
+    "automation_type" | "enabled" | "send_time" | "last_run_at"
+  >,
   now = new Date(),
 ) => {
+  if (setting.automation_type === "reservation_completion") return null;
   if (!setting.enabled) return null;
   const today = japanDateKey(now);
   const ranToday =
