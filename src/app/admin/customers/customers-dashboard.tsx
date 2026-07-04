@@ -161,7 +161,7 @@ export function CustomersDashboard({
         ) : null}
 
         <section className="w-full overflow-x-auto rounded-[5px] border border-blue-100 bg-white shadow-sm lg:col-span-2 lg:w-fit">
-          <div className="grid min-w-[1060px] grid-cols-[190px_310px_560px]">
+          <div className="grid min-w-[1200px] grid-cols-[190px_310px_700px]">
             <div className="flex flex-col bg-blue-50/60 px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className="grid h-7 w-7 place-items-center rounded-[5px] border border-blue-100 bg-white text-blue-600">
@@ -223,7 +223,7 @@ export function CustomersDashboard({
               </div>
               <div className="mt-1.5 grid grid-cols-7 divide-x divide-blue-100">
                 {ageGroupLabels.map((label) => (
-                  <div key={label} className="px-2 first:pl-0 last:pr-0">
+                  <div key={label} className="px-2.5 first:pl-0 last:pr-0">
                     <p className="whitespace-nowrap text-[13px] font-semibold text-slate-700">
                       {label}
                     </p>
