@@ -333,7 +333,9 @@ export type Database = {
           p_customer_kana: string | null;
           p_phone: string;
           p_normalized_phone: string;
-          p_vehicle_model: string;
+          p_gender: "男性" | "女性" | null;
+          p_birth_date: string | null;
+          p_vehicle_model: string | null;
           p_license_plate: string | null;
           p_shaken_expiry_date: string | null;
           p_reserved_at: string;

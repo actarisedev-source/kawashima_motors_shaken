@@ -66,16 +66,18 @@ type ReservationDraft = {
   customerName: string;
   customerKana: string;
   phone: string;
+  gender: string;
   vehicleModel: string;
   licensePlate: string;
   inspectionExpiresOn: string;
+  birthDate: string;
   note: string;
 };
 
 type FieldErrors = {
   customerName: string;
   phone: string;
-  vehicleModel: string;
+  birthDate: string;
   reservationDateTime: string;
 };
 
@@ -85,7 +87,7 @@ const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
 const emptyFieldErrors: FieldErrors = {
   customerName: "",
   phone: "",
-  vehicleModel: "",
+  birthDate: "",
   reservationDateTime: "",
 };
 
@@ -370,10 +372,14 @@ export function ReservationForm({
     const customerName = String(formData.get("customerName") ?? "").trim();
     const normalizedPhone = normalizePhone(phone);
     const vehicleModel = String(formData.get("vehicleModel") ?? "").trim();
+    const birthDate = String(formData.get("birthDate") ?? "").trim();
     const nextFieldErrors: FieldErrors = {
       customerName: customerName ? "" : "お名前を入力してください。",
       phone: normalizedPhone ? "" : "電話番号を入力してください。",
-      vehicleModel: vehicleModel ? "" : "車種を入力してください。",
+      birthDate:
+        birthDate && birthDate > currentTodayKey
+          ? "生年月日は今日以前の日付を選択してください。"
+          : "",
       reservationDateTime:
         selectedDate && selectedTime ? "" : "予約日時を選択してください。",
     };
@@ -407,11 +413,13 @@ export function ReservationForm({
       customerName,
       customerKana: String(formData.get("customerKana") ?? "").trim(),
       phone: normalizedPhone,
+      gender: String(formData.get("gender") ?? "").trim(),
       vehicleModel,
       licensePlate: String(formData.get("licensePlate") ?? "").trim(),
       inspectionExpiresOn: String(
         formData.get("inspectionExpiresOn") ?? "",
       ).trim(),
+      birthDate,
       note: String(formData.get("note") ?? "").trim(),
     });
     setSubmitState({ status: "idle", message: "" });
@@ -432,7 +440,7 @@ export function ReservationForm({
       reservedTime: reservationDraft.reservedTime,
       customerName: reservationDraft.customerName,
       phone: reservationDraft.phone,
-      vehicleModel: reservationDraft.vehicleModel,
+      vehicleModel: reservationDraft.vehicleModel || "未入力",
     };
 
     try {
@@ -447,7 +455,9 @@ export function ReservationForm({
           customerName: completedReservation.customerName,
           customerKana: reservationDraft.customerKana,
           phone: completedReservation.phone,
-          vehicleModel: completedReservation.vehicleModel,
+          gender: reservationDraft.gender || undefined,
+          birthDate: reservationDraft.birthDate || undefined,
+          vehicleModel: reservationDraft.vehicleModel || undefined,
           licensePlate: reservationDraft.licensePlate,
           inspectionExpiresOn: reservationDraft.inspectionExpiresOn,
           reservedAt: `${reservationDraft.reservedDate}T${reservationDraft.reservedTime}:00+09:00`,
@@ -541,9 +551,11 @@ export function ReservationForm({
       ["お名前", reservationDraft.customerName],
       ["ふりがな", reservationDraft.customerKana || "未入力"],
       ["電話番号", reservationDraft.phone],
-      ["車種", reservationDraft.vehicleModel],
+      ["性別", reservationDraft.gender || "未選択"],
+      ["車種", reservationDraft.vehicleModel || "未入力"],
       ["ナンバー", reservationDraft.licensePlate || "未入力"],
       ["車検満了日", reservationDraft.inspectionExpiresOn || "未入力"],
+      ["生年月日", reservationDraft.birthDate || "未入力"],
     ];
 
     return (
@@ -903,33 +915,29 @@ export function ReservationForm({
           </span>
         </label>
         <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          車種
+          性別（任意）
+          <select
+            name="gender"
+            defaultValue={reservationDraft?.gender ?? ""}
+            className="h-11 rounded-md border border-zinc-300 bg-white px-3 text-base font-normal outline-none focus:border-emerald-600"
+          >
+            <option value="">未選択</option>
+            <option value="男性">男性</option>
+            <option value="女性">女性</option>
+          </select>
+          <span aria-hidden="true" className="min-h-4" />
+        </label>
+        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+          車種（任意）
           <input
             name="vehicleModel"
             defaultValue={reservationDraft?.vehicleModel ?? ""}
-            aria-invalid={fieldErrors.vehicleModel ? "true" : "false"}
-            aria-describedby="vehicle-model-error"
-            onChange={() =>
-              setFieldErrors((current) => ({
-                ...current,
-                vehicleModel: "",
-              }))
-            }
-            className={
-              fieldErrors.vehicleModel
-                ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
-                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
-            }
+            className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
           />
-          <span
-            id="vehicle-model-error"
-            className="min-h-4 text-xs font-semibold leading-4 text-red-600"
-          >
-            {fieldErrors.vehicleModel}
-          </span>
+          <span aria-hidden="true" className="min-h-4" />
         </label>
         <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          ナンバー
+          ナンバー（任意）
           <input
             name="licensePlate"
             defaultValue={reservationDraft?.licensePlate ?? ""}
@@ -938,7 +946,7 @@ export function ReservationForm({
           <span aria-hidden="true" className="min-h-4" />
         </label>
         <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          車検満了日
+          車検満了日（任意）
           <input
             name="inspectionExpiresOn"
             type="date"
@@ -946,6 +954,31 @@ export function ReservationForm({
             className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
           />
           <span aria-hidden="true" className="min-h-4" />
+        </label>
+        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+          生年月日（任意）
+          <input
+            name="birthDate"
+            type="date"
+            max={currentTodayKey}
+            defaultValue={reservationDraft?.birthDate ?? ""}
+            aria-invalid={fieldErrors.birthDate ? "true" : "false"}
+            aria-describedby="birth-date-error"
+            onChange={() =>
+              setFieldErrors((current) => ({ ...current, birthDate: "" }))
+            }
+            className={
+              fieldErrors.birthDate
+                ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
+                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+            }
+          />
+          <span
+            id="birth-date-error"
+            className="min-h-4 text-xs font-semibold leading-4 text-red-600"
+          >
+            {fieldErrors.birthDate}
+          </span>
         </label>
       </div>
 

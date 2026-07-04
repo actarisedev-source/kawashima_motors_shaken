@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { normalizeBirthDateInput } from "@/lib/customers/birth-date";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { isValidNormalizedPhone, normalizePhone } from "@/lib/customers/phone";
 import {
@@ -18,6 +19,8 @@ type ReservationRequest = {
   customerName?: string;
   customerKana?: string;
   phone?: string;
+  gender?: string;
+  birthDate?: string;
   vehicleModel?: string;
   licensePlate?: string;
   inspectionExpiresOn?: string;
@@ -42,6 +45,12 @@ export async function POST(request: Request) {
   const customerKana = normalizeOptional(body.customerKana);
   const phone = normalizeOptional(body.phone);
   const normalizedPhone = phone ? normalizePhone(phone) : "";
+  const gender = normalizeOptional(body.gender);
+  const normalizedGender =
+    gender === "男性" || gender === "女性"
+      ? gender
+      : null;
+  const birthDate = normalizeBirthDateInput(normalizeOptional(body.birthDate));
   const vehicleModel = normalizeOptional(body.vehicleModel);
   const licensePlate = normalizeOptional(body.licensePlate);
   const shakenExpiryDate = normalizeDateInput(
@@ -55,13 +64,12 @@ export async function POST(request: Request) {
     !customerName ||
     !phone ||
     !isValidNormalizedPhone(normalizedPhone) ||
-    !vehicleModel ||
     !reservedAt
   ) {
     return NextResponse.json(
       {
         ok: false,
-        message: "お名前、電話番号、車種、予約日時を入力してください。",
+        message: "お名前、電話番号、予約日時を入力してください。",
       },
       { status: 400 },
     );
@@ -70,6 +78,13 @@ export async function POST(request: Request) {
   if (customerKana && !isValidHiragana(customerKana)) {
     return NextResponse.json(
       { ok: false, message: kanaErrorMessage },
+      { status: 400 },
+    );
+  }
+
+  if (body.birthDate && !birthDate) {
+    return NextResponse.json(
+      { ok: false, message: "生年月日は今日以前の日付を入力してください。" },
       { status: 400 },
     );
   }
@@ -141,6 +156,8 @@ export async function POST(request: Request) {
       p_customer_kana: customerKana,
       p_phone: phone,
       p_normalized_phone: normalizedPhone,
+      p_gender: normalizedGender,
+      p_birth_date: birthDate,
       p_vehicle_model: vehicleModel,
       p_license_plate: licensePlate,
       p_shaken_expiry_date: shakenExpiryDate,
@@ -164,8 +181,11 @@ export async function POST(request: Request) {
     };
     const badRequestMessages: Record<string, string> = {
       reservation_invalid_input:
-        "お名前、電話番号、車種、予約日時を入力してください。",
+        "お名前、電話番号、予約日時を入力してください。",
       reservation_invalid_time: "選択できない予約時間です。",
+      reservation_invalid_gender: "性別の選択内容が正しくありません。",
+      reservation_invalid_birth_date:
+        "生年月日は今日以前の日付を入力してください。",
     };
     const errorKey = reservationError?.message ?? "";
 
@@ -197,7 +217,7 @@ export async function POST(request: Request) {
     vehicleId: reservation.vehicle_id,
     reservationId: reservation.reservation_id,
     reservedAt: reservedDate,
-    vehicleModel,
+    vehicleModel: vehicleModel ?? "未登録",
     licensePlate,
   });
 
