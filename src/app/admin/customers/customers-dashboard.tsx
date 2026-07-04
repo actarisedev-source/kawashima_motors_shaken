@@ -160,9 +160,9 @@ export function CustomersDashboard({
           </div>
         ) : null}
 
-        <section className="overflow-x-auto rounded-[5px] border border-blue-100 bg-white shadow-sm lg:col-span-2">
-          <div className="grid min-w-[980px] grid-cols-[180px_330px_minmax(470px,1fr)]">
-            <div className="bg-blue-50/60 px-4 py-3">
+        <section className="w-full overflow-x-auto rounded-[5px] border border-blue-100 bg-white shadow-sm lg:col-span-2 lg:w-fit">
+          <div className="grid min-w-[1060px] grid-cols-[190px_310px_560px]">
+            <div className="flex flex-col bg-blue-50/60 px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className="grid h-7 w-7 place-items-center rounded-[5px] border border-blue-100 bg-white text-blue-600">
                   <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
@@ -173,7 +173,7 @@ export function CustomersDashboard({
                   総顧客数
                 </p>
               </div>
-              <p className="mt-1 flex items-baseline text-3xl font-bold leading-none text-blue-600">
+              <p className="mt-1 flex items-baseline self-center text-3xl font-bold leading-none text-blue-600">
                 {summary.total}
                 <span className="ml-1 text-[13px] font-semibold text-slate-600">
                   人
@@ -195,7 +195,7 @@ export function CustomersDashboard({
               </div>
               <div className="mt-1.5 grid grid-cols-3 divide-x divide-blue-100">
                 {genderLabels.map((label) => (
-                  <div key={label} className="px-3 first:pl-0 last:pr-0">
+                  <div key={label} className="px-2.5 first:pl-0 last:pr-0">
                     <p className="text-[13px] font-semibold text-slate-700">
                       {label}
                     </p>
@@ -223,7 +223,7 @@ export function CustomersDashboard({
               </div>
               <div className="mt-1.5 grid grid-cols-7 divide-x divide-blue-100">
                 {ageGroupLabels.map((label) => (
-                  <div key={label} className="px-2.5 first:pl-0 last:pr-0">
+                  <div key={label} className="px-2 first:pl-0 last:pr-0">
                     <p className="whitespace-nowrap text-[13px] font-semibold text-slate-700">
                       {label}
                     </p>
