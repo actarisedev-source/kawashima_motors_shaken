@@ -851,7 +851,7 @@ export function ReservationForm({
             className={
               fieldErrors.customerName
                 ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
-                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
             }
           />
           <span
@@ -878,7 +878,7 @@ export function ReservationForm({
             className={
               customerKanaError
                 ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
-                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
             }
           />
           <span
@@ -904,7 +904,7 @@ export function ReservationForm({
             className={
               fieldErrors.phone
                 ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
-                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
             }
           />
           <span
@@ -919,7 +919,7 @@ export function ReservationForm({
           <select
             name="gender"
             defaultValue={reservationDraft?.gender ?? ""}
-            className="h-11 rounded-md border border-zinc-300 bg-white px-3 text-base font-normal outline-none focus:border-emerald-600"
+            className="h-11 rounded-md border border-zinc-300 bg-white px-3 text-base font-normal outline-none focus:border-blue-600"
           >
             <option value="">未選択</option>
             <option value="男性">男性</option>
@@ -932,7 +932,7 @@ export function ReservationForm({
           <input
             name="vehicleModel"
             defaultValue={reservationDraft?.vehicleModel ?? ""}
-            className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+            className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
           />
           <span aria-hidden="true" className="min-h-4" />
         </label>
@@ -941,7 +941,7 @@ export function ReservationForm({
           <input
             name="licensePlate"
             defaultValue={reservationDraft?.licensePlate ?? ""}
-            className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+            className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
           />
           <span aria-hidden="true" className="min-h-4" />
         </label>
@@ -951,7 +951,7 @@ export function ReservationForm({
             name="inspectionExpiresOn"
             type="date"
             defaultValue={reservationDraft?.inspectionExpiresOn ?? ""}
-            className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+            className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
           />
           <span aria-hidden="true" className="min-h-4" />
         </label>
@@ -970,7 +970,7 @@ export function ReservationForm({
             className={
               fieldErrors.birthDate
                 ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
-                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-emerald-600"
+                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
             }
           />
           <span
@@ -988,7 +988,7 @@ export function ReservationForm({
           name="note"
           rows={4}
           defaultValue={reservationDraft?.note ?? ""}
-          className="rounded-md border border-zinc-300 px-3 py-2 text-base font-normal outline-none focus:border-emerald-600"
+          className="rounded-md border border-zinc-300 px-3 py-2 text-base font-normal outline-none focus:border-blue-600"
         />
       </label>
       <button
