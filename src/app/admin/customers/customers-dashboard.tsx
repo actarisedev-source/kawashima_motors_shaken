@@ -160,40 +160,82 @@ export function CustomersDashboard({
           </div>
         ) : null}
 
-        <section className="grid gap-3 rounded-[5px] border border-slate-200 bg-white px-4 py-3 shadow-sm sm:grid-cols-[140px_1fr] lg:col-span-2 lg:grid-cols-[150px_300px_minmax(0,1fr)] lg:items-center">
-          <div className="border-b border-slate-100 pb-3 sm:border-b-0 sm:border-r sm:pb-0 sm:pr-4">
-            <p className="text-xs font-semibold text-slate-500">総顧客数</p>
-            <p className="mt-1 text-2xl font-bold text-slate-950">
-              {summary.total}
-              <span className="ml-1 text-sm font-semibold text-slate-500">人</span>
-            </p>
-          </div>
-
-          <div className="sm:pl-1 lg:border-r lg:border-slate-100 lg:pr-4">
-            <p className="text-xs font-semibold text-slate-500">性別顧客数</p>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
-              {genderLabels.map((label) => (
-                <p
-                  key={label}
-                  className="text-xs font-semibold text-slate-700"
-                >
-                  {label}：{summary.gender[label]}
+        <section className="overflow-x-auto rounded-[5px] border border-blue-100 bg-white shadow-sm lg:col-span-2">
+          <div className="grid min-w-[980px] grid-cols-[180px_330px_minmax(470px,1fr)]">
+            <div className="bg-blue-50/60 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="grid h-7 w-7 place-items-center rounded-[5px] border border-blue-100 bg-white text-blue-600">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+                    <path d="M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-1a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2 20c0-4 2.5-6 6-6s6 2 6 6M14 14c4 0 7 1.5 7 5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+                  </svg>
+                </span>
+                <p className="text-[13px] font-semibold text-slate-700">
+                  総顧客数
                 </p>
-              ))}
+              </div>
+              <p className="mt-1 flex items-baseline text-3xl font-bold leading-none text-blue-600">
+                {summary.total}
+                <span className="ml-1 text-[13px] font-semibold text-slate-600">
+                  人
+                </span>
+              </p>
             </div>
-          </div>
 
-          <div className="sm:col-span-2 lg:col-span-1 lg:pl-1">
-            <p className="text-xs font-semibold text-slate-500">年代別顧客数</p>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
-              {ageGroupLabels.map((label) => (
-                <p
-                  key={label}
-                  className="text-xs font-semibold text-slate-700"
-                >
-                  {label}：{summary.ageGroup[label]}
+            <div className="border-l border-blue-100 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="grid h-7 w-7 place-items-center rounded-[5px] bg-blue-50 text-blue-600">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+                    <circle cx="12" cy="7" r="3.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M5 21c0-5 2.8-8 7-8s7 3 7 8" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+                  </svg>
+                </span>
+                <p className="text-[13px] font-semibold text-slate-700">
+                  性別顧客数
                 </p>
-              ))}
+              </div>
+              <div className="mt-1.5 grid grid-cols-3 divide-x divide-blue-100">
+                {genderLabels.map((label) => (
+                  <div key={label} className="px-3 first:pl-0 last:pr-0">
+                    <p className="text-[13px] font-semibold text-slate-700">
+                      {label}
+                    </p>
+                    <p className="mt-0.5 text-xl font-bold leading-none text-blue-600">
+                      {summary.gender[label]}
+                      <span className="ml-1 text-[13px] font-semibold text-slate-600">
+                        人
+                      </span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-l border-blue-100 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="grid h-7 w-7 place-items-center rounded-[5px] bg-blue-50 text-blue-600">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+                    <path d="M5 20v-6M12 20V9M19 20V4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2.4" />
+                  </svg>
+                </span>
+                <p className="text-[13px] font-semibold text-slate-700">
+                  年代別顧客数
+                </p>
+              </div>
+              <div className="mt-1.5 grid grid-cols-7 divide-x divide-blue-100">
+                {ageGroupLabels.map((label) => (
+                  <div key={label} className="px-2.5 first:pl-0 last:pr-0">
+                    <p className="whitespace-nowrap text-[13px] font-semibold text-slate-700">
+                      {label}
+                    </p>
+                    <p className="mt-0.5 text-xl font-bold leading-none text-blue-600">
+                      {summary.ageGroup[label]}
+                      <span className="ml-1 text-[13px] font-semibold text-slate-600">
+                        人
+                      </span>
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
