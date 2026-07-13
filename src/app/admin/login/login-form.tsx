@@ -130,15 +130,9 @@ export function AdminLoginForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+      className="w-full rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
     >
-      <div>
-        <p className="text-sm font-semibold text-blue-700">Admin</p>
-        <h1 className="mt-2 text-2xl font-bold tracking-normal text-slate-950">
-          管理者ログイン
-        </h1>
-      </div>
-      <label className="mt-6 grid gap-2 text-sm font-medium text-slate-800">
+      <label className="grid gap-2 text-sm font-medium text-slate-800">
         メールアドレス
         <input
           required
