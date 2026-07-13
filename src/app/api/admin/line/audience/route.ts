@@ -1,20 +1,17 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import {
-  adminSessionCookieName,
-  verifyAdminSessionValue,
-} from "@/lib/auth/admin-session";
+import { getAdminAuthFromRequest } from "@/lib/auth/admin-session";
 import {
   getLineAudience,
   type LineAudienceFilters,
 } from "@/lib/line/audience";
 import { getLineConfig } from "@/lib/line/config";
 
-const isAuthenticated = (request: NextRequest) =>
-  verifyAdminSessionValue(request.cookies.get(adminSessionCookieName)?.value);
+const isAuthenticated = async (request: NextRequest) =>
+  (await getAdminAuthFromRequest(request)).authenticated;
 
 export async function POST(request: NextRequest) {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json(
       { ok: false, message: "ログインが必要です。" },
       { status: 401 },

@@ -117,6 +117,7 @@ export function AdminHeader({
                 title="設定"
                 className={`grid h-10 w-10 place-items-center rounded-md border text-xl shadow-sm transition ${
                   pathname.startsWith("/admin/settings/password") ||
+                  pathname.startsWith("/admin/settings/account") ||
                   pathname === "/admin/settings"
                     ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
                     : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"

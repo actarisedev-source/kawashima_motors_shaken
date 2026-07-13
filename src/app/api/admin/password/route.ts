@@ -1,12 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
-  adminSessionCookieName,
-  verifyAdminSessionValue,
+  createAdminUserScopedClient,
+  getAdminAuthFromRequest,
+  verifySupabaseAdminPassword,
 } from "@/lib/auth/admin-session";
-import {
-  saveAdminPassword,
-  verifyActiveAdminPassword,
-} from "@/lib/auth/admin-password";
 
 type PasswordChangeRequest = {
   currentPassword?: unknown;
@@ -15,11 +12,8 @@ type PasswordChangeRequest = {
 };
 
 export async function PUT(request: NextRequest) {
-  if (
-    !verifyAdminSessionValue(
-      request.cookies.get(adminSessionCookieName)?.value,
-    )
-  ) {
+  const auth = await getAdminAuthFromRequest(request);
+  if (!auth.authenticated) {
     return NextResponse.json(
       { ok: false, message: "ログインが必要です。" },
       { status: 401 },
@@ -36,49 +30,84 @@ export async function PUT(request: NextRequest) {
 
   if (!currentPassword) {
     return NextResponse.json(
-      { ok: false, field: "currentPassword", message: "現在のパスワードを入力してください。" },
+      {
+        ok: false,
+        field: "currentPassword",
+        message: "現在のパスワードを入力してください。",
+      },
       { status: 400 },
     );
   }
 
   if (newPassword.length < 8) {
     return NextResponse.json(
-      { ok: false, field: "newPassword", message: "新しいパスワードは8文字以上で入力してください。" },
+      {
+        ok: false,
+        field: "newPassword",
+        message: "新しいパスワードは8文字以上で入力してください。",
+      },
       { status: 400 },
     );
   }
 
   if (currentPassword.length > 256) {
     return NextResponse.json(
-      { ok: false, field: "currentPassword", message: "現在のパスワードが正しくありません。" },
+      {
+        ok: false,
+        field: "currentPassword",
+        message: "現在のパスワードが正しくありません。",
+      },
       { status: 401 },
     );
   }
 
   if (newPassword.length > 128) {
     return NextResponse.json(
-      { ok: false, field: "newPassword", message: "新しいパスワードは128文字以内で入力してください。" },
+      {
+        ok: false,
+        field: "newPassword",
+        message: "新しいパスワードは128文字以内で入力してください。",
+      },
       { status: 400 },
     );
   }
 
   if (newPassword !== confirmPassword) {
     return NextResponse.json(
-      { ok: false, field: "confirmPassword", message: "新しいパスワードが一致しません。" },
+      {
+        ok: false,
+        field: "confirmPassword",
+        message: "新しいパスワードが一致しません。",
+      },
       { status: 400 },
     );
   }
 
   if (currentPassword === newPassword) {
     return NextResponse.json(
-      { ok: false, field: "newPassword", message: "現在と異なるパスワードを入力してください。" },
+      {
+        ok: false,
+        field: "newPassword",
+        message: "現在と異なるパスワードを入力してください。",
+      },
+      { status: 400 },
+    );
+  }
+
+  const email = auth.user.email;
+  if (!email) {
+    return NextResponse.json(
+      { ok: false, message: "ログイン中のメールアドレスを確認できません。" },
       { status: 400 },
     );
   }
 
   let currentPasswordMatches = false;
   try {
-    currentPasswordMatches = await verifyActiveAdminPassword(currentPassword);
+    currentPasswordMatches = await verifySupabaseAdminPassword(
+      email,
+      currentPassword,
+    );
   } catch (error) {
     console.error("Admin password verification failed", error);
     return NextResponse.json(
@@ -89,13 +118,24 @@ export async function PUT(request: NextRequest) {
 
   if (!currentPasswordMatches) {
     return NextResponse.json(
-      { ok: false, field: "currentPassword", message: "現在のパスワードが正しくありません。" },
+      {
+        ok: false,
+        field: "currentPassword",
+        message: "現在のパスワードが正しくありません。",
+      },
       { status: 401 },
     );
   }
 
   try {
-    await saveAdminPassword(newPassword);
+    const supabase = await createAdminUserScopedClient(
+      auth.accessToken,
+      auth.refreshToken,
+    );
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      throw error;
+    }
   } catch (error) {
     console.error("Failed to save admin password", error);
     return NextResponse.json(

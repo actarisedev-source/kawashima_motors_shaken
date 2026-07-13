@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import {
-  adminSessionCookieName,
-  verifyAdminSessionValue,
-} from "@/lib/auth/admin-session";
+import { getAdminAuthFromRequest } from "@/lib/auth/admin-session";
 import {
   getLineAudience,
   type LineAudienceFilters,
@@ -16,8 +13,8 @@ import {
 import { supabaseServer } from "@/lib/supabase/server";
 import type { Json } from "@/types/database";
 
-const isAuthenticated = (request: NextRequest) =>
-  verifyAdminSessionValue(request.cookies.get(adminSessionCookieName)?.value);
+const isAuthenticated = async (request: NextRequest) =>
+  (await getAdminAuthFromRequest(request)).authenticated;
 
 const textValue = (value: FormDataEntryValue | null) =>
   typeof value === "string" ? value.trim() : "";
@@ -66,7 +63,7 @@ const parseScheduledAt = (date: string, time: string) => {
 };
 
 export async function GET(request: NextRequest) {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json(
       { ok: false, message: "ログインが必要です。" },
       { status: 401 },
@@ -88,7 +85,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json(
       { ok: false, message: "ログインが必要です。" },
       { status: 401 },

@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import {
-  adminSessionCookieName,
-  verifyAdminSessionValue,
-} from "@/lib/auth/admin-session";
+import { getAdminAuthFromRequest } from "@/lib/auth/admin-session";
 import { supabaseServer } from "@/lib/supabase/server";
 
 const lineImageBucket = "line-message-images";
 
-const isAuthenticated = (request: NextRequest) =>
-  verifyAdminSessionValue(request.cookies.get(adminSessionCookieName)?.value);
+const isAuthenticated = async (request: NextRequest) =>
+  (await getAdminAuthFromRequest(request)).authenticated;
 
 const getStorageObjectPath = (imageUrl: string) => {
   try {
@@ -34,7 +31,7 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json(
       { ok: false, message: "ログインが必要です。" },
       { status: 401 },

@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import {
-  adminSessionCookieName,
-  verifyAdminSessionValue,
-} from "@/lib/auth/admin-session";
+import { getAdminAuthFromRequest } from "@/lib/auth/admin-session";
 import { getMonthRangeFromJstMonth } from "@/lib/reservations/slots";
 import { supabaseServer } from "@/lib/supabase/server";
 import {
@@ -21,8 +18,8 @@ const unauthorizedResponse = () =>
     { status: 401 },
   );
 
-const isAuthenticated = (request: NextRequest) =>
-  verifyAdminSessionValue(request.cookies.get(adminSessionCookieName)?.value);
+const isAuthenticated = async (request: NextRequest) =>
+  (await getAdminAuthFromRequest(request)).authenticated;
 
 const getCurrentJstMonth = () =>
   new Intl.DateTimeFormat("sv-SE", {
@@ -51,7 +48,7 @@ const compareExpiryDate = (a: string | null, b: string | null) => {
 };
 
 export async function GET(request: NextRequest) {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return unauthorizedResponse();
   }
 

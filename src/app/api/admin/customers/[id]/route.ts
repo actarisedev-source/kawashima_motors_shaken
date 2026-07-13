@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import {
-  adminSessionCookieName,
-  verifyAdminSessionValue,
+  getAdminAuthFromRequest,
+  verifySupabaseAdminPassword,
 } from "@/lib/auth/admin-session";
-import { verifyActiveAdminPassword } from "@/lib/auth/admin-password";
 import { normalizeBirthDateInput } from "@/lib/customers/birth-date";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { isValidNormalizedPhone, normalizePhone } from "@/lib/customers/phone";
@@ -28,8 +27,8 @@ const unauthorizedResponse = () =>
     { status: 401 },
   );
 
-const isAuthenticated = (request: NextRequest) =>
-  verifyAdminSessionValue(request.cookies.get(adminSessionCookieName)?.value);
+const isAuthenticated = async (request: NextRequest) =>
+  (await getAdminAuthFromRequest(request)).authenticated;
 
 const normalizeOptional = (value: unknown) => {
   if (typeof value !== "string") {
@@ -44,7 +43,8 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  if (!isAuthenticated(request)) {
+  const auth = await getAdminAuthFromRequest(request);
+  if (!auth.authenticated) {
     return unauthorizedResponse();
   }
 
@@ -168,7 +168,7 @@ export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return unauthorizedResponse();
   }
 
@@ -522,7 +522,8 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  if (!isAuthenticated(request)) {
+  const auth = await getAdminAuthFromRequest(request);
+  if (!auth.authenticated) {
     return unauthorizedResponse();
   }
 
@@ -535,16 +536,11 @@ export async function DELETE(
     );
   }
 
-  if (!process.env.ADMIN_PASSWORD) {
-    return NextResponse.json(
-      { ok: false, message: "ADMIN_PASSWORD が設定されていません。" },
-      { status: 500 },
-    );
-  }
-
   let passwordMatches = false;
   try {
-    passwordMatches = await verifyActiveAdminPassword(body.password);
+    passwordMatches = auth.user.email
+      ? await verifySupabaseAdminPassword(auth.user.email, body.password)
+      : false;
   } catch (error) {
     console.error("Admin password verification failed", error);
     return NextResponse.json(
