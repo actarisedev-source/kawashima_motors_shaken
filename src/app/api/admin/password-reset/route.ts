@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
 import { resetAdminPasswordForEmail } from "@/lib/auth/admin-session";
 
+const getResetRedirectUrl = (request: Request) => {
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  const vercelUrl = process.env.VERCEL_URL?.trim();
+  const requestOrigin = request.headers.get("origin")?.trim();
+  const baseUrl =
+    configuredSiteUrl ||
+    (vercelUrl ? `https://${vercelUrl}` : "") ||
+    requestOrigin ||
+    "http://localhost:3000";
+
+  return `${baseUrl.replace(/\/$/, "")}/admin/reset-password`;
+};
+
 export async function POST(request: Request) {
   const body = (await request.json()) as { email?: unknown };
   const email = typeof body.email === "string" ? body.email.trim() : "";
@@ -12,20 +25,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const origin =
-    request.headers.get("origin") ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    "http://localhost:3000";
-
-  const { error } = await resetAdminPasswordForEmail(
-    email,
-    `${origin}/admin/reset-password`,
-  );
+  const redirectTo = getResetRedirectUrl(request);
+  const { error } = await resetAdminPasswordForEmail(email, redirectTo);
 
   if (error) {
     console.error("Failed to send password reset email", error);
     return NextResponse.json(
-      { ok: false, message: "再設定メールを送信できませんでした。" },
+      {
+        ok: false,
+        message: error.message || "再設定メールを送信できませんでした。",
+        redirectTo,
+      },
       { status: 500 },
     );
   }
@@ -33,5 +43,6 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     message: "パスワード再設定メールを送信しました。",
+    redirectTo,
   });
 }

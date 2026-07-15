@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 
 type Field = "newPassword" | "confirmPassword";
 
@@ -15,25 +16,63 @@ export function ResetPasswordForm() {
   });
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [loadingSession, setLoadingSession] = useState(true);
   const [completed, setCompleted] = useState(false);
 
   useEffect(() => {
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const query = new URLSearchParams(window.location.search);
-    const hashAccessToken = hash.get("access_token") ?? "";
-    const hashRefreshToken = hash.get("refresh_token") ?? "";
+    let mounted = true;
 
-    setAccessToken(hashAccessToken || query.get("access_token") || "");
-    setRefreshToken(hashRefreshToken || query.get("refresh_token") || "");
+    async function readRecoverySession() {
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const query = new URLSearchParams(window.location.search);
+      const hashAccessToken = hash.get("access_token") ?? "";
+      const hashRefreshToken = hash.get("refresh_token") ?? "";
+      const queryAccessToken = query.get("access_token") ?? "";
+      const queryRefreshToken = query.get("refresh_token") ?? "";
+      const code = query.get("code") ?? "";
 
-    if (window.location.hash) {
-      window.history.replaceState(null, "", window.location.pathname);
+      if (hashAccessToken || queryAccessToken) {
+        if (!mounted) return;
+        setAccessToken(hashAccessToken || queryAccessToken);
+        setRefreshToken(hashRefreshToken || queryRefreshToken);
+        setLoadingSession(false);
+        window.history.replaceState(null, "", window.location.pathname);
+        return;
+      }
+
+      if (code) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!mounted) return;
+
+        if (error || !data.session) {
+          setMessage(
+            error?.message ??
+              "再設定リンクの確認に失敗しました。ログイン画面から再度お試しください。",
+          );
+          setLoadingSession(false);
+          window.history.replaceState(null, "", window.location.pathname);
+          return;
+        }
+
+        setAccessToken(data.session.access_token);
+        setRefreshToken(data.session.refresh_token);
+        setLoadingSession(false);
+        window.history.replaceState(null, "", window.location.pathname);
+        return;
+      }
+
+      setLoadingSession(false);
     }
+
+    void readRecoverySession();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const tokenMissing = useMemo(
-    () => !accessToken || !refreshToken,
-    [accessToken, refreshToken],
+    () => !loadingSession && (!accessToken || !refreshToken),
+    [accessToken, loadingSession, refreshToken],
   );
 
   function validate() {
@@ -97,6 +136,12 @@ export function ResetPasswordForm() {
       <h1 className="mt-2 text-2xl font-bold tracking-normal text-slate-950">
         新しいパスワード設定
       </h1>
+
+      {loadingSession ? (
+        <p className="mt-5 rounded-md border border-blue-100 bg-blue-50 px-3 py-3 text-sm font-semibold text-blue-700">
+          再設定リンクを確認しています。
+        </p>
+      ) : null}
 
       {tokenMissing ? (
         <p className="mt-5 rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm font-semibold text-red-700">
@@ -164,7 +209,7 @@ export function ResetPasswordForm() {
       ) : (
         <button
           type="submit"
-          disabled={submitting || tokenMissing}
+          disabled={submitting || loadingSession || tokenMissing}
           className="mt-5 h-11 w-full rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
           {submitting ? "変更中..." : "パスワードを設定"}
