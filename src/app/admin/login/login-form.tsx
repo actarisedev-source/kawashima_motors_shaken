@@ -167,11 +167,11 @@ export function AdminLoginForm() {
       >
         ログイン
       </button>
-      <div className="mt-3 grid gap-2 text-center">
+      <div className="mt-5 grid gap-2 text-center">
         <button
           type="button"
           onClick={() => setShowEmailHelp(true)}
-          className="text-sm font-medium text-blue-700 transition hover:text-blue-800 hover:underline"
+          className="text-[13px] font-medium text-blue-700 transition hover:text-blue-800 hover:underline"
         >
           メールアドレスをお忘れですか？
         </button>
@@ -181,7 +181,7 @@ export function AdminLoginForm() {
             setResetState({ status: "idle", message: "" });
             setShowPasswordReset(true);
           }}
-          className="text-sm font-medium text-blue-700 transition hover:text-blue-800 hover:underline"
+          className="text-[13px] font-medium text-blue-700 transition hover:text-blue-800 hover:underline"
         >
           パスワードをお忘れですか？
         </button>
