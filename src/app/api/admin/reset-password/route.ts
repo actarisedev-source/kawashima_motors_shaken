@@ -64,7 +64,8 @@ export async function POST(request: Request) {
     const response = NextResponse.json({
       ok: true,
       email: data.user.email ?? "",
-      message: "パスワードを変更しました。",
+      message:
+        "パスワードを更新しました。\n新しいパスワードでログインしてください。",
     });
     setAdminAuthCookies(response, sessionData.session);
     return response;

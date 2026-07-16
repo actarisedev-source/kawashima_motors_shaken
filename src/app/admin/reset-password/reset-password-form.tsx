@@ -124,7 +124,9 @@ export function ResetPasswordForm() {
     }
 
     setCompleted(true);
-    setMessage("パスワードを変更しました。");
+    setMessage(
+      "パスワードを更新しました。\n新しいパスワードでログインしてください。",
+    );
   }
 
   return (
@@ -134,7 +136,7 @@ export function ResetPasswordForm() {
     >
       <p className="text-sm font-semibold text-blue-700">Admin</p>
       <h1 className="mt-2 text-2xl font-bold tracking-normal text-slate-950">
-        新しいパスワード設定
+        パスワードの再設定
       </h1>
 
       {loadingSession ? (
@@ -191,7 +193,7 @@ export function ResetPasswordForm() {
 
       {message ? (
         <p
-          className={`mt-3 text-sm font-semibold ${
+          className={`mt-3 whitespace-pre-line text-sm font-semibold ${
             completed ? "text-emerald-700" : "text-red-700"
           }`}
         >
@@ -212,7 +214,7 @@ export function ResetPasswordForm() {
           disabled={submitting || loadingSession || tokenMissing}
           className="mt-5 h-11 w-full rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {submitting ? "変更中..." : "パスワードを設定"}
+          {submitting ? "変更中..." : "パスワードを更新"}
         </button>
       )}
     </form>

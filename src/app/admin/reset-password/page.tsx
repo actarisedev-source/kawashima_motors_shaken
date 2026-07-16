@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ResetPasswordForm } from "./reset-password-form";
 
 export const metadata: Metadata = {
-  title: "新しいパスワード設定 | Kawashima Motors Shaken",
+  title: "パスワードの再設定 | Kawashima Motors Shaken",
 };
 
 export default function ResetPasswordPage() {
