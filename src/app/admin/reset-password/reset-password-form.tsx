@@ -134,7 +134,9 @@ export function ResetPasswordForm() {
       onSubmit={handleSubmit}
       className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
     >
-      <p className="text-sm font-semibold text-blue-700">Admin</p>
+      <p className="text-sm font-semibold text-blue-700">
+        【川島モータース】車検予約管理システム
+      </p>
       <h1 className="mt-2 text-2xl font-bold tracking-normal text-slate-950">
         パスワードの再設定
       </h1>
@@ -172,7 +174,7 @@ export function ResetPasswordForm() {
       </label>
 
       <label className="mt-2 grid gap-2 text-sm font-medium text-slate-800">
-        新しいパスワード（確認）
+        新しいパスワード（確認用）
         <input
           required
           type="password"
