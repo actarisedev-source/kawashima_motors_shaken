@@ -110,6 +110,8 @@ export function AdminNewReservationModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingReservation, setPendingReservation] =
     useState<ReservationCreateRequest | null>(null);
+  const [completedReservation, setCompletedReservation] =
+    useState<AdminReservationItem | null>(null);
 
   const selectedDay = availability[reservedDate];
   const selectedHoliday = selectedDay?.holiday ?? null;
@@ -251,7 +253,8 @@ export function AdminNewReservationModal({
         return;
       }
 
-      onCreated(result.item);
+      setPendingReservation(null);
+      setCompletedReservation(result.item);
     } catch {
       setPendingReservation(null);
       setSubmitError("通信に失敗しました。時間をおいてもう一度お試しください。");
@@ -265,7 +268,12 @@ export function AdminNewReservationModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-3 sm:p-6"
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !isSubmitting) {
+        if (
+          event.target === event.currentTarget &&
+          !isSubmitting &&
+          !pendingReservation &&
+          !completedReservation
+        ) {
           onClose();
         }
       }}
@@ -288,7 +296,11 @@ export function AdminNewReservationModal({
           <button
             type="button"
             onClick={onClose}
-            disabled={isSubmitting}
+            disabled={
+              isSubmitting ||
+              Boolean(pendingReservation) ||
+              Boolean(completedReservation)
+            }
             className="h-9 cursor-pointer rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             閉じる
@@ -518,14 +530,18 @@ export function AdminNewReservationModal({
             <button
               type="button"
               onClick={onClose}
-              disabled={isSubmitting || Boolean(pendingReservation)}
+              disabled={
+                isSubmitting ||
+                Boolean(pendingReservation) ||
+                Boolean(completedReservation)
+              }
               className="h-11 cursor-pointer rounded-md border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               キャンセル
             </button>
             <button
               type="button"
-              disabled={isSubmitting}
+              disabled={isSubmitting || Boolean(completedReservation)}
               onClick={(event) => handleRegisterRequest(event.currentTarget.form)}
               className="h-11 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
@@ -572,6 +588,35 @@ export function AdminNewReservationModal({
                 className="h-11 cursor-pointer rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 {isSubmitting ? "登録中..." : "登録する"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+      {completedReservation ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/40 p-4"
+          role="presentation"
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-reservation-complete-title"
+            className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl"
+          >
+            <h3
+              id="new-reservation-complete-title"
+              className="text-lg font-bold text-slate-950"
+            >
+              登録が完了しました
+            </h3>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => onCreated(completedReservation)}
+                className="h-11 min-w-28 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              >
+                OK
               </button>
             </div>
           </section>
