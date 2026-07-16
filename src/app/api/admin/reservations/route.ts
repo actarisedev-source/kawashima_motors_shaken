@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getAdminAuthFromRequest } from "@/lib/auth/admin-session";
+import {
+  createReservation,
+  type ReservationCreateRequest,
+} from "@/lib/reservations/create-reservation";
 import { getJstDateKey } from "@/lib/reservations/slots";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
@@ -24,6 +28,38 @@ const unauthorizedResponse = () =>
 
 const isAuthenticated = async (request: NextRequest) =>
   (await getAdminAuthFromRequest(request)).authenticated;
+
+const buildReservationItem = ({
+  reservationId,
+  customerId,
+  reservedAt,
+  status,
+  customerName,
+  phone,
+  vehicleModel,
+  licensePlate,
+  createdAt,
+}: {
+  reservationId: string;
+  customerId: string;
+  reservedAt: string;
+  status: string;
+  customerName: string;
+  phone: string;
+  vehicleModel: string;
+  licensePlate: string | null;
+  createdAt: string;
+}) => ({
+  id: reservationId,
+  customerId,
+  reservedAt,
+  status,
+  customerName,
+  phone,
+  vehicleModel,
+  licensePlate: licensePlate ?? "",
+  createdAt,
+});
 
 export async function GET(request: NextRequest) {
   if (!(await isAuthenticated(request))) {
@@ -97,6 +133,46 @@ export async function GET(request: NextRequest) {
   });
 
   return NextResponse.json({ ok: true, items });
+}
+
+export async function POST(request: NextRequest) {
+  if (!(await isAuthenticated(request))) {
+    return unauthorizedResponse();
+  }
+
+  const body = (await request.json()) as ReservationCreateRequest;
+  const result = await createReservation({
+    body,
+    mode: "admin",
+    requestUrl: request.url,
+  });
+
+  if (!result.ok) {
+    return NextResponse.json(
+      { ok: false, message: result.message },
+      { status: result.statusCode },
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    reservationId: result.reservationId,
+    status: result.reservationStatus,
+    confirmationUrl: result.confirmationUrl,
+    lineLinkWarning: result.lineLinkWarning,
+    lineLinked: result.lineLinked,
+    item: buildReservationItem({
+      reservationId: result.reservationId,
+      customerId: result.customerId,
+      reservedAt: result.reservedAt,
+      status: result.reservationStatus,
+      customerName: result.customerName,
+      phone: result.phone,
+      vehicleModel: result.vehicleModel,
+      licensePlate: result.licensePlate,
+      createdAt: new Date().toISOString(),
+    }),
+  });
 }
 
 export async function PATCH(request: NextRequest) {

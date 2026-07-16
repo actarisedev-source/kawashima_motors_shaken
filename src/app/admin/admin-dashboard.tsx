@@ -8,6 +8,10 @@ import {
 } from "@/lib/reservations/slots";
 import { AdminHeader } from "./admin-header";
 import {
+  AdminNewReservationModal,
+  type AdminReservationItem,
+} from "./admin-new-reservation-modal";
+import {
   ReservationCustomerDetail,
   ReservationCustomerSummary,
 } from "./reservation-customer-summary";
@@ -17,17 +21,7 @@ const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
 
 type ReservationStatus = (typeof reservationStatuses)[number];
 
-type ReservationItem = {
-  id: string;
-  customerId: string;
-  reservedAt: string;
-  customerName: string;
-  phone: string;
-  vehicleModel: string;
-  licensePlate: string;
-  status: ReservationStatus;
-  createdAt: string;
-};
+type ReservationItem = AdminReservationItem;
 
 type SlotAvailability = {
   time: string;
@@ -134,6 +128,7 @@ export function AdminDashboard() {
   const [customerError, setCustomerError] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isNewReservationOpen, setIsNewReservationOpen] = useState(false);
   const [printedAt, setPrintedAt] = useState(() => new Date());
 
   const month = formatMonth(monthDate);
@@ -264,6 +259,20 @@ export function AdminDashboard() {
   function printSelectedReservations() {
     setPrintedAt(new Date());
     window.setTimeout(() => window.print(), 0);
+  }
+
+  function handleReservationCreated(item: ReservationItem) {
+    const dateKey = getJstDateKey(item.reservedAt);
+
+    setIsNewReservationOpen(false);
+    setItems((currentItems) => [
+      item,
+      ...currentItems.filter((currentItem) => currentItem.id !== item.id),
+    ]);
+    selectDate(dateKey);
+    setSelectedReservation(item);
+    setLoadState({ status: "ready", message: "" });
+    void refreshAll();
   }
 
   useEffect(() => {
@@ -415,6 +424,13 @@ export function AdminDashboard() {
                 className="col-span-2 h-11 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
               >
                 予約カレンダー
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsNewReservationOpen(true)}
+                className="col-span-2 h-11 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              >
+                ＋ 新規予約
               </button>
             </div>
           </div>
@@ -728,6 +744,13 @@ export function AdminDashboard() {
             </div>
           </section>
         </div>
+      ) : null}
+      {isNewReservationOpen ? (
+        <AdminNewReservationModal
+          initialDate={selectedDate}
+          onClose={() => setIsNewReservationOpen(false)}
+          onCreated={handleReservationCreated}
+        />
       ) : null}
     </div>
     <section className="reservation-print-sheet" aria-label="選択日の予約印刷一覧">
