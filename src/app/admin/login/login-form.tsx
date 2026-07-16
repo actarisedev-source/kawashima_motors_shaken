@@ -234,6 +234,7 @@ export function AdminLoginForm() {
                 name="resetEmail"
                 type="email"
                 autoComplete="email"
+                disabled={resetState.status === "success"}
                 className="h-11 rounded-md border border-slate-300 px-3 text-base font-normal outline-none focus:border-blue-600"
               />
             </label>
@@ -250,7 +251,11 @@ export function AdminLoginForm() {
                 {resetState.message}
               </p>
             ) : null}
-            <div className="mt-6 grid grid-cols-2 gap-3">
+            <div
+              className={`mt-6 grid gap-3 ${
+                resetState.status === "success" ? "grid-cols-1" : "grid-cols-2"
+              }`}
+            >
               <button
                 ref={passwordResetCancelRef}
                 type="button"
@@ -258,15 +263,17 @@ export function AdminLoginForm() {
                 onClick={() => setShowPasswordReset(false)}
                 className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
               >
-                キャンセル
+                {resetState.status === "success" ? "閉じる" : "キャンセル"}
               </button>
-              <button
-                type="submit"
-                disabled={resetState.status === "submitting"}
-                className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:bg-blue-300"
-              >
-                再設定メールを送信
-              </button>
+              {resetState.status === "success" ? null : (
+                <button
+                  type="submit"
+                  disabled={resetState.status === "submitting"}
+                  className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:bg-blue-300"
+                >
+                  再設定メールを送信
+                </button>
+              )}
             </div>
           </form>
         </div>
