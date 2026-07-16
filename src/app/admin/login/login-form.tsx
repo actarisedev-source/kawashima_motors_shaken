@@ -94,6 +94,8 @@ export function AdminLoginForm() {
 
   async function handlePasswordReset(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (resetState.status === "submitting") return;
+
     setResetState({ status: "submitting", message: "送信中です。" });
 
     const formData = new FormData(event.currentTarget);
@@ -128,75 +130,77 @@ export function AdminLoginForm() {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="w-full rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
-    >
-      <label className="grid gap-2 text-sm font-medium text-slate-800">
-        メールアドレス
-        <input
-          required
-          name="email"
-          type="email"
-          autoComplete="email"
-          className={`h-11 rounded-md border px-3 text-base font-normal outline-none focus:border-blue-600 ${
-            loginState.status === "error" && loginState.field === "email"
-              ? "border-red-500"
-              : "border-slate-300"
-          }`}
-        />
-      </label>
-      <label className="mt-4 grid gap-2 text-sm font-medium text-slate-800">
-        パスワード
-        <input
-          required
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          className={`h-11 rounded-md border px-3 text-base font-normal outline-none focus:border-blue-600 ${
-            loginState.status === "error" && loginState.field === "password"
-              ? "border-red-500"
-              : "border-slate-300"
-          }`}
-        />
-      </label>
-      <button
-        type="submit"
-        disabled={loginState.status === "submitting"}
-        className="mt-5 h-11 w-full rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+    <>
+      <form
+        onSubmit={handleSubmit}
+        className="w-full rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
       >
-        ログイン
-      </button>
-      <div className="mt-5 grid gap-2 text-center">
+        <label className="grid gap-2 text-sm font-medium text-slate-800">
+          メールアドレス
+          <input
+            required
+            name="email"
+            type="email"
+            autoComplete="email"
+            className={`h-11 rounded-md border px-3 text-base font-normal outline-none focus:border-blue-600 ${
+              loginState.status === "error" && loginState.field === "email"
+                ? "border-red-500"
+                : "border-slate-300"
+            }`}
+          />
+        </label>
+        <label className="mt-4 grid gap-2 text-sm font-medium text-slate-800">
+          パスワード
+          <input
+            required
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            className={`h-11 rounded-md border px-3 text-base font-normal outline-none focus:border-blue-600 ${
+              loginState.status === "error" && loginState.field === "password"
+                ? "border-red-500"
+                : "border-slate-300"
+            }`}
+          />
+        </label>
         <button
-          type="button"
-          onClick={() => setShowEmailHelp(true)}
-          className="text-[13px] font-medium text-blue-700 transition hover:text-blue-800 hover:underline"
+          type="submit"
+          disabled={loginState.status === "submitting"}
+          className="mt-5 h-11 w-full rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          メールアドレスをお忘れですか？
+          ログイン
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            setResetState({ status: "idle", message: "" });
-            setShowPasswordReset(true);
-          }}
-          className="text-[13px] font-medium text-blue-700 transition hover:text-blue-800 hover:underline"
-        >
-          パスワードをお忘れですか？
-        </button>
-      </div>
-      {loginState.message ? (
-        <p
-          className={
-            loginState.status === "error"
-              ? "mt-4 text-sm font-medium text-red-700"
-              : "mt-4 text-sm font-medium text-blue-700"
-          }
-        >
-          {loginState.message}
-        </p>
-      ) : null}
+        <div className="mt-5 grid gap-2 text-center">
+          <button
+            type="button"
+            onClick={() => setShowEmailHelp(true)}
+            className="text-[13px] font-medium text-blue-700 transition hover:text-blue-800 hover:underline"
+          >
+            メールアドレスをお忘れですか？
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setResetState({ status: "idle", message: "" });
+              setShowPasswordReset(true);
+            }}
+            className="text-[13px] font-medium text-blue-700 transition hover:text-blue-800 hover:underline"
+          >
+            パスワードをお忘れですか？
+          </button>
+        </div>
+        {loginState.message ? (
+          <p
+            className={
+              loginState.status === "error"
+                ? "mt-4 text-sm font-medium text-red-700"
+                : "mt-4 text-sm font-medium text-blue-700"
+            }
+          >
+            {loginState.message}
+          </p>
+        ) : null}
+      </form>
 
       {showPasswordReset ? (
         <div
@@ -332,6 +336,6 @@ export function AdminLoginForm() {
           </div>
         </div>
       ) : null}
-    </form>
+    </>
   );
 }

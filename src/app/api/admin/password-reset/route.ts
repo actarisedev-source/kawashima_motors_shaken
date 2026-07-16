@@ -26,7 +26,13 @@ export async function POST(request: Request) {
   }
 
   const redirectTo = getResetRedirectUrl(request);
+  console.info("Admin password reset requested", { redirectTo });
   const { error } = await resetAdminPasswordForEmail(email, redirectTo);
+  console.info("Admin password reset completed", {
+    ok: !error,
+    errorMessage: error?.message ?? null,
+    redirectTo,
+  });
 
   if (error) {
     console.error("Failed to send password reset email", error);
