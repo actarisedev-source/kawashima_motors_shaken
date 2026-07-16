@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { resetAdminPasswordForEmail } from "@/lib/auth/admin-session";
 
+const productionSiteUrl = "https://kawashima-motors-shaken.vercel.app";
+
 const getResetRedirectUrl = (request: Request) => {
   const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   const vercelUrl = process.env.VERCEL_URL?.trim();
@@ -10,10 +12,9 @@ const getResetRedirectUrl = (request: Request) => {
   const baseUrl = (
     vercelEnv === "preview"
       ? previewUrl || requestOrigin || configuredSiteUrl
-      : configuredSiteUrl || previewUrl || requestOrigin
+      : configuredSiteUrl || productionSiteUrl
   ) || "http://localhost:3000";
-  const url = new URL(baseUrl);
-  url.pathname = "/admin/reset-password";
+  const url = new URL("/admin/reset-password", baseUrl);
   url.search = "";
   url.hash = "";
 
