@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getAgeFromBirthDate } from "@/lib/customers/birth-date";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { AdminHeader } from "../../admin-header";
@@ -132,6 +133,7 @@ export function CustomerDetail({
   embedded = false,
   onCustomerUpdated,
 }: CustomerDetailProps) {
+  const router = useRouter();
   const [customer, setCustomer] = useState<CustomerDetailItem | null>(null);
   const [vehicleDrafts, setVehicleDrafts] = useState<VehicleDraft[]>([]);
   const [loadState, setLoadState] = useState<LoadState>({
@@ -771,7 +773,7 @@ export function CustomerDetail({
                   <button
                     type="button"
                     autoFocus
-                    onClick={() => window.location.replace("/admin/customers")}
+                    onClick={() => router.replace("/admin/customers")}
                     className="mt-6 h-11 w-full rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
                   >
                     顧客一覧へ戻る
