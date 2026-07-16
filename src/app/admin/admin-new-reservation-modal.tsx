@@ -7,6 +7,7 @@ import {
   getJstDateKey,
   reservationTimeSlots,
 } from "@/lib/reservations/slots";
+import type { ReservationCreateRequest } from "@/lib/reservations/create-reservation";
 
 type ReservationStatus = "受付中" | "確定" | "完了" | "キャンセル";
 
@@ -107,6 +108,8 @@ export function AdminNewReservationModal({
     useState<FieldErrors>(emptyFieldErrors);
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingReservation, setPendingReservation] =
+    useState<ReservationCreateRequest | null>(null);
 
   const selectedDay = availability[reservedDate];
   const selectedHoliday = selectedDay?.holiday ?? null;
@@ -161,14 +164,16 @@ export function AdminNewReservationModal({
     }
   }, [reservedDate, reservedTime, selectedDay, selectedHoliday]);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+  }
 
-    if (isSubmitting) {
+  function handleRegisterRequest(form: HTMLFormElement | null) {
+    if (!form || isSubmitting) {
       return;
     }
 
-    const formData = new FormData(event.currentTarget);
+    const formData = new FormData(form);
     const customerName = String(formData.get("customerName") ?? "").trim();
     const customerKana = String(formData.get("customerKana") ?? "").trim();
     const phone = normalizePhone(String(formData.get("phone") ?? ""));
@@ -211,36 +216,44 @@ export function AdminNewReservationModal({
       return;
     }
 
+    setPendingReservation({
+      customerName,
+      customerKana,
+      phone,
+      gender: String(formData.get("gender") ?? "") || undefined,
+      birthDate: birthDate || undefined,
+      vehicleModel: String(formData.get("vehicleModel") ?? "").trim() || undefined,
+      licensePlate: String(formData.get("licensePlate") ?? "").trim(),
+      inspectionExpiresOn: String(formData.get("inspectionExpiresOn") ?? "").trim(),
+      reservedAt: `${reservedDate}T${reservedTime}:00+09:00`,
+      note: String(formData.get("note") ?? "").trim(),
+    });
+  }
+
+  async function handleConfirmRegistration() {
+    if (!pendingReservation || isSubmitting) {
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       const response = await fetch("/api/admin/reservations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerName,
-          customerKana,
-          phone,
-          gender: String(formData.get("gender") ?? "") || undefined,
-          birthDate: birthDate || undefined,
-          vehicleModel: String(formData.get("vehicleModel") ?? "").trim() || undefined,
-          licensePlate: String(formData.get("licensePlate") ?? "").trim(),
-          inspectionExpiresOn: String(
-            formData.get("inspectionExpiresOn") ?? "",
-          ).trim(),
-          reservedAt: `${reservedDate}T${reservedTime}:00+09:00`,
-          note: String(formData.get("note") ?? "").trim(),
-        }),
+        body: JSON.stringify(pendingReservation),
       });
       const result = (await response.json()) as CreateReservationResponse;
 
       if (!response.ok || !result.ok || !result.item) {
+        setPendingReservation(null);
         setSubmitError(result.message ?? "予約登録に失敗しました。");
         return;
       }
 
       onCreated(result.item);
     } catch {
+      setPendingReservation(null);
       setSubmitError("通信に失敗しました。時間をおいてもう一度お試しください。");
     } finally {
       setIsSubmitting(false);
@@ -505,14 +518,15 @@ export function AdminNewReservationModal({
             <button
               type="button"
               onClick={onClose}
-              disabled={isSubmitting}
+              disabled={isSubmitting || Boolean(pendingReservation)}
               className="h-11 cursor-pointer rounded-md border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               キャンセル
             </button>
             <button
-              type="submit"
+              type="button"
               disabled={isSubmitting}
+              onClick={(event) => handleRegisterRequest(event.currentTarget.form)}
               className="h-11 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {isSubmitting ? "登録中..." : "予約を登録"}
@@ -520,6 +534,49 @@ export function AdminNewReservationModal({
           </div>
         </form>
       </section>
+      {pendingReservation ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/40 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isSubmitting) {
+              setPendingReservation(null);
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-reservation-confirm-title"
+            className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl"
+          >
+            <h3
+              id="new-reservation-confirm-title"
+              className="text-lg font-bold text-slate-950"
+            >
+              予約を登録しますか？
+            </h3>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => setPendingReservation(null)}
+                className="h-11 cursor-pointer rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => void handleConfirmRegistration()}
+                className="h-11 cursor-pointer rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {isSubmitting ? "登録中..." : "登録する"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }
