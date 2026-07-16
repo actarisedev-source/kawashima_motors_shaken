@@ -126,12 +126,14 @@ type CustomerDetailProps = {
   customerId: string;
   embedded?: boolean;
   onCustomerUpdated?: () => void;
+  onCustomerDeleted?: () => void;
 };
 
 export function CustomerDetail({
   customerId,
   embedded = false,
   onCustomerUpdated,
+  onCustomerDeleted,
 }: CustomerDetailProps) {
   const router = useRouter();
   const [customer, setCustomer] = useState<CustomerDetailItem | null>(null);
@@ -773,7 +775,16 @@ export function CustomerDetail({
                   <button
                     type="button"
                     autoFocus
-                    onClick={() => router.replace("/admin/customers")}
+                    onClick={() => {
+                      setCustomerDeleteSucceeded(false);
+
+                      if (embedded && onCustomerDeleted) {
+                        onCustomerDeleted();
+                        return;
+                      }
+
+                      router.replace("/admin/customers");
+                    }}
                     className="mt-6 h-11 w-full rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
                   >
                     顧客一覧へ戻る
