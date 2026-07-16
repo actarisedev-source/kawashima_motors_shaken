@@ -4,14 +4,20 @@ import { resetAdminPasswordForEmail } from "@/lib/auth/admin-session";
 const getResetRedirectUrl = (request: Request) => {
   const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   const vercelUrl = process.env.VERCEL_URL?.trim();
+  const vercelEnv = process.env.VERCEL_ENV?.trim();
   const requestOrigin = request.headers.get("origin")?.trim();
-  const baseUrl =
-    configuredSiteUrl ||
-    (vercelUrl ? `https://${vercelUrl}` : "") ||
-    requestOrigin ||
-    "http://localhost:3000";
+  const previewUrl = vercelUrl ? `https://${vercelUrl}` : "";
+  const baseUrl = (
+    vercelEnv === "preview"
+      ? previewUrl || requestOrigin || configuredSiteUrl
+      : configuredSiteUrl || previewUrl || requestOrigin
+  ) || "http://localhost:3000";
+  const url = new URL(baseUrl);
+  url.pathname = "/admin/reset-password";
+  url.search = "";
+  url.hash = "";
 
-  return `${baseUrl.replace(/\/$/, "")}/admin/reset-password`;
+  return url.toString();
 };
 
 export async function POST(request: Request) {
