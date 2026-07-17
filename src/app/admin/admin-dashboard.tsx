@@ -389,21 +389,23 @@ export function AdminDashboard() {
         ) : null}
 
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+          <div className="flex flex-wrap items-end gap-2 sm:gap-3">
+            <div className="grid gap-1.5 text-sm font-semibold text-slate-700">
               日付選択
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(event) => {
-                  if (event.target.value) {
-                    selectDate(event.target.value);
-                  }
-                }}
-                className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-              />
-            </label>
-            <div className="grid grid-cols-2 gap-2 sm:flex">
+              <button
+                type="button"
+                onClick={() => setIsCalendarOpen(true)}
+                className="flex h-11 min-w-[190px] cursor-pointer items-center justify-between gap-3 rounded-md border border-slate-300 bg-white px-3 text-left text-sm font-semibold text-slate-950 outline-none transition hover:border-blue-300 hover:bg-blue-50 focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                aria-haspopup="dialog"
+                aria-expanded={isCalendarOpen}
+              >
+                <span>{formatSelectedDate(selectedDate)}</span>
+                <span className="text-blue-600" aria-hidden="true">
+                  ▼
+                </span>
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               <button
                 type="button"
                 onClick={() => selectRelativeDate(0)}
@@ -413,22 +415,8 @@ export function AdminDashboard() {
               </button>
               <button
                 type="button"
-                onClick={() => selectRelativeDate(1)}
-                className="h-11 cursor-pointer rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
-              >
-                明日
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsCalendarOpen(true)}
-                className="col-span-2 h-11 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-              >
-                予約カレンダー
-              </button>
-              <button
-                type="button"
                 onClick={() => setIsNewReservationOpen(true)}
-                className="col-span-2 h-11 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                className="h-11 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
               >
                 ＋ 新規予約
               </button>
@@ -728,13 +716,21 @@ export function AdminDashboard() {
                         ) : null}
                       </div>
                       {isCurrentMonth ? (
-                        <div className="mt-3 grid gap-1 text-xs font-semibold">
-                          <p className="text-amber-700">
-                            受付中：{acceptingCount}件
-                          </p>
-                          <p className="text-blue-700">
-                            確認済：{confirmedCount}件
-                          </p>
+                        <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-semibold">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-1 text-amber-700 ring-1 ring-amber-100">
+                            <span
+                              className="h-2 w-2 rounded-full bg-amber-400"
+                              aria-hidden="true"
+                            />
+                            受付中 {acceptingCount}件
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-1 text-emerald-700 ring-1 ring-emerald-100">
+                            <span
+                              className="h-2 w-2 rounded-full bg-emerald-400"
+                              aria-hidden="true"
+                            />
+                            確認済 {confirmedCount}件
+                          </span>
                         </div>
                       ) : null}
                     </button>
