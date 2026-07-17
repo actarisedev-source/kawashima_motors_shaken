@@ -717,14 +717,14 @@ export function AdminDashboard() {
                       </div>
                       {isCurrentMonth ? (
                         <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-semibold">
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-1 text-amber-700 ring-1 ring-amber-100">
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-1 text-slate-700">
                             <span
                               className="h-2 w-2 rounded-full bg-amber-400"
                               aria-hidden="true"
                             />
                             受付中 {acceptingCount}件
                           </span>
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-1 text-emerald-700 ring-1 ring-emerald-100">
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-1 text-slate-700">
                             <span
                               className="h-2 w-2 rounded-full bg-emerald-400"
                               aria-hidden="true"
