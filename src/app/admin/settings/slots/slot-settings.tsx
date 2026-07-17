@@ -29,6 +29,12 @@ type AvailabilityResponse = {
   message?: string;
 };
 
+type SpecialAvailabilityState =
+  | { status: "idle"; message: "" }
+  | { status: "loading"; message: "休業日情報を読み込み中…" }
+  | { status: "ready"; message: "" }
+  | { status: "error"; message: string };
+
 const createDefaultDay = () =>
   Object.fromEntries(reservationTimeSlots.map((time) => [time, 1]));
 
@@ -53,6 +59,11 @@ export function SlotSettings() {
   const [specialAvailability, setSpecialAvailability] = useState<
     Record<string, AdminCalendarDayAvailability>
   >({});
+  const [specialAvailabilityState, setSpecialAvailabilityState] =
+    useState<SpecialAvailabilityState>({
+      status: "idle",
+      message: "",
+    });
   const [specialCapacities, setSpecialCapacities] = useState<Record<string, number>>(
     createSpecialCapacities,
   );
@@ -146,16 +157,16 @@ export function SlotSettings() {
     setLoadState({ status: "ready", message: "" });
   }
 
-  async function loadSpecialAvailability() {
+  async function loadSpecialAvailability(month: string, signal?: AbortSignal) {
     const response = await fetch(
-      `/api/reservations/availability?month=${specialMonth}`,
-      { cache: "no-store" },
+      `/api/reservations/availability?month=${month}`,
+      { cache: "no-store", signal },
     );
     const result = (await response.json()) as AvailabilityResponse;
 
     if (!response.ok || !result.ok || !result.days) {
       setSpecialAvailability({});
-      setLoadState({
+      setSpecialAvailabilityState({
         status: "error",
         message: result.message ?? "休業日情報の取得に失敗しました。",
       });
@@ -163,6 +174,7 @@ export function SlotSettings() {
     }
 
     setSpecialAvailability(result.days);
+    setSpecialAvailabilityState({ status: "ready", message: "" });
   }
 
   async function saveWeekly() {
@@ -259,18 +271,51 @@ export function SlotSettings() {
       }
     }
 
+    setSpecialAvailability({});
+    setSpecialAvailabilityState({
+      status: "loading",
+      message: "休業日情報を読み込み中…",
+    });
     setSpecialCalendarOpen(true);
   }
 
   function selectSpecialDate(dateKey: string) {
+    if (specialAvailabilityState.status !== "ready") {
+      return;
+    }
+
+    if (specialAvailability[dateKey]?.holiday) {
+      return;
+    }
+
     setSpecialDate(dateKey);
     setSpecialCalendarOpen(false);
   }
 
   function moveSpecialMonth(amount: number) {
+    setSpecialAvailability({});
+    setSpecialAvailabilityState({
+      status: "loading",
+      message: "休業日情報を読み込み中…",
+    });
     setSpecialMonthDate(
       (current) => new Date(current.getFullYear(), current.getMonth() + amount, 1),
     );
+  }
+
+  function retrySpecialAvailability() {
+    setSpecialAvailability({});
+    setSpecialAvailabilityState({
+      status: "loading",
+      message: "休業日情報を読み込み中…",
+    });
+    void loadSpecialAvailability(specialMonth).catch(() => {
+      setSpecialAvailability({});
+      setSpecialAvailabilityState({
+        status: "error",
+        message: "休業日情報の取得に失敗しました。",
+      });
+    });
   }
 
   useEffect(() => {
@@ -279,9 +324,27 @@ export function SlotSettings() {
 
   useEffect(() => {
     if (specialCalendarOpen) {
-      void loadSpecialAvailability();
+      const controller = new AbortController();
+
+      setSpecialAvailability({});
+      setSpecialAvailabilityState({
+        status: "loading",
+        message: "休業日情報を読み込み中…",
+      });
+      void loadSpecialAvailability(specialMonth, controller.signal).catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setSpecialAvailability({});
+        setSpecialAvailabilityState({
+          status: "error",
+          message: "休業日情報の取得に失敗しました。",
+        });
+      });
+
+      return () => controller.abort();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [specialCalendarOpen, specialMonth]);
 
   return (
@@ -483,12 +546,24 @@ export function SlotSettings() {
       {specialCalendarOpen ? (
         <AdminDateCalendarModal
           availability={specialAvailability}
+          calendarErrorMessage={
+            specialAvailabilityState.status === "error"
+              ? specialAvailabilityState.message
+              : undefined
+          }
+          calendarLoadingMessage={
+            specialAvailabilityState.status === "loading"
+              ? specialAvailabilityState.message
+              : undefined
+          }
           description="特定日上書きを設定する営業日を選択できます。"
           disableHolidaySelection
+          disableSelection={specialAvailabilityState.status !== "ready"}
           holidayTone="gray"
           monthDate={specialMonthDate}
           onClose={() => setSpecialCalendarOpen(false)}
           onMoveMonth={moveSpecialMonth}
+          onRetry={retrySpecialAvailability}
           onSelectDate={selectSpecialDate}
           selectedDate={specialDate}
           showReservationCounts={false}
