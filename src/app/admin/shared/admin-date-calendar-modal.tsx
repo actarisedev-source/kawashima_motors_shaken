@@ -3,6 +3,7 @@
 import { getJstDateKey } from "@/lib/reservations/slots";
 
 const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
+const holidayTextClassName = "text-red-500";
 
 export type AdminCalendarDayAvailability = {
   holiday: {
@@ -50,7 +51,6 @@ type AdminDateCalendarModalProps = {
   availability: Record<string, AdminCalendarDayAvailability | undefined>;
   description: string;
   disableHolidaySelection?: boolean;
-  holidayLabelTone?: "inherit" | "red";
   holidayTone?: "red" | "gray";
   monthDate: Date;
   onClose: () => void;
@@ -66,8 +66,7 @@ export function AdminDateCalendarModal({
   availability,
   description,
   disableHolidaySelection = false,
-  holidayLabelTone = "inherit",
-  holidayTone = "red",
+  holidayTone = "gray",
   monthDate,
   onClose,
   onMoveMonth,
@@ -150,12 +149,7 @@ export function AdminDateCalendarModal({
               const isPast = dateKey < getJstDateKey(new Date());
               const holiday = availability[dateKey]?.holiday;
               const isHolidayDisabled = Boolean(holiday && disableHolidaySelection);
-              const holidayLabelRedClassName = "text-red-500";
-              const holidayLabelClassName =
-                holidayLabelTone === "red" ||
-                (isPast && holidayTone !== "gray")
-                  ? holidayLabelRedClassName
-                  : "";
+              const holidayDateClassName = holiday ? holidayTextClassName : "";
 
               return (
                 <button
@@ -178,7 +172,7 @@ export function AdminDateCalendarModal({
                       ? "bg-gray-100 text-gray-400"
                       : holiday
                         ? holidayTone === "gray"
-                          ? "bg-gray-100 text-gray-500"
+                          ? "bg-gray-100"
                           : "bg-red-50 text-red-800"
                         : "bg-white",
                     !isCurrentMonth ? "text-slate-300" : "",
@@ -186,11 +180,11 @@ export function AdminDateCalendarModal({
                   ].join(" ")}
                 >
                   <div className="flex items-start justify-between gap-1">
-                    <span className="text-sm font-bold">{date.getDate()}</span>
+                    <span className={`text-sm font-bold ${holidayDateClassName}`}>
+                      {date.getDate()}
+                    </span>
                     {isCurrentMonth && holiday ? (
-                      <span
-                        className={`text-[11px] font-semibold ${holidayLabelClassName}`}
-                      >
+                      <span className={`text-[11px] font-semibold ${holidayTextClassName}`}>
                         休業
                       </span>
                     ) : null}
