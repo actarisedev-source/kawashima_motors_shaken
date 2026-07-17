@@ -4,6 +4,12 @@ import { FormEvent, useEffect, useState } from "react";
 import { weekdayLabels } from "@/lib/holidays/holidays";
 import { reservationTimeSlots } from "@/lib/reservations/slots";
 import { AdminHeader } from "../../admin-header";
+import {
+  AdminDateCalendarModal,
+  formatAdminCalendarMonth,
+  formatAdminCalendarSelectedDate,
+  type AdminCalendarDayAvailability,
+} from "../../shared/admin-date-calendar-modal";
 
 type WeeklySettings = Record<string, Record<string, number>>;
 
@@ -16,6 +22,12 @@ type LoadState =
   | { status: "loading"; message: "読み込み中です。" }
   | { status: "ready"; message: "" }
   | { status: "error"; message: string };
+
+type AvailabilityResponse = {
+  ok: boolean;
+  days?: Record<string, AdminCalendarDayAvailability>;
+  message?: string;
+};
 
 const createDefaultDay = () =>
   Object.fromEntries(reservationTimeSlots.map((time) => [time, 1]));
@@ -33,6 +45,14 @@ export function SlotSettings() {
   const [weekly, setWeekly] = useState<WeeklySettings>(createDefaultWeekly);
   const [specialItems, setSpecialItems] = useState<SpecialSettings[]>([]);
   const [specialDate, setSpecialDate] = useState("");
+  const [specialCalendarOpen, setSpecialCalendarOpen] = useState(false);
+  const [specialMonthDate, setSpecialMonthDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [specialAvailability, setSpecialAvailability] = useState<
+    Record<string, AdminCalendarDayAvailability>
+  >({});
   const [specialCapacities, setSpecialCapacities] = useState<Record<string, number>>(
     createSpecialCapacities,
   );
@@ -45,6 +65,7 @@ export function SlotSettings() {
   const [bulkWeekdays, setBulkWeekdays] = useState<number[]>(allWeekdays);
   const [bulkTimeSlots, setBulkTimeSlots] = useState<string[]>(allTimeSlots);
   const [bulkCapacity, setBulkCapacity] = useState(1);
+  const specialMonth = formatAdminCalendarMonth(specialMonthDate);
 
   function openBulkSettings() {
     setBulkWeekdays(allWeekdays);
@@ -125,6 +146,25 @@ export function SlotSettings() {
     setLoadState({ status: "ready", message: "" });
   }
 
+  async function loadSpecialAvailability() {
+    const response = await fetch(
+      `/api/reservations/availability?month=${specialMonth}`,
+      { cache: "no-store" },
+    );
+    const result = (await response.json()) as AvailabilityResponse;
+
+    if (!response.ok || !result.ok || !result.days) {
+      setSpecialAvailability({});
+      setLoadState({
+        status: "error",
+        message: result.message ?? "休業日情報の取得に失敗しました。",
+      });
+      return;
+    }
+
+    setSpecialAvailability(result.days);
+  }
+
   async function saveWeekly() {
     setSubmitting(true);
 
@@ -153,6 +193,15 @@ export function SlotSettings() {
 
   async function saveSpecial(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!specialDate) {
+      setLoadState({
+        status: "error",
+        message: "日付を選択してください。",
+      });
+      return;
+    }
+
     setSubmitting(true);
 
     const response = await fetch("/api/admin/slots", {
@@ -201,9 +250,39 @@ export function SlotSettings() {
     setSpecialItems((current) => current.filter((item) => item.date !== date));
   }
 
+  function openSpecialCalendar() {
+    if (specialDate) {
+      const [year, month] = specialDate.split("-").map(Number);
+
+      if (year && month) {
+        setSpecialMonthDate(new Date(year, month - 1, 1));
+      }
+    }
+
+    setSpecialCalendarOpen(true);
+  }
+
+  function selectSpecialDate(dateKey: string) {
+    setSpecialDate(dateKey);
+    setSpecialCalendarOpen(false);
+  }
+
+  function moveSpecialMonth(amount: number) {
+    setSpecialMonthDate(
+      (current) => new Date(current.getFullYear(), current.getMonth() + amount, 1),
+    );
+  }
+
   useEffect(() => {
     void loadSlots();
   }, []);
+
+  useEffect(() => {
+    if (specialCalendarOpen) {
+      void loadSpecialAvailability();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [specialCalendarOpen, specialMonth]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
@@ -309,16 +388,23 @@ export function SlotSettings() {
                 設定した日は曜日別基本枠より優先されます。
               </p>
             </div>
-            <label className="grid gap-2 text-sm font-semibold text-slate-700">
+            <div className="grid gap-2 text-sm font-semibold text-slate-700">
               日付
-              <input
-                required
-                type="date"
-                value={specialDate}
-                onChange={(event) => setSpecialDate(event.target.value)}
-                className="h-11 rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-blue-600"
-              />
-            </label>
+              <button
+                type="button"
+                onClick={openSpecialCalendar}
+                className="flex h-11 items-center justify-between rounded-md border border-slate-300 bg-white px-3 text-left text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50/40 focus:border-blue-600 focus:outline-none"
+              >
+                <span>
+                  {specialDate
+                    ? formatAdminCalendarSelectedDate(specialDate)
+                    : "日付を選択"}
+                </span>
+                <span className="text-blue-600" aria-hidden="true">
+                  ▼
+                </span>
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               {reservationTimeSlots.map((time) => (
                 <label
@@ -393,6 +479,22 @@ export function SlotSettings() {
           </section>
         </section>
       </main>
+
+      {specialCalendarOpen ? (
+        <AdminDateCalendarModal
+          availability={specialAvailability}
+          description="特定日上書きを設定する営業日を選択できます。"
+          disableHolidaySelection
+          holidayTone="gray"
+          monthDate={specialMonthDate}
+          onClose={() => setSpecialCalendarOpen(false)}
+          onMoveMonth={moveSpecialMonth}
+          onSelectDate={selectSpecialDate}
+          selectedDate={specialDate}
+          showReservationCounts={false}
+          title="日付選択"
+        />
+      ) : null}
 
       {showBulkSettings ? (
         <div

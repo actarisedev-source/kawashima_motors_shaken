@@ -15,9 +15,15 @@ import {
   ReservationCustomerDetail,
   ReservationCustomerSummary,
 } from "./reservation-customer-summary";
+import {
+  AdminDateCalendarModal,
+  formatAdminCalendarMonth as formatMonth,
+  formatAdminCalendarSelectedDate as formatSelectedDate,
+  type AdminCalendarDayAvailability,
+  type AdminCalendarReservationCounts,
+} from "./shared/admin-date-calendar-modal";
 
 const reservationStatuses = ["受付中", "確定", "完了", "キャンセル"] as const;
-const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
 
 type ReservationStatus = (typeof reservationStatuses)[number];
 
@@ -30,15 +36,10 @@ type SlotAvailability = {
   available: boolean;
 };
 
-type DayAvailability = {
+type DayAvailability = AdminCalendarDayAvailability & {
   totalReserved: number;
   totalCapacity: number;
   slots: Record<string, SlotAvailability>;
-  holiday: {
-    id: string;
-    type: "single" | "weekly";
-    label: string | null;
-  } | null;
 };
 
 type AvailabilityResponse = {
@@ -52,14 +53,6 @@ type LoadState =
   | { status: "ready"; message: "" }
   | { status: "error"; message: string };
 
-const formatMonth = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-
-const formatDateKey = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate(),
-  ).padStart(2, "0")}`;
-
 const formatDateTime = (value: string) =>
   new Intl.DateTimeFormat("ja-JP", {
     year: "numeric",
@@ -69,27 +62,6 @@ const formatDateTime = (value: string) =>
     minute: "2-digit",
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
-
-const formatSelectedDate = (dateKey: string) =>
-  new Intl.DateTimeFormat("ja-JP", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "short",
-    timeZone: "Asia/Tokyo",
-  }).format(new Date(`${dateKey}T00:00:00+09:00`));
-
-const getCalendarDates = (monthDate: Date) => {
-  const firstDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-  const startDate = new Date(firstDate);
-  startDate.setDate(firstDate.getDate() - firstDate.getDay());
-
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + index);
-    return date;
-  });
-};
 
 const statusClassName = (status: ReservationStatus) => {
   switch (status) {
@@ -133,7 +105,6 @@ export function AdminDashboard() {
 
   const month = formatMonth(monthDate);
   const selectedCustomerId = selectedReservation?.customerId ?? null;
-  const calendarDates = useMemo(() => getCalendarDates(monthDate), [monthDate]);
 
   async function loadReservations() {
     setLoadState({ status: "loading", message: "読み込み中です。" });
@@ -355,6 +326,18 @@ export function AdminDashboard() {
     () => itemsByDate.get(selectedDate) ?? [],
     [itemsByDate, selectedDate],
   );
+  const reservationCountsByDate = useMemo(() => {
+    const counts: Record<string, AdminCalendarReservationCounts> = {};
+
+    for (const [dateKey, dateItems] of itemsByDate.entries()) {
+      counts[dateKey] = {
+        accepting: dateItems.filter((item) => item.status === "受付中").length,
+        confirmed: dateItems.filter((item) => item.status === "確定").length,
+      };
+    }
+
+    return counts;
+  }, [itemsByDate]);
   const selectedAvailability = availability[selectedDate];
   const selectedHoliday = availability[selectedDate]?.holiday ?? null;
   const selectedDateIsPast = selectedDate < getJstDateKey(new Date());
@@ -598,148 +581,18 @@ export function AdminDashboard() {
       </main>
 
       {isCalendarOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-3 sm:p-6"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setIsCalendarOpen(false);
-            }
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reservation-calendar-title"
-            className="max-h-[92vh] w-full max-w-5xl overflow-auto rounded-lg border border-slate-200 bg-white shadow-xl"
-          >
-            <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-              <div>
-                <h2
-                  id="reservation-calendar-title"
-                  className="text-base font-semibold"
-                >
-                  予約カレンダー
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  月全体の受付状況を確認できます。
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => moveMonth(-1)}
-                  className="h-9 cursor-pointer rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  前月
-                </button>
-                <p className="min-w-28 text-center text-base font-bold">
-                  {monthDate.getFullYear()}年 {monthDate.getMonth() + 1}月
-                </p>
-                <button
-                  type="button"
-                  onClick={() => moveMonth(1)}
-                  className="h-9 cursor-pointer rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  次月
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsCalendarOpen(false)}
-                  className="ml-auto h-9 cursor-pointer rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  閉じる
-                </button>
-              </div>
-            </div>
-            <div className="min-w-[700px]">
-              <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center text-xs font-semibold text-slate-500">
-                {weekdayLabels.map((label) => (
-                  <div key={label} className="px-1 py-2">
-                    {label}
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7">
-                {calendarDates.map((date) => {
-                  const dateKey = formatDateKey(date);
-                  const dateItems = itemsByDate.get(dateKey) ?? [];
-                  const acceptingCount = dateItems.filter(
-                    (item) => item.status === "受付中",
-                  ).length;
-                  const confirmedCount = dateItems.filter(
-                    (item) => item.status === "確定",
-                  ).length;
-                  const isCurrentMonth =
-                    date.getMonth() === monthDate.getMonth();
-                  const isSelected = dateKey === selectedDate;
-                  const isToday = dateKey === getJstDateKey(new Date());
-                  const isPast = dateKey < getJstDateKey(new Date());
-                  const holiday = availability[dateKey]?.holiday;
-
-                  return (
-                    <button
-                      key={dateKey}
-                      type="button"
-                      onClick={() => selectDate(dateKey, true)}
-                      className={[
-                        "min-h-28 cursor-pointer border-b border-r border-slate-100 p-2 text-left transition",
-                        isToday
-                          ? "ring-2 ring-inset ring-blue-500"
-                          : "",
-                        isSelected && !isToday && !isPast
-                          ? "bg-blue-50 ring-2 ring-inset ring-blue-500"
-                          : "",
-                        isPast
-                          ? "bg-gray-100 text-gray-400"
-                          : holiday
-                            ? "bg-red-50 text-red-800"
-                            : "bg-white",
-                        !isCurrentMonth ? "text-slate-300" : "",
-                        !isPast && !holiday && !isSelected
-                          ? "hover:bg-blue-50/60"
-                          : "",
-                      ].join(" ")}
-                    >
-                      <div className="flex items-start justify-between gap-1">
-                        <span className="text-sm font-bold">
-                          {date.getDate()}
-                        </span>
-                        {isCurrentMonth && holiday ? (
-                          <span
-                            className={`text-[11px] font-semibold ${
-                              isPast ? "text-red-500" : ""
-                            }`}
-                          >
-                            休業
-                          </span>
-                        ) : null}
-                      </div>
-                      {isCurrentMonth ? (
-                        <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-semibold">
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 text-slate-600">
-                            <span
-                              className="h-2 w-2 rounded-full bg-amber-400"
-                              aria-hidden="true"
-                            />
-                            受付中 {acceptingCount}件
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 text-slate-600">
-                            <span
-                              className="h-2 w-2 rounded-full bg-emerald-400"
-                              aria-hidden="true"
-                            />
-                            確認済 {confirmedCount}件
-                          </span>
-                        </div>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </section>
-        </div>
+        <AdminDateCalendarModal
+          availability={availability}
+          description="月全体の受付状況を確認できます。"
+          monthDate={monthDate}
+          onClose={() => setIsCalendarOpen(false)}
+          onMoveMonth={moveMonth}
+          onSelectDate={(dateKey) => selectDate(dateKey, true)}
+          reservationCountsByDate={reservationCountsByDate}
+          selectedDate={selectedDate}
+          showReservationCounts
+          title="予約カレンダー"
+        />
       ) : null}
       {isNewReservationOpen ? (
         <AdminNewReservationModal
