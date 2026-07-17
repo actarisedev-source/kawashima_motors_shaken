@@ -50,6 +50,7 @@ type AdminDateCalendarModalProps = {
   availability: Record<string, AdminCalendarDayAvailability | undefined>;
   description: string;
   disableHolidaySelection?: boolean;
+  holidayLabelTone?: "inherit" | "red";
   holidayTone?: "red" | "gray";
   monthDate: Date;
   onClose: () => void;
@@ -65,6 +66,7 @@ export function AdminDateCalendarModal({
   availability,
   description,
   disableHolidaySelection = false,
+  holidayLabelTone = "inherit",
   holidayTone = "red",
   monthDate,
   onClose,
@@ -148,8 +150,12 @@ export function AdminDateCalendarModal({
               const isPast = dateKey < getJstDateKey(new Date());
               const holiday = availability[dateKey]?.holiday;
               const isHolidayDisabled = Boolean(holiday && disableHolidaySelection);
+              const holidayLabelRedClassName = "text-red-500";
               const holidayLabelClassName =
-                isPast && holidayTone !== "gray" ? "text-red-500" : "";
+                holidayLabelTone === "red" ||
+                (isPast && holidayTone !== "gray")
+                  ? holidayLabelRedClassName
+                  : "";
 
               return (
                 <button

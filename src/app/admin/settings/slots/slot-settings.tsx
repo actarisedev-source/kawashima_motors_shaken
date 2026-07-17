@@ -485,6 +485,7 @@ export function SlotSettings() {
           availability={specialAvailability}
           description="特定日上書きを設定する営業日を選択できます。"
           disableHolidaySelection
+          holidayLabelTone="red"
           holidayTone="gray"
           monthDate={specialMonthDate}
           onClose={() => setSpecialCalendarOpen(false)}
