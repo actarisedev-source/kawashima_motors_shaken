@@ -435,83 +435,96 @@ export function AdminDashboard() {
                 </button>
               </div>
             </div>
-            <div className="grid gap-3 p-4 sm:p-5">
-              {reservationTimeSlots.map((time) => {
-                const timeItems = selectedItemsByTime.get(time) ?? [];
-                const slot = selectedAvailability?.slots?.[time];
-                const reservedCount = slot?.reservedCount ?? timeItems.length;
-                const capacity = selectedHoliday ? 0 : (slot?.capacity ?? 1);
-                const isStopped = capacity === 0;
-                const isFull = capacity > 0 && reservedCount >= capacity;
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[620px] border-collapse text-left text-sm">
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">時間</th>
+                    <th className="px-4 py-3">予約状況</th>
+                    <th className="px-4 py-3">予約内容</th>
+                    <th className="px-4 py-3">ステータス</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {reservationTimeSlots.map((time) => {
+                    const timeItems = selectedItemsByTime.get(time) ?? [];
+                    const slot = selectedAvailability?.slots?.[time];
+                    const reservedCount = slot?.reservedCount ?? timeItems.length;
+                    const capacity = selectedHoliday ? 0 : (slot?.capacity ?? 1);
+                    const isStopped = capacity === 0;
+                    const isFull = capacity > 0 && reservedCount >= capacity;
 
-                return (
-                  <div
-                    key={time}
-                    className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[72px_1fr]"
-                  >
-                    <div className="grid content-start gap-1">
-                      <div className="text-sm font-bold text-slate-950">
-                        {time}
-                      </div>
-                      <span
-                        className={[
-                          "inline-flex h-fit w-fit self-start whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ring-1",
-                          isStopped
-                            ? "bg-slate-100 text-slate-500 ring-slate-200"
-                            : isFull
-                              ? "bg-red-50 text-red-700 ring-red-200"
-                              : "bg-blue-50 text-blue-700 ring-blue-200",
-                        ].join(" ")}
-                      >
-                        {isStopped
-                          ? "受付停止"
-                          : isFull
-                            ? `満席 ${reservedCount} / ${capacity}`
-                            : `予約 ${reservedCount} / ${capacity}`}
-                      </span>
-                    </div>
-                    <div className="grid gap-2">
-                      {timeItems.length ? (
-                        timeItems.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => setSelectedReservation(item)}
+                    return (
+                      <tr key={time} className="transition hover:bg-slate-50/80">
+                        <td className="whitespace-nowrap px-4 py-4 text-base font-bold text-slate-950">
+                          {time}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span
                             className={[
-                              "rounded-lg border bg-white p-3 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50/40",
-                              selectedReservation?.id === item.id
-                                ? "border-blue-500 ring-2 ring-blue-100"
-                                : "border-slate-200",
+                              "inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ring-1",
+                              isStopped
+                                ? "bg-slate-100 text-slate-500 ring-slate-200"
+                                : isFull
+                                  ? "bg-red-50 text-red-700 ring-red-200"
+                                  : "bg-blue-50 text-blue-700 ring-blue-200",
                             ].join(" ")}
                           >
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <div>
-                                <p className="font-semibold text-slate-950">
+                            {reservedCount} / {capacity}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          {timeItems.length ? (
+                            <div className="grid gap-1.5">
+                              {timeItems.map((item) => (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => setSelectedReservation(item)}
+                                  className={[
+                                    "w-fit rounded-md px-2 py-1 text-left text-sm font-semibold transition",
+                                    selectedReservation?.id === item.id
+                                      ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200"
+                                      : "text-blue-700 hover:bg-blue-50",
+                                  ].join(" ")}
+                                >
                                   {item.customerName} 様
-                                </p>
-                                <p className="mt-1 text-sm text-slate-500">
-                                  {item.vehicleModel} / {item.phone || "電話番号未登録"}
-                                </p>
-                              </div>
-                              <span
-                                className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
-                                  item.status,
-                                )}`}
-                              >
-                                {item.status}
-                              </span>
+                                </button>
+                              ))}
                             </div>
-                          </button>
-                        ))
-                      ) : (
-                        <p className="rounded-md border border-dashed border-slate-200 bg-white px-3 py-2 text-sm text-slate-400">
-                          予約なし
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                          ) : (
+                            <span className="text-sm font-medium text-slate-500">
+                              予約なし
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4">
+                          {timeItems.length ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {timeItems.map((item) => (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => setSelectedReservation(item)}
+                                  className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition hover:brightness-95 ${statusClassName(
+                                    item.status,
+                                  )}`}
+                                >
+                                  {item.status}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-sm font-semibold text-slate-400">
+                              -
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
 
