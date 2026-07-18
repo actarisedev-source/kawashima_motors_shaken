@@ -625,7 +625,7 @@ export function AdminDashboard() {
                       onChange={(event) =>
                         handleStatusChange(event.target.value as ReservationStatus)
                       }
-                      className={`h-8 min-h-8 w-28 rounded-full border px-3 text-sm font-semibold outline-none ring-1 transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${statusClassName(
+                      className={`h-8 min-h-8 w-28 rounded-full border px-3 text-center text-sm font-semibold outline-none ring-1 transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${statusClassName(
                         selectedReservation.status,
                       )}`}
                     >
