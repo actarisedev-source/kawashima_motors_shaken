@@ -247,6 +247,12 @@ export function ReservationForm({
   const [availabilityMessage, setAvailabilityMessage] =
     useState("最新情報を取得中です");
   const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
+  const reservationDateTimeErrorRef = useRef<HTMLElement | null>(null);
+  const customerNameInputRef = useRef<HTMLInputElement | null>(null);
+  const customerKanaInputRef = useRef<HTMLInputElement | null>(null);
+  const phoneInputRef = useRef<HTMLInputElement | null>(null);
+  const birthDateInputRef = useRef<HTMLInputElement | null>(null);
+  const privacyConsentInputRef = useRef<HTMLInputElement | null>(null);
   const submissionInFlightRef = useRef(false);
 
   const currentTodayKey = getJstDateKey(new Date());
@@ -365,16 +371,40 @@ export function ReservationForm({
     setSelectedTime("");
   }
 
+  function scrollToFirstError(
+    candidates: {
+      target: HTMLElement | null;
+      focus?: HTMLElement | null;
+    }[],
+  ) {
+    const firstError = candidates
+      .filter(
+        (candidate): candidate is { target: HTMLElement; focus?: HTMLElement | null } =>
+          Boolean(candidate.target),
+      )
+      .sort(
+        (a, b) =>
+          a.target.getBoundingClientRect().top -
+          b.target.getBoundingClientRect().top,
+      )[0];
+
+    if (!firstError) {
+      return;
+    }
+
+    firstError.target.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    if (firstError.focus) {
+      window.setTimeout(() => {
+        firstError.focus?.focus({ preventScroll: true });
+      }, 250);
+    }
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (submissionInFlightRef.current) {
-      return;
-    }
-
-    if (!privacyConsent) {
-      setPrivacyConsentError("個人情報の取り扱いに同意してください。");
-      setSubmitState({ status: "idle", message: "" });
       return;
     }
 
@@ -395,16 +425,56 @@ export function ReservationForm({
         selectedDate && selectedTime ? "" : "予約日時を選択してください。",
     };
     const hasFieldError = Object.values(nextFieldErrors).some(Boolean);
+    const hasKanaError = !isValidHiragana(customerKana);
+    const hasPrivacyConsentError = !privacyConsent;
 
     setPhone(normalizedPhone);
     setFieldErrors(nextFieldErrors);
+    setPrivacyConsentError(
+      hasPrivacyConsentError ? "個人情報の取り扱いに同意してください。" : "",
+    );
 
-    if (!isValidHiragana(customerKana)) {
+    if (hasKanaError) {
       setCustomerKanaError(kanaErrorMessage);
     }
 
-    if (hasFieldError || !isValidHiragana(customerKana)) {
+    if (hasFieldError || hasKanaError || hasPrivacyConsentError) {
       setSubmitState({ status: "idle", message: "" });
+      scrollToFirstError([
+        nextFieldErrors.reservationDateTime
+          ? {
+              target: reservationDateTimeErrorRef.current,
+              focus: reservationDateTimeErrorRef.current,
+            }
+          : { target: null },
+        nextFieldErrors.customerName
+          ? {
+              target: customerNameInputRef.current,
+              focus: customerNameInputRef.current,
+            }
+          : { target: null },
+        hasKanaError
+          ? {
+              target: customerKanaInputRef.current,
+              focus: customerKanaInputRef.current,
+            }
+          : { target: null },
+        nextFieldErrors.phone
+          ? { target: phoneInputRef.current, focus: phoneInputRef.current }
+          : { target: null },
+        nextFieldErrors.birthDate
+          ? {
+              target: birthDateInputRef.current,
+              focus: birthDateInputRef.current,
+            }
+          : { target: null },
+        hasPrivacyConsentError
+          ? {
+              target: privacyConsentInputRef.current,
+              focus: privacyConsentInputRef.current,
+            }
+          : { target: null },
+      ]);
       return;
     }
 
@@ -637,7 +707,11 @@ export function ReservationForm({
       noValidate
       className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-3 shadow-sm sm:gap-5 sm:p-5"
     >
-      <section className="grid gap-3 sm:gap-5">
+      <section
+        ref={reservationDateTimeErrorRef}
+        tabIndex={-1}
+        className="grid gap-3 scroll-mt-8 outline-none sm:gap-5"
+      >
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2.5 shadow-sm sm:px-8 sm:py-4">
           <button
             type="button"
@@ -849,6 +923,7 @@ export function ReservationForm({
         <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
           お名前
           <input
+            ref={customerNameInputRef}
             name="customerName"
             defaultValue={reservationDraft?.customerName ?? ""}
             aria-invalid={fieldErrors.customerName ? "true" : "false"}
@@ -875,6 +950,7 @@ export function ReservationForm({
         <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
           ふりがな
           <input
+            ref={customerKanaInputRef}
             name="customerKana"
             value={customerKana}
             onChange={(event) => {
@@ -902,6 +978,7 @@ export function ReservationForm({
         <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
           電話番号
           <input
+            ref={phoneInputRef}
             name="phone"
             type="tel"
             inputMode="tel"
@@ -969,6 +1046,7 @@ export function ReservationForm({
         <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
           生年月日（任意）
           <input
+            ref={birthDateInputRef}
             name="birthDate"
             type="date"
             max={currentTodayKey}
@@ -1013,6 +1091,7 @@ export function ReservationForm({
         </div>
         <label className="flex items-start gap-2 text-sm font-bold text-zinc-800">
           <input
+            ref={privacyConsentInputRef}
             type="checkbox"
             checked={privacyConsent}
             onChange={(event) => {
@@ -1034,11 +1113,7 @@ export function ReservationForm({
       </section>
       <button
         type="submit"
-        disabled={
-          submitState.status === "submitting" ||
-          Boolean(customerKanaError) ||
-          !privacyConsent
-        }
+        disabled={submitState.status === "submitting"}
         className="flex h-14 items-center justify-center rounded-[12px] bg-blue-600 px-5 text-lg font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-zinc-300"
       >
         {submitState.status === "submitting" ? "送信中..." : "予約に進む"}
