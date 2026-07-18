@@ -733,7 +733,7 @@ export function ReservationForm({
             type="button"
             disabled={submitState.status === "submitting"}
             onClick={closeConfirmation}
-            className="flex h-13 items-center justify-center rounded-[12px] border border-zinc-300 bg-white px-5 text-base font-bold text-zinc-800 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-13 cursor-pointer items-center justify-center rounded-lg border border-zinc-300 bg-white px-5 text-base font-bold text-zinc-800 transition-colors duration-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             入力内容を修正
           </button>
