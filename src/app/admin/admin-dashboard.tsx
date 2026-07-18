@@ -636,10 +636,18 @@ export function AdminDashboard() {
                       ))}
                     </select>
                     {selectedReservationDateIsPast ? (
-                      <span className="mt-2 block w-28 text-left text-xs font-medium text-slate-500">
+                      <span className="mt-2 block w-28 whitespace-normal text-left text-xs font-medium leading-relaxed text-slate-500">
                         {selectedReservation.status === "完了"
                           ? "完了済みの過去予約です。"
-                          : "過去の予約は「完了」への変更のみ可能です。"}
+                          : (
+                              <>
+                                過去の予約は
+                                <br />
+                                「完了」への変更のみ
+                                <br />
+                                可能です。
+                              </>
+                            )}
                       </span>
                     ) : null}
                   </div>
