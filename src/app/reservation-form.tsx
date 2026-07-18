@@ -254,6 +254,8 @@ export function ReservationForm({
   const birthDateInputRef = useRef<HTMLInputElement | null>(null);
   const privacyConsentInputRef = useRef<HTMLInputElement | null>(null);
   const submissionInFlightRef = useRef(false);
+  const showConfirmationRef = useRef(false);
+  const confirmationHistoryActiveRef = useRef(false);
 
   const currentTodayKey = getJstDateKey(new Date());
   const todayDate = useMemo(() => getDateFromKey(currentTodayKey), [currentTodayKey]);
@@ -356,6 +358,58 @@ export function ReservationForm({
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
   }, [showConfirmation]);
+
+  useEffect(() => {
+    showConfirmationRef.current = showConfirmation;
+  }, [showConfirmation]);
+
+  useEffect(() => {
+    function handlePopState() {
+      if (!confirmationHistoryActiveRef.current) {
+        return;
+      }
+
+      confirmationHistoryActiveRef.current = false;
+
+      if (showConfirmationRef.current) {
+        setShowConfirmation(false);
+        onConfirmationChange?.(false);
+        setSubmitState({ status: "idle", message: "" });
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [onConfirmationChange]);
+
+  function openConfirmation() {
+    if (!confirmationHistoryActiveRef.current) {
+      window.history.pushState(
+        { kawashimaReservationConfirmation: true },
+        "",
+        window.location.href,
+      );
+      confirmationHistoryActiveRef.current = true;
+    }
+
+    setShowConfirmation(true);
+    onConfirmationChange?.(true);
+  }
+
+  function closeConfirmation() {
+    if (confirmationHistoryActiveRef.current) {
+      window.history.back();
+      return;
+    }
+
+    setShowConfirmation(false);
+    onConfirmationChange?.(false);
+    setSubmitState({ status: "idle", message: "" });
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }
 
   function moveCalendarMonth(amount: number) {
     setCalendarViewDate((current) => {
@@ -504,8 +558,7 @@ export function ReservationForm({
       note: String(formData.get("note") ?? "").trim(),
     });
     setSubmitState({ status: "idle", message: "" });
-    setShowConfirmation(true);
-    onConfirmationChange?.(true);
+    openConfirmation();
   }
 
   async function handleConfirmReservation() {
@@ -593,6 +646,7 @@ export function ReservationForm({
             showLineLinkGuide: successState.showLineLinkGuide,
           }),
         );
+        confirmationHistoryActiveRef.current = false;
         window.location.assign("/reservations/complete");
         return;
       } catch {
@@ -678,12 +732,7 @@ export function ReservationForm({
           <button
             type="button"
             disabled={submitState.status === "submitting"}
-            onClick={() => {
-              setShowConfirmation(false);
-              onConfirmationChange?.(false);
-              setSubmitState({ status: "idle", message: "" });
-              window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-            }}
+            onClick={closeConfirmation}
             className="flex h-13 items-center justify-center rounded-[12px] border border-zinc-300 bg-white px-5 text-base font-bold text-zinc-800 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             入力内容を修正
