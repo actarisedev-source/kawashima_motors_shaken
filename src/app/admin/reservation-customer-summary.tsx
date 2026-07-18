@@ -77,6 +77,11 @@ const statusClassName = (status: ReservationStatus) => {
   }
 };
 
+const valueOrDash = (value: string | null | undefined) => {
+  const normalized = value?.trim();
+  return normalized ? normalized : "－";
+};
+
 export function ReservationCustomerSummary({
   customer,
   loading,
@@ -113,55 +118,56 @@ export function ReservationCustomerSummary({
   }
 
   const age = getAgeFromBirthDate(customer.birthDate);
-  const visibleReservations = showAllReservations
-    ? customer.reservations
-    : customer.reservations.slice(0, 1);
-  const visibleLineLogs = showAllLineLogs
-    ? customer.lineMessageLogs
-    : customer.lineMessageLogs.slice(0, 1);
-
   return (
-    <div className="grid gap-5 border-t border-slate-200 p-4 sm:p-5">
-      <section>
-        <h3 className="text-sm font-bold text-slate-950">顧客情報</h3>
-        <dl className="mt-3 grid gap-x-4 gap-y-3 text-sm sm:grid-cols-2">
+    <div>
+      <section className="border-b border-slate-200 p-4 sm:p-5">
+        <h3 className="text-base font-bold text-slate-950">顧客情報</h3>
+        <dl className="mt-4 grid gap-x-5 gap-y-4 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-slate-500">氏名</dt>
-            <dd className="mt-1 font-semibold">{customer.name} 様</dd>
+            <dt className="font-semibold text-slate-500">氏名</dt>
+            <dd className="mt-1 font-bold text-slate-950">{customer.name} 様</dd>
           </div>
           <div>
-            <dt className="text-slate-500">ふりがな</dt>
-            <dd className="mt-1 font-semibold">{customer.nameKana || "未登録"}</dd>
+            <dt className="font-semibold text-slate-500">ふりがな</dt>
+            <dd className="mt-1 font-bold text-slate-950">
+              {customer.nameKana || "未登録"}
+            </dd>
           </div>
           <div>
-            <dt className="text-slate-500">電話番号</dt>
-            <dd className="mt-1 font-semibold">{customer.phone || "未登録"}</dd>
+            <dt className="font-semibold text-slate-500">電話番号</dt>
+            <dd className="mt-1 font-bold text-slate-950">
+              {customer.phone || "未登録"}
+            </dd>
           </div>
           <div>
-            <dt className="text-slate-500">性別</dt>
-            <dd className="mt-1 font-semibold">{customer.gender}</dd>
+            <dt className="font-semibold text-slate-500">性別</dt>
+            <dd className="mt-1 font-bold text-slate-950">{customer.gender}</dd>
           </div>
           <div>
-            <dt className="text-slate-500">生年月日</dt>
-            <dd className="mt-1 font-semibold">
+            <dt className="font-semibold text-slate-500">生年月日</dt>
+            <dd className="mt-1 font-bold text-slate-950">
               {customer.birthDate ? formatDate(customer.birthDate) : "未登録"}
             </dd>
           </div>
           <div>
-            <dt className="text-slate-500">年齢</dt>
-            <dd className="mt-1 font-semibold">{age === null ? "未登録" : `${age}歳`}</dd>
+            <dt className="font-semibold text-slate-500">年齢</dt>
+            <dd className="mt-1 font-bold text-slate-950">
+              {age === null ? "未登録" : `${age}歳`}
+            </dd>
           </div>
           <div>
-            <dt className="text-slate-500">LINE連携</dt>
-            <dd className="mt-1 font-semibold">{customer.lineStatus || "未連携"}</dd>
+            <dt className="font-semibold text-slate-500">LINE連携</dt>
+            <dd className="mt-1 font-bold text-slate-950">
+              {customer.lineStatus || "未連携"}
+            </dd>
           </div>
         </dl>
       </section>
 
-      <section className="border-t border-slate-200 pt-5">
+      <section className="border-b border-slate-200 p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-bold text-slate-950">車両情報</h3>
-          <span className="text-xs font-semibold text-slate-500">
+          <h3 className="text-base font-bold text-slate-950">車両情報</h3>
+          <span className="text-sm font-bold text-slate-500">
             {customer.vehicles.length}台
           </span>
         </div>
@@ -172,25 +178,29 @@ export function ReservationCustomerSummary({
               className="grid gap-x-4 gap-y-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm sm:grid-cols-2"
             >
               <div>
-                <dt className="text-slate-500">車名</dt>
-                <dd className="mt-1 font-semibold">{vehicle.modelName || "未登録"}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">ナンバー</dt>
-                <dd className="mt-1 font-semibold">{vehicle.plateNumber || "未登録"}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">車検満了日</dt>
-                <dd className="mt-1 font-semibold">
-                  {vehicle.shakenExpiryDate
-                    ? formatDate(vehicle.shakenExpiryDate)
-                    : "未登録"}
+                <dt className="font-semibold text-slate-500">車名</dt>
+                <dd className="mt-1 font-bold text-slate-700">
+                  {valueOrDash(vehicle.modelName)}
                 </dd>
               </div>
               <div>
-                <dt className="text-slate-500">車両メモ</dt>
-                <dd className="mt-1 whitespace-pre-wrap font-semibold">
-                  {vehicle.memo || "未登録"}
+                <dt className="font-semibold text-slate-500">ナンバー</dt>
+                <dd className="mt-1 font-bold text-slate-700">
+                  {valueOrDash(vehicle.plateNumber)}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-slate-500">車検満了日</dt>
+                <dd className="mt-1 font-bold text-slate-700">
+                  {vehicle.shakenExpiryDate
+                    ? formatDate(vehicle.shakenExpiryDate)
+                    : "－"}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-slate-500">車両メモ</dt>
+                <dd className="mt-1 whitespace-pre-wrap font-bold text-slate-700">
+                  {valueOrDash(vehicle.memo)}
                 </dd>
               </div>
             </dl>
@@ -203,101 +213,114 @@ export function ReservationCustomerSummary({
         </div>
       </section>
 
-      <section className="border-t border-slate-200 pt-5">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-bold text-slate-950">予約履歴</h3>
-          <button
-            type="button"
-            disabled={customer.reservations.length <= 1}
-            aria-expanded={showAllReservations}
-            onClick={() => setShowAllReservations((current) => !current)}
-            className="cursor-pointer text-xs font-semibold text-blue-700 hover:text-blue-900 disabled:cursor-default disabled:text-slate-400"
-          >
-            {showAllReservations ? "閉じる" : "もっと見る"}
-          </button>
-        </div>
-        <div className="mt-3 grid gap-2">
-          {visibleReservations.map((reservation) => (
-            <div
-              key={reservation.id}
-              className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{formatDateTime(reservation.reservedAt)}</p>
-                  <p className="mt-1 text-slate-500">{reservation.vehicleModel}</p>
-                </div>
-                <span
-                  className={`w-fit rounded-full px-2 py-1 text-xs font-semibold ring-1 ${statusClassName(
-                    reservation.status,
-                  )}`}
-                >
-                  {reservation.status}
-                </span>
-              </div>
-            </div>
-          ))}
-          {!customer.reservations.length ? (
-            <p className="text-sm text-slate-500">予約履歴はありません。</p>
-          ) : null}
-        </div>
+      <section className="border-b border-slate-200 p-4 sm:p-5">
+        <h3 className="text-base font-bold text-slate-950">備考</h3>
+        <p className="mt-3 whitespace-pre-wrap text-sm font-bold text-slate-700">
+          {valueOrDash(customer.memo)}
+        </p>
       </section>
 
-      <section className="border-t border-slate-200 pt-5">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-bold text-slate-950">LINE配信履歴</h3>
-          <button
-            type="button"
-            disabled={customer.lineMessageLogs.length <= 1}
-            aria-expanded={showAllLineLogs}
-            onClick={() => setShowAllLineLogs((current) => !current)}
-            className="cursor-pointer text-xs font-semibold text-blue-700 hover:text-blue-900 disabled:cursor-default disabled:text-slate-400"
-          >
-            {showAllLineLogs ? "閉じる" : "もっと見る"}
-          </button>
-        </div>
-        <div className="mt-3 grid gap-2">
-          {visibleLineLogs.map((log) => (
-            <div
-              key={log.id}
-              className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-semibold">{log.title || "タイトルなし"}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {formatDateTime(log.sentAt)} / {log.deliveryType}
-                  </p>
-                  <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-slate-600">
-                    {log.body || "本文なし"}
-                  </p>
-                  {log.imageUrl ? (
-                    <span className="mt-2 inline-flex text-xs font-semibold text-blue-700">
-                      画像あり
-                    </span>
-                  ) : null}
-                  {log.errorMessage ? (
-                    <p className="mt-2 text-xs font-semibold text-red-700">
-                      {log.errorMessage}
+      <section className="border-b border-slate-200">
+        <button
+          type="button"
+          aria-expanded={showAllReservations}
+          onClick={() => setShowAllReservations((current) => !current)}
+          className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-4 text-left font-bold text-slate-950 transition hover:bg-slate-50 sm:px-5"
+        >
+          <span>予約履歴（{customer.reservations.length}件）</span>
+          <span className="text-lg text-slate-600" aria-hidden="true">
+            {showAllReservations ? "▲" : "∨"}
+          </span>
+        </button>
+        {showAllReservations ? (
+          <div className="grid gap-2 px-4 pb-4 sm:px-5">
+            {customer.reservations.map((reservation) => (
+              <div
+                key={reservation.id}
+                className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">
+                      {formatDateTime(reservation.reservedAt)}
                     </p>
-                  ) : null}
+                    <p className="mt-1 text-slate-500">
+                      {reservation.vehicleModel}
+                    </p>
+                  </div>
+                  <span
+                    className={`w-fit rounded-full px-2 py-1 text-xs font-semibold ring-1 ${statusClassName(
+                      reservation.status,
+                    )}`}
+                  >
+                    {reservation.status}
+                  </span>
                 </div>
-                <span
-                  className={
-                    log.status === "成功"
-                      ? "w-fit shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200"
-                      : "w-fit shrink-0 rounded-full bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200"
-                  }
-                >
-                  {log.status}
-                </span>
               </div>
-            </div>
-          ))}
-          {!customer.lineMessageLogs.length ? (
-            <p className="text-sm text-slate-500">LINE配信履歴はありません。</p>
-          ) : null}
-        </div>
+            ))}
+            {!customer.reservations.length ? (
+              <p className="text-sm text-slate-500">予約履歴はありません。</p>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="border-b border-slate-200">
+        <button
+          type="button"
+          aria-expanded={showAllLineLogs}
+          onClick={() => setShowAllLineLogs((current) => !current)}
+          className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-4 text-left font-bold text-slate-950 transition hover:bg-slate-50 sm:px-5"
+        >
+          <span>LINE配信履歴（{customer.lineMessageLogs.length}件）</span>
+          <span className="text-lg text-slate-600" aria-hidden="true">
+            {showAllLineLogs ? "▲" : "∨"}
+          </span>
+        </button>
+        {showAllLineLogs ? (
+          <div className="grid gap-2 px-4 pb-4 sm:px-5">
+            {customer.lineMessageLogs.map((log) => (
+              <div
+                key={log.id}
+                className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold">{log.title || "タイトルなし"}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {formatDateTime(log.sentAt)} / {log.deliveryType}
+                    </p>
+                    <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-slate-600">
+                      {log.body || "本文なし"}
+                    </p>
+                    {log.imageUrl ? (
+                      <span className="mt-2 inline-flex text-xs font-semibold text-blue-700">
+                        画像あり
+                      </span>
+                    ) : null}
+                    {log.errorMessage ? (
+                      <p className="mt-2 text-xs font-semibold text-red-700">
+                        {log.errorMessage}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span
+                    className={
+                      log.status === "成功"
+                        ? "w-fit shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200"
+                        : "w-fit shrink-0 rounded-full bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200"
+                    }
+                  >
+                    {log.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {!customer.lineMessageLogs.length ? (
+              <p className="text-sm text-slate-500">LINE配信履歴はありません。</p>
+            ) : null}
+          </div>
+        ) : null}
       </section>
     </div>
   );
