@@ -614,7 +614,7 @@ export function AdminDashboard() {
                       {selectedReservation.customerName} 様
                     </p>
                   </div>
-                  <div className="shrink-0 text-sm">
+                  <div className="w-28 shrink-0 text-sm">
                     <label className="sr-only" htmlFor="reservation-status">
                       ステータス
                     </label>
@@ -625,7 +625,7 @@ export function AdminDashboard() {
                       onChange={(event) =>
                         handleStatusChange(event.target.value as ReservationStatus)
                       }
-                      className={`h-9 min-h-9 rounded-full border px-3 text-sm font-semibold outline-none ring-1 transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${statusClassName(
+                      className={`h-8 min-h-8 w-28 rounded-full border px-3 text-sm font-semibold outline-none ring-1 transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${statusClassName(
                         selectedReservation.status,
                       )}`}
                     >
@@ -636,7 +636,7 @@ export function AdminDashboard() {
                       ))}
                     </select>
                     {selectedReservationDateIsPast ? (
-                      <span className="mt-2 block text-right text-xs font-medium text-slate-500">
+                      <span className="mt-2 block w-28 text-left text-xs font-medium text-slate-500">
                         {selectedReservation.status === "完了"
                           ? "完了済みの過去予約です。"
                           : "過去の予約は「完了」への変更のみ可能です。"}
