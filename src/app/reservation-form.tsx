@@ -91,6 +91,9 @@ const emptyFieldErrors: FieldErrors = {
   reservationDateTime: "",
 };
 
+const privacyPolicyText =
+  "川島モータースは、予約受付およびご連絡のために、お客様の氏名、電話番号、車両情報その他の入力情報を取得します。取得した個人情報は、予約内容の確認、ご連絡、サービス提供およびこれらに付随する業務のために利用し、法令に基づく場合を除き、本人の同意なく第三者へ提供しません。個人情報は適切に管理し、利用目的の達成に必要な範囲で取り扱います。";
+
 const formatMonth = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 
@@ -229,6 +232,8 @@ export function ReservationForm({
   const [phone, setPhone] = useState("");
   const [fieldErrors, setFieldErrors] =
     useState<FieldErrors>(emptyFieldErrors);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
+  const [privacyConsentError, setPrivacyConsentError] = useState("");
   const [lineIdToken, setLineIdToken] = useState("");
   const [reservationDraft, setReservationDraft] =
     useState<ReservationDraft | null>(null);
@@ -364,6 +369,12 @@ export function ReservationForm({
     event.preventDefault();
 
     if (submissionInFlightRef.current) {
+      return;
+    }
+
+    if (!privacyConsent) {
+      setPrivacyConsentError("個人情報の取り扱いに同意してください。");
+      setSubmitState({ status: "idle", message: "" });
       return;
     }
 
@@ -834,7 +845,7 @@ export function ReservationForm({
         ) : null}
       </section>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
           お名前
           <input
@@ -991,11 +1002,42 @@ export function ReservationForm({
           className="rounded-md border border-zinc-300 px-3 py-2 text-base font-normal outline-none focus:border-blue-600"
         />
       </label>
+      <section className="grid gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 sm:p-4">
+        <div>
+          <h2 className="text-sm font-bold text-zinc-900">
+            個人情報の取り扱いについて
+          </h2>
+          <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-zinc-200 bg-white px-3 py-3 text-sm leading-6 text-zinc-700">
+            <p>{privacyPolicyText}</p>
+          </div>
+        </div>
+        <label className="flex items-start gap-2 text-sm font-bold text-zinc-800">
+          <input
+            type="checkbox"
+            checked={privacyConsent}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              setPrivacyConsent(checked);
+              if (checked) {
+                setPrivacyConsentError("");
+              }
+            }}
+            className="mt-0.5 h-5 w-5 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span>個人情報の取り扱いに同意します</span>
+        </label>
+        {privacyConsentError ? (
+          <p className="text-xs font-semibold text-red-600" role="alert">
+            {privacyConsentError}
+          </p>
+        ) : null}
+      </section>
       <button
         type="submit"
         disabled={
           submitState.status === "submitting" ||
-          Boolean(customerKanaError)
+          Boolean(customerKanaError) ||
+          !privacyConsent
         }
         className="flex h-14 items-center justify-center rounded-[12px] bg-blue-600 px-5 text-lg font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-zinc-300"
       >
