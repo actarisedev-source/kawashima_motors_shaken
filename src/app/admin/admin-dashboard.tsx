@@ -594,7 +594,7 @@ export function AdminDashboard() {
                           event.target.value as ReservationStatus,
                         )
                       }
-                      className={`h-10 rounded-full border px-4 text-sm font-bold outline-none ring-1 transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${statusClassName(
+                      className={`h-9 min-h-9 rounded-full border px-3 text-sm font-semibold outline-none ring-1 transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${statusClassName(
                         selectedReservation.status,
                       )}`}
                     >

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { getAgeFromBirthDate } from "@/lib/customers/birth-date";
 
 type ReservationStatus = "受付中" | "確定" | "完了" | "キャンセル";
@@ -54,29 +53,6 @@ const formatDate = (value: string) =>
     timeZone: "Asia/Tokyo",
   }).format(new Date(value));
 
-const formatDateTime = (value: string) =>
-  new Intl.DateTimeFormat("ja-JP", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Tokyo",
-  }).format(new Date(value));
-
-const statusClassName = (status: ReservationStatus) => {
-  switch (status) {
-    case "確定":
-      return "bg-blue-50 text-blue-700 ring-blue-200";
-    case "完了":
-      return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-    case "キャンセル":
-      return "bg-zinc-100 text-zinc-600 ring-zinc-200";
-    default:
-      return "bg-amber-50 text-amber-700 ring-amber-200";
-  }
-};
-
 const valueOrDash = (value: string | null | undefined) => {
   const normalized = value?.trim();
   return normalized ? normalized : "－";
@@ -87,14 +63,6 @@ export function ReservationCustomerSummary({
   loading,
   error,
 }: ReservationCustomerSummaryProps) {
-  const [showAllReservations, setShowAllReservations] = useState(false);
-  const [showAllLineLogs, setShowAllLineLogs] = useState(false);
-
-  useEffect(() => {
-    setShowAllReservations(false);
-    setShowAllLineLogs(false);
-  }, [customer?.id]);
-
   if (loading) {
     return (
       <div className="border-t border-slate-200 px-4 py-6 text-center text-sm text-slate-500 sm:px-5">
@@ -218,109 +186,6 @@ export function ReservationCustomerSummary({
         <p className="mt-3 whitespace-pre-wrap text-sm font-bold text-slate-700">
           {valueOrDash(customer.memo)}
         </p>
-      </section>
-
-      <section className="border-b border-slate-200">
-        <button
-          type="button"
-          aria-expanded={showAllReservations}
-          onClick={() => setShowAllReservations((current) => !current)}
-          className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-4 text-left font-bold text-slate-950 transition hover:bg-slate-50 sm:px-5"
-        >
-          <span>予約履歴（{customer.reservations.length}件）</span>
-          <span className="text-lg text-slate-600" aria-hidden="true">
-            {showAllReservations ? "▲" : "∨"}
-          </span>
-        </button>
-        {showAllReservations ? (
-          <div className="grid gap-2 px-4 pb-4 sm:px-5">
-            {customer.reservations.map((reservation) => (
-              <div
-                key={reservation.id}
-                className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">
-                      {formatDateTime(reservation.reservedAt)}
-                    </p>
-                    <p className="mt-1 text-slate-500">
-                      {reservation.vehicleModel}
-                    </p>
-                  </div>
-                  <span
-                    className={`w-fit rounded-full px-2 py-1 text-xs font-semibold ring-1 ${statusClassName(
-                      reservation.status,
-                    )}`}
-                  >
-                    {reservation.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-            {!customer.reservations.length ? (
-              <p className="text-sm text-slate-500">予約履歴はありません。</p>
-            ) : null}
-          </div>
-        ) : null}
-      </section>
-
-      <section className="border-b border-slate-200">
-        <button
-          type="button"
-          aria-expanded={showAllLineLogs}
-          onClick={() => setShowAllLineLogs((current) => !current)}
-          className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-4 text-left font-bold text-slate-950 transition hover:bg-slate-50 sm:px-5"
-        >
-          <span>LINE配信履歴（{customer.lineMessageLogs.length}件）</span>
-          <span className="text-lg text-slate-600" aria-hidden="true">
-            {showAllLineLogs ? "▲" : "∨"}
-          </span>
-        </button>
-        {showAllLineLogs ? (
-          <div className="grid gap-2 px-4 pb-4 sm:px-5">
-            {customer.lineMessageLogs.map((log) => (
-              <div
-                key={log.id}
-                className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold">{log.title || "タイトルなし"}</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {formatDateTime(log.sentAt)} / {log.deliveryType}
-                    </p>
-                    <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-slate-600">
-                      {log.body || "本文なし"}
-                    </p>
-                    {log.imageUrl ? (
-                      <span className="mt-2 inline-flex text-xs font-semibold text-blue-700">
-                        画像あり
-                      </span>
-                    ) : null}
-                    {log.errorMessage ? (
-                      <p className="mt-2 text-xs font-semibold text-red-700">
-                        {log.errorMessage}
-                      </p>
-                    ) : null}
-                  </div>
-                  <span
-                    className={
-                      log.status === "成功"
-                        ? "w-fit shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200"
-                        : "w-fit shrink-0 rounded-full bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200"
-                    }
-                  >
-                    {log.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-            {!customer.lineMessageLogs.length ? (
-              <p className="text-sm text-slate-500">LINE配信履歴はありません。</p>
-            ) : null}
-          </div>
-        ) : null}
       </section>
     </div>
   );
