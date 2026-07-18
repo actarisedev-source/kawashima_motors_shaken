@@ -29,6 +29,11 @@ type ReservationStatus = (typeof reservationStatuses)[number];
 
 type ReservationItem = AdminReservationItem;
 
+type PendingStatusChange = {
+  reservationId: string;
+  status: ReservationStatus;
+};
+
 type SlotAvailability = {
   time: string;
   reservedCount: number;
@@ -101,6 +106,8 @@ export function AdminDashboard() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isNewReservationOpen, setIsNewReservationOpen] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] =
+    useState<PendingStatusChange | null>(null);
   const [printedAt, setPrintedAt] = useState(() => new Date());
 
   const month = formatMonth(monthDate);
@@ -192,6 +199,25 @@ export function AdminDashboard() {
     );
     setLoadState({ status: "ready", message: "" });
     setUpdatingId(null);
+  }
+
+  function handleStatusChange(status: ReservationStatus) {
+    if (!selectedReservation) {
+      return;
+    }
+
+    const isPastReservation =
+      getJstDateKey(selectedReservation.reservedAt) < getJstDateKey(new Date());
+
+    if (isPastReservation && status === "完了") {
+      setPendingStatusChange({
+        reservationId: selectedReservation.id,
+        status,
+      });
+      return;
+    }
+
+    void updateStatus(selectedReservation.id, status);
   }
 
   function moveMonth(amount: number) {
@@ -340,7 +366,18 @@ export function AdminDashboard() {
   }, [itemsByDate]);
   const selectedAvailability = availability[selectedDate];
   const selectedHoliday = availability[selectedDate]?.holiday ?? null;
-  const selectedDateIsPast = selectedDate < getJstDateKey(new Date());
+  const selectedReservationDateIsPast = selectedReservation
+    ? getJstDateKey(selectedReservation.reservedAt) < getJstDateKey(new Date())
+    : false;
+  const selectedReservationStatusOptions = selectedReservation
+    ? selectedReservationDateIsPast
+      ? Array.from(new Set([selectedReservation.status, "完了"] as const))
+      : reservationStatuses
+    : reservationStatuses;
+  const selectedReservationStatusDisabled =
+    !selectedReservation ||
+    updatingId === selectedReservation.id ||
+    (selectedReservationDateIsPast && selectedReservation.status === "完了");
 
   const selectedItemsByTime = useMemo(() => {
     const map = new Map<string, ReservationItem[]>();
@@ -584,29 +621,25 @@ export function AdminDashboard() {
                     <select
                       id="reservation-status"
                       value={selectedReservation.status}
-                      disabled={
-                        selectedDateIsPast ||
-                        updatingId === selectedReservation.id
-                      }
+                      disabled={selectedReservationStatusDisabled}
                       onChange={(event) =>
-                        void updateStatus(
-                          selectedReservation.id,
-                          event.target.value as ReservationStatus,
-                        )
+                        handleStatusChange(event.target.value as ReservationStatus)
                       }
                       className={`h-9 min-h-9 rounded-full border px-3 text-sm font-semibold outline-none ring-1 transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${statusClassName(
                         selectedReservation.status,
                       )}`}
                     >
-                      {reservationStatuses.map((status) => (
+                      {selectedReservationStatusOptions.map((status) => (
                         <option key={status} value={status}>
                           {status}
                         </option>
                       ))}
                     </select>
-                    {selectedDateIsPast ? (
+                    {selectedReservationDateIsPast ? (
                       <span className="mt-2 block text-right text-xs font-medium text-slate-500">
-                        過去の予約は閲覧のみです。
+                        {selectedReservation.status === "完了"
+                          ? "完了済みの過去予約です。"
+                          : "過去の予約は「完了」への変更のみ可能です。"}
                       </span>
                     ) : null}
                   </div>
@@ -652,6 +685,46 @@ export function AdminDashboard() {
           onClose={() => setIsNewReservationOpen(false)}
           onCreated={handleReservationCreated}
         />
+      ) : null}
+      {pendingStatusChange ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-5"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="status-confirm-title"
+        >
+          <div className="w-full max-w-md rounded-md bg-white p-6 shadow-xl">
+            <h2 id="status-confirm-title" className="text-lg font-bold">
+              ステータス変更確認
+            </h2>
+            <p className="mt-4 text-sm font-medium text-slate-700">
+              この予約を完了に変更しますか？
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingStatusChange(null)}
+                className="h-11 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextStatusChange = pendingStatusChange;
+                  setPendingStatusChange(null);
+                  void updateStatus(
+                    nextStatusChange.reservationId,
+                    nextStatusChange.status,
+                  );
+                }}
+                className="h-11 rounded-md bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                変更する
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
     <section className="reservation-print-sheet" aria-label="選択日の予約印刷一覧">

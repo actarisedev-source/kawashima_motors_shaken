@@ -221,7 +221,8 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (
-    getJstDateKey(existingReservation.reserved_at) < getJstDateKey(new Date())
+    getJstDateKey(existingReservation.reserved_at) < getJstDateKey(new Date()) &&
+    body.status !== "完了"
   ) {
     return NextResponse.json(
       { ok: false, message: "過去の予約は変更できません。" },
