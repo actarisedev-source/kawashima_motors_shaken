@@ -17,6 +17,7 @@ const adminAuthCookieOptions = {
 const publicAdminPaths = [
   "/admin/login",
   "/admin/reset-password",
+  "/admin/email-change-confirmed",
   "/api/admin/login",
   "/api/admin/logout",
   "/api/admin/password-reset",

@@ -4,6 +4,23 @@ import {
   getAdminAuthFromRequest,
 } from "@/lib/auth/admin-session";
 
+const getEmailChangeRedirectUrl = (request: NextRequest) => {
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  const vercelUrl = process.env.VERCEL_URL?.trim();
+  const requestOrigin = request.headers.get("origin")?.trim();
+  const previewUrl = vercelUrl ? `https://${vercelUrl}` : "";
+  const baseUrl =
+    (process.env.VERCEL_ENV === "preview"
+      ? previewUrl || requestOrigin || configuredSiteUrl
+      : configuredSiteUrl || requestOrigin || previewUrl) ||
+    "http://localhost:3000";
+  const url = new URL("/admin/email-change-confirmed", baseUrl);
+
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+};
+
 export async function GET(request: NextRequest) {
   const auth = await getAdminAuthFromRequest(request);
   if (!auth.authenticated) {
@@ -79,7 +96,14 @@ export async function PUT(request: NextRequest) {
       auth.accessToken,
       auth.refreshToken,
     );
-    const { error } = await supabase.auth.updateUser({ email });
+    const emailRedirectTo = getEmailChangeRedirectUrl(request);
+    console.info("Admin email change redirect configured", {
+      emailRedirectTo,
+    });
+    const { error } = await supabase.auth.updateUser(
+      { email },
+      { emailRedirectTo },
+    );
     if (error) {
       throw error;
     }
