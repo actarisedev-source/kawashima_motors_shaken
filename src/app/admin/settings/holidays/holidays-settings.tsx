@@ -446,6 +446,7 @@ export function HolidaysSettings() {
                 selectedDate={rangeStartDate}
                 minDate={currentTodayKey}
                 error={rangeErrors.startDate}
+                dropdownClassName="left-0 w-[min(86vw,372px)]"
                 isDateHoliday={(dateKey) => Boolean(findHoliday(dateKey, items))}
                 onSelectDate={(dateKey) => {
                   setRangeStartDate(dateKey);
@@ -460,6 +461,7 @@ export function HolidaysSettings() {
                 selectedDate={rangeEndDate}
                 minDate={rangeStartDate || currentTodayKey}
                 error={rangeErrors.endDate}
+                dropdownClassName="right-0 w-[min(86vw,372px)]"
                 isDateHoliday={(dateKey) => Boolean(findHoliday(dateKey, items))}
                 onSelectDate={(dateKey) => {
                   setRangeEndDate(dateKey);

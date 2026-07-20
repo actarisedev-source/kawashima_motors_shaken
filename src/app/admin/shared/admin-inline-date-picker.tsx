@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getJstDateKey } from "@/lib/reservations/slots";
 import {
   formatAdminCalendarDateKey,
@@ -31,6 +31,7 @@ const formatCalendarMonthLabel = (date: Date) => {
 };
 
 type AdminInlineDatePickerProps = {
+  dropdownClassName?: string;
   error?: string;
   errorMessage?: string;
   isDateDisabled?: (dateKey: string) => boolean;
@@ -46,6 +47,7 @@ type AdminInlineDatePickerProps = {
 };
 
 export function AdminInlineDatePicker({
+  dropdownClassName = "left-0 w-[min(86vw,600px)]",
   error,
   errorMessage,
   isDateDisabled,
@@ -60,12 +62,30 @@ export function AdminInlineDatePicker({
   selectedDate,
 }: AdminInlineDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const [monthDate, setMonthDate] = useState(() =>
     getDateFromDateKey(selectedDate || getJstDateKey(new Date())),
   );
   const todayKey = getJstDateKey(new Date());
   const minimumDate = minDate ?? todayKey;
   const calendarDates = useMemo(() => getCalendarDates(monthDate), [monthDate]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (
+        pickerRef.current &&
+        !pickerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+        onOpenChange?.(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isOpen, onOpenChange]);
 
   function setOpen(open: boolean) {
     setIsOpen(open);
@@ -95,7 +115,10 @@ export function AdminInlineDatePicker({
   }
 
   return (
-    <div className="relative grid gap-1.5 text-sm font-semibold text-slate-700">
+    <div
+      ref={pickerRef}
+      className="relative grid gap-1.5 text-sm font-semibold text-slate-700"
+    >
       {label}
       <button
         type="button"
@@ -113,7 +136,12 @@ export function AdminInlineDatePicker({
         </span>
       </button>
       {isOpen ? (
-        <div className="absolute left-0 top-[calc(100%-1rem)] z-30 w-[min(86vw,600px)] rounded-md border border-slate-300 bg-white shadow-xl">
+        <div
+          className={[
+            "absolute top-[calc(100%-1rem)] z-30 rounded-md border border-slate-300 bg-white shadow-xl",
+            dropdownClassName,
+          ].join(" ")}
+        >
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
             <p className="text-xl font-bold text-slate-950">
               {formatCalendarMonthLabel(monthDate)}
