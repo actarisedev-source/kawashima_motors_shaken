@@ -372,7 +372,6 @@ export function HolidaysSettings() {
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <AdminHeader
         title="定休日管理"
-        description="カレンダーから定休日の設定・解除ができます。"
         onRefresh={loadHolidays}
       />
 
