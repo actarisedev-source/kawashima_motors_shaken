@@ -351,7 +351,6 @@ export function SlotSettings() {
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <AdminHeader
         title="予約枠管理"
-        description="曜日別の基本枠と、特定日の上書き枠を設定できます。"
         onRefresh={loadSlots}
       />
       <main className="mx-auto grid max-w-7xl gap-6 px-5 py-6 sm:px-6 lg:px-8">
