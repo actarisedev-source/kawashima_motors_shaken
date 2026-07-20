@@ -77,12 +77,12 @@ function CalendarOffIcon(props: IconProps) {
       aria-hidden="true"
       {...props}
     >
-      <path d="M8 2v4" />
-      <path d="M16 2v4" />
-      <rect x="3" y="4.5" width="18" height="16.5" rx="2" />
-      <path d="M3 10h18" />
-      <path d="m8.8 14.1 6.4 6.4" />
-      <path d="m15.2 14.1-6.4 6.4" />
+      <path d="M7.5 2.2v4" />
+      <path d="M16.5 2.2v4" />
+      <rect x="2.5" y="4.5" width="19" height="17" rx="2.2" />
+      <path d="M2.5 9.8h19" />
+      <path d="m9 13.2 6 6" />
+      <path d="m15 13.2-6 6" />
     </svg>
   );
 }
