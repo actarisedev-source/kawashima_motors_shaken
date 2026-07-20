@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { weekdayLabels } from "@/lib/holidays/holidays";
 import { getJstDateKey } from "@/lib/reservations/slots";
 import { AdminHeader } from "../../admin-header";
+import { AdminInlineDatePicker } from "../../shared/admin-inline-date-picker";
 
 type HolidayItem = {
   id: string;
@@ -440,54 +441,34 @@ export function HolidaysSettings() {
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[180px_180px_auto] lg:items-start">
-              <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-                開始日
-                <input
-                  type="date"
-                  min={currentTodayKey}
-                  value={rangeStartDate}
-                  aria-invalid={rangeErrors.startDate ? "true" : "false"}
-                  onChange={(event) => {
-                    setRangeStartDate(event.target.value);
-                    setRangeErrors((current) => ({
-                      ...current,
-                      startDate: "",
-                    }));
-                  }}
-                  className={`h-10 rounded-md border bg-white px-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-100 ${
-                    rangeErrors.startDate
-                      ? "border-red-400 focus:border-red-500"
-                      : "border-slate-300 focus:border-blue-500"
-                  }`}
-                />
-                <span className="min-h-4 text-xs font-semibold leading-4 text-red-600">
-                  {rangeErrors.startDate}
-                </span>
-              </label>
-              <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-                終了日
-                <input
-                  type="date"
-                  min={rangeStartDate || currentTodayKey}
-                  value={rangeEndDate}
-                  aria-invalid={rangeErrors.endDate ? "true" : "false"}
-                  onChange={(event) => {
-                    setRangeEndDate(event.target.value);
-                    setRangeErrors((current) => ({
-                      ...current,
-                      endDate: "",
-                    }));
-                  }}
-                  className={`h-10 rounded-md border bg-white px-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-100 ${
-                    rangeErrors.endDate
-                      ? "border-red-400 focus:border-red-500"
-                      : "border-slate-300 focus:border-blue-500"
-                  }`}
-                />
-                <span className="min-h-4 text-xs font-semibold leading-4 text-red-600">
-                  {rangeErrors.endDate}
-                </span>
-              </label>
+              <AdminInlineDatePicker
+                label="開始日"
+                selectedDate={rangeStartDate}
+                minDate={currentTodayKey}
+                error={rangeErrors.startDate}
+                isDateHoliday={(dateKey) => Boolean(findHoliday(dateKey, items))}
+                onSelectDate={(dateKey) => {
+                  setRangeStartDate(dateKey);
+                  setRangeErrors((current) => ({
+                    ...current,
+                    startDate: "",
+                  }));
+                }}
+              />
+              <AdminInlineDatePicker
+                label="終了日"
+                selectedDate={rangeEndDate}
+                minDate={rangeStartDate || currentTodayKey}
+                error={rangeErrors.endDate}
+                isDateHoliday={(dateKey) => Boolean(findHoliday(dateKey, items))}
+                onSelectDate={(dateKey) => {
+                  setRangeEndDate(dateKey);
+                  setRangeErrors((current) => ({
+                    ...current,
+                    endDate: "",
+                  }));
+                }}
+              />
               <button
                 type="button"
                 disabled={loadState.status === "loading"}
