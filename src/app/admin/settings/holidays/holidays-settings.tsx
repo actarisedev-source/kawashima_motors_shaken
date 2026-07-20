@@ -484,6 +484,12 @@ export function HolidaysSettings() {
         </section>
 
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 px-4 py-4 sm:px-5">
+            <h2 className="text-base font-semibold">個別日設定</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              カレンダーの日付をクリックして、休業日の設定・解除ができます。
+            </p>
+          </div>
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
             <button
               type="button"
