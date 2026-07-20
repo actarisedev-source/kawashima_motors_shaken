@@ -28,12 +28,41 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  const body = (await request.json()) as { email?: unknown };
+  const body = (await request.json()) as {
+    email?: unknown;
+    emailConfirmation?: unknown;
+  };
   const email = typeof body.email === "string" ? body.email.trim() : "";
+  const emailConfirmation =
+    typeof body.emailConfirmation === "string"
+      ? body.emailConfirmation.trim()
+      : "";
 
   if (!email) {
     return NextResponse.json(
       { ok: false, field: "email", message: "新しいメールアドレスを入力してください。" },
+      { status: 400 },
+    );
+  }
+
+  if (!emailConfirmation) {
+    return NextResponse.json(
+      {
+        ok: false,
+        field: "emailConfirmation",
+        message: "確認用メールアドレスを入力してください。",
+      },
+      { status: 400 },
+    );
+  }
+
+  if (email !== emailConfirmation) {
+    return NextResponse.json(
+      {
+        ok: false,
+        field: "emailConfirmation",
+        message: "メールアドレスが一致しません。",
+      },
       { status: 400 },
     );
   }
@@ -65,6 +94,6 @@ export async function PUT(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     message:
-      "メールアドレス変更手続きを開始しました。確認メールが届いた場合は内容に従ってください。",
+      "確認メールを送信しました。\nメール内のリンクからメールアドレス変更を完了してください。",
   });
 }

@@ -9,9 +9,13 @@ type AccountSettingsProps = {
 };
 
 export function AccountSettings({ initialEmail }: AccountSettingsProps) {
-  const [currentEmail, setCurrentEmail] = useState(initialEmail);
   const [newEmail, setNewEmail] = useState("");
+  const [newEmailConfirmation, setNewEmailConfirmation] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
   const [error, setError] = useState("");
+  const [errorField, setErrorField] = useState<
+    "email" | "emailConfirmation" | ""
+  >("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -20,11 +24,26 @@ export function AccountSettings({ initialEmail }: AccountSettingsProps) {
     if (submitting) return;
 
     setError("");
+    setErrorField("");
     setMessage("");
     const email = newEmail.trim();
+    const emailConfirmation = newEmailConfirmation.trim();
 
     if (!email) {
       setError("新しいメールアドレスを入力してください。");
+      setErrorField("email");
+      return;
+    }
+
+    if (!emailConfirmation) {
+      setError("確認用メールアドレスを入力してください。");
+      setErrorField("emailConfirmation");
+      return;
+    }
+
+    if (email !== emailConfirmation) {
+      setError("メールアドレスが一致しません。");
+      setErrorField("emailConfirmation");
       return;
     }
 
@@ -32,7 +51,7 @@ export function AccountSettings({ initialEmail }: AccountSettingsProps) {
     const response = await fetch("/api/admin/account", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, emailConfirmation }),
     });
     const result = (await response.json()) as {
       ok: boolean;
@@ -44,14 +63,18 @@ export function AccountSettings({ initialEmail }: AccountSettingsProps) {
     setSubmitting(false);
     if (!response.ok || !result.ok) {
       setError(result.message ?? "メールアドレスの変更に失敗しました。");
+      setErrorField(
+        result.field === "emailConfirmation" ? "emailConfirmation" : "email",
+      );
       return;
     }
 
-    setCurrentEmail(email);
+    setPendingEmail(email);
     setNewEmail("");
+    setNewEmailConfirmation("");
     setMessage(
       result.message ??
-        "メールアドレス変更手続きを開始しました。確認メールが届いた場合は内容に従ってください。",
+        "確認メールを送信しました。\nメール内のリンクからメールアドレス変更を完了してください。",
     );
   }
 
@@ -67,8 +90,13 @@ export function AccountSettings({ initialEmail }: AccountSettingsProps) {
                 現在のメールアドレス
               </p>
               <p className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-950">
-                {currentEmail || "未取得"}
+                {initialEmail || "未取得"}
               </p>
+              {pendingEmail ? (
+                <p className="mt-2 text-sm font-semibold text-blue-700">
+                  確認待ちのメールアドレス: {pendingEmail}
+                </p>
+              ) : null}
             </div>
             <label className="grid gap-2 text-sm font-semibold text-slate-700">
               新しいメールアドレス
@@ -78,18 +106,40 @@ export function AccountSettings({ initialEmail }: AccountSettingsProps) {
                 onChange={(event) => {
                   setNewEmail(event.target.value);
                   setError("");
+                  setErrorField("");
                   setMessage("");
                 }}
                 className={`h-11 rounded-md border bg-white px-3 text-base font-normal outline-none focus:border-blue-600 ${
-                  error ? "border-red-500" : "border-slate-300"
+                  errorField === "email" ? "border-red-500" : "border-slate-300"
                 }`}
               />
               <span className="min-h-5 text-xs font-medium text-red-600">
-                {error}
+                {errorField === "email" ? error : ""}
+              </span>
+            </label>
+            <label className="grid gap-2 text-sm font-semibold text-slate-700">
+              新しいメールアドレス（確認用）
+              <input
+                type="email"
+                value={newEmailConfirmation}
+                onChange={(event) => {
+                  setNewEmailConfirmation(event.target.value);
+                  setError("");
+                  setErrorField("");
+                  setMessage("");
+                }}
+                className={`h-11 rounded-md border bg-white px-3 text-base font-normal outline-none focus:border-blue-600 ${
+                  errorField === "emailConfirmation"
+                    ? "border-red-500"
+                    : "border-slate-300"
+                }`}
+              />
+              <span className="min-h-5 text-xs font-medium text-red-600">
+                {errorField === "emailConfirmation" ? error : ""}
               </span>
             </label>
             {message ? (
-              <p className="text-sm font-semibold text-emerald-700">
+              <p className="whitespace-pre-line text-sm font-semibold text-emerald-700">
                 {message}
               </p>
             ) : null}
