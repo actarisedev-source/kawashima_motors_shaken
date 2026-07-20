@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type SVGProps,
+} from "react";
 
 type AdminHeaderProps = {
   title: string;
@@ -11,33 +17,173 @@ type AdminHeaderProps = {
   children?: ReactNode;
 };
 
+type IconProps = SVGProps<SVGSVGElement>;
+
+function CalendarIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M3 10h18" />
+      <path d="M8 14h.01" />
+      <path d="M12 14h.01" />
+      <path d="M16 14h.01" />
+      <path d="M8 18h.01" />
+      <path d="M12 18h.01" />
+      <path d="M16 18h.01" />
+    </svg>
+  );
+}
+
+function UsersIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function CalendarOffIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M3 10h18" />
+      <path d="m9 15 6 6" />
+      <path d="m15 15-6 6" />
+    </svg>
+  );
+}
+
+function CalendarClockIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+      <path d="M21 13V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7" />
+      <path d="M3 10h18" />
+      <circle cx="18" cy="18" r="4" />
+      <path d="M18 16v2l1.5 1" />
+    </svg>
+  );
+}
+
+function MessageIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-6.5A8 8 0 1 1 21 12Z" />
+      <path d="M8 12h.01" />
+      <path d="M12 12h.01" />
+      <path d="M16 12h.01" />
+    </svg>
+  );
+}
+
+function LogoutIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="M16 17l5-5-5-5" />
+      <path d="M21 12H9" />
+    </svg>
+  );
+}
+
 const navItems = [
-  { href: "/admin", label: "予約管理", match: (path: string) => path === "/admin" },
+  {
+    href: "/admin",
+    label: "予約管理",
+    Icon: CalendarIcon,
+    match: (path: string) => path === "/admin",
+  },
   {
     href: "/admin/customers",
     label: "顧客管理",
+    Icon: UsersIcon,
     match: (path: string) => path.startsWith("/admin/customers"),
   },
   {
     href: "/admin/settings/holidays",
     label: "定休日管理",
+    Icon: CalendarOffIcon,
     match: (path: string) => path.startsWith("/admin/settings/holidays"),
   },
   {
     href: "/admin/settings/slots",
     label: "予約枠管理",
+    Icon: CalendarClockIcon,
     match: (path: string) => path.startsWith("/admin/settings/slots"),
   },
   {
     href: "/admin/line",
     label: "LINE配信",
+    Icon: MessageIcon,
     match: (path: string) => path.startsWith("/admin/line"),
   },
 ];
 
 const navButtonClassName = (active: boolean) =>
   [
-    "flex h-10 items-center justify-center rounded-md border px-4 text-sm font-semibold shadow-sm transition",
+    "flex h-10 items-center justify-center gap-1.5 rounded-md border px-3 text-sm font-semibold shadow-sm transition",
     active
       ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
       : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50",
@@ -101,14 +247,16 @@ export function AdminHeader({
                   href={item.href}
                   className={navButtonClassName(item.match(pathname))}
                 >
+                  <item.Icon className="h-4 w-4 shrink-0" />
                   {item.label}
                 </Link>
               ))}
               <button
                 type="button"
                 onClick={() => setIsConfirmingLogout(true)}
-                className="h-10 cursor-pointer rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-red-600 hover:bg-red-600 hover:text-white"
+                className="flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-red-600 hover:bg-red-600 hover:text-white"
               >
+                <LogoutIcon className="h-4 w-4 shrink-0" />
                 ログアウト
               </button>
               <Link
