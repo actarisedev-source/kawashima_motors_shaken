@@ -8,6 +8,11 @@ import {
   reservationTimeSlots,
 } from "@/lib/reservations/slots";
 import type { ReservationCreateRequest } from "@/lib/reservations/create-reservation";
+import {
+  formatAdminCalendarDateKey,
+  formatAdminCalendarMonth,
+  formatAdminCalendarSelectedDate,
+} from "./shared/admin-date-calendar-modal";
 
 type ReservationStatus = "受付中" | "確定" | "完了" | "キャンセル";
 
@@ -70,6 +75,7 @@ const emptyFieldErrors: FieldErrors = {
 };
 
 const formatMonth = (dateKey: string) => dateKey.slice(0, 7);
+const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
 
 const getNowJstDateKey = () => getJstDateKey(new Date());
 
@@ -83,6 +89,26 @@ const isPastAdminSlot = (date: string, time: string) => {
   if (date > today) return false;
 
   return getJstDateTime(date, time) <= new Date();
+};
+
+const getCalendarDates = (monthDate: Date) => {
+  const firstDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const startDate = new Date(firstDate);
+  startDate.setDate(firstDate.getDate() - firstDate.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + index);
+    return date;
+  });
+};
+
+const getDateFromDateKey = (dateKey: string) =>
+  new Date(`${dateKey}T00:00:00+09:00`);
+
+const formatCalendarMonthLabel = (date: Date) => {
+  const year = date.getFullYear();
+  return `${year}年（令和${year - 2018}年）${date.getMonth() + 1}月`;
 };
 
 export function AdminNewReservationModal({
@@ -102,6 +128,11 @@ export function AdminNewReservationModal({
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>(
     {},
   );
+  const [isReservationCalendarOpen, setIsReservationCalendarOpen] =
+    useState(false);
+  const [calendarMonthDate, setCalendarMonthDate] = useState(() =>
+    getDateFromDateKey(reservedDate),
+  );
   const [availabilityError, setAvailabilityError] = useState("");
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
   const [fieldErrors, setFieldErrors] =
@@ -118,6 +149,17 @@ export function AdminNewReservationModal({
   const todayKey = getNowJstDateKey();
 
   const selectedMonth = useMemo(() => formatMonth(reservedDate), [reservedDate]);
+  const calendarMonth = useMemo(
+    () => formatAdminCalendarMonth(calendarMonthDate),
+    [calendarMonthDate],
+  );
+  const availabilityMonth = isReservationCalendarOpen
+    ? calendarMonth
+    : selectedMonth;
+  const calendarDates = useMemo(
+    () => getCalendarDates(calendarMonthDate),
+    [calendarMonthDate],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -125,7 +167,7 @@ export function AdminNewReservationModal({
     setIsLoadingAvailability(true);
     setAvailabilityError("");
 
-    void fetch(`/api/reservations/availability?month=${selectedMonth}`, {
+    void fetch(`/api/reservations/availability?month=${availabilityMonth}`, {
       cache: "no-store",
       signal: controller.signal,
     })
@@ -136,7 +178,7 @@ export function AdminNewReservationModal({
           throw new Error(result.message ?? "空き状況の取得に失敗しました。");
         }
 
-        setAvailability(result.days);
+        setAvailability((current) => ({ ...current, ...result.days }));
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -155,7 +197,7 @@ export function AdminNewReservationModal({
       });
 
     return () => controller.abort();
-  }, [selectedMonth]);
+  }, [availabilityMonth]);
 
   useEffect(() => {
     if (!reservedTime) return;
@@ -309,25 +351,173 @@ export function AdminNewReservationModal({
 
         <form onSubmit={handleSubmit} className="grid gap-5 p-4 sm:p-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+            <div className="relative grid gap-1.5 text-sm font-semibold text-slate-700">
               予約日
-              <input
-                type="date"
-                value={reservedDate}
-                min={todayKey}
-                onChange={(event) => {
-                  setReservedDate(event.target.value);
-                  setFieldErrors((current) => ({ ...current, reservedDate: "" }));
+              <button
+                type="button"
+                onClick={() => {
+                  setCalendarMonthDate(getDateFromDateKey(reservedDate));
+                  setIsReservationCalendarOpen((current) => !current);
                 }}
                 className={[
-                  "h-11 rounded-md border bg-white px-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100",
+                  "flex h-11 items-center justify-between rounded-md border bg-white px-3 text-left text-sm font-semibold text-slate-950 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100",
                   fieldErrors.reservedDate ? "border-red-400" : "border-slate-300",
                 ].join(" ")}
-              />
+              >
+                <span>{formatAdminCalendarSelectedDate(reservedDate)}</span>
+                <span className="text-base text-slate-500" aria-hidden="true">
+                  ▾
+                </span>
+              </button>
+              {isReservationCalendarOpen ? (
+                <div className="absolute left-0 top-[calc(100%-1rem)] z-30 w-[min(86vw,600px)] rounded-md border border-slate-300 bg-white shadow-xl">
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                    <p className="text-xl font-bold text-slate-950">
+                      {formatCalendarMonthLabel(calendarMonthDate)}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCalendarMonthDate(
+                            new Date(
+                              calendarMonthDate.getFullYear(),
+                              calendarMonthDate.getMonth() - 1,
+                              1,
+                            ),
+                          )
+                        }
+                        className="grid h-9 w-9 place-items-center rounded-md text-2xl font-bold text-slate-500 transition hover:bg-slate-100"
+                        aria-label="前月"
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCalendarMonthDate(
+                            new Date(
+                              calendarMonthDate.getFullYear(),
+                              calendarMonthDate.getMonth() + 1,
+                              1,
+                            ),
+                          )
+                        }
+                        className="grid h-9 w-9 place-items-center rounded-md text-2xl font-bold text-slate-500 transition hover:bg-slate-100"
+                        aria-label="次月"
+                      >
+                        ›
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-7 px-5 pt-4 text-center text-sm font-bold">
+                    {weekdayLabels.map((label, index) => (
+                      <div
+                        key={label}
+                        className={[
+                          "py-2",
+                          index === 0
+                            ? "text-red-500"
+                            : index === 6
+                              ? "text-blue-600"
+                              : "text-slate-700",
+                        ].join(" ")}
+                      >
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 px-5 pb-4 text-center">
+                    {calendarDates.map((date) => {
+                      const dateKey = formatAdminCalendarDateKey(date);
+                      const isCurrentMonth =
+                        date.getMonth() === calendarMonthDate.getMonth();
+                      const isSelected = dateKey === reservedDate;
+                      const isToday = dateKey === todayKey;
+                      const isPast = dateKey < todayKey;
+                      const isHoliday = Boolean(availability[dateKey]?.holiday);
+                      const isDisabled =
+                        isLoadingAvailability ||
+                        !isCurrentMonth ||
+                        isPast ||
+                        isHoliday;
+
+                      return (
+                        <button
+                          key={dateKey}
+                          type="button"
+                          disabled={isDisabled}
+                          onClick={() => {
+                            if (isDisabled) return;
+                            setReservedDate(dateKey);
+                            setIsReservationCalendarOpen(false);
+                            setFieldErrors((current) => ({
+                              ...current,
+                              reservedDate: "",
+                              reservedTime: "",
+                            }));
+                          }}
+                          className={[
+                            "grid h-12 place-items-center rounded-md text-base font-bold transition",
+                            isSelected
+                              ? "bg-blue-600 text-white shadow-sm"
+                              : isToday
+                                ? "border border-slate-400 bg-white text-slate-950"
+                                : "border border-transparent",
+                            isDisabled
+                              ? "cursor-not-allowed text-slate-300"
+                              : "cursor-pointer text-slate-950 hover:bg-blue-50",
+                            isHoliday ? "bg-slate-100 text-red-500" : "",
+                          ].join(" ")}
+                        >
+                          {date.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center justify-between border-t border-slate-200 px-5 py-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReservedDate(todayKey);
+                        setCalendarMonthDate(getDateFromDateKey(todayKey));
+                        setIsReservationCalendarOpen(false);
+                        setFieldErrors((current) => ({
+                          ...current,
+                          reservedDate: "",
+                          reservedTime: "",
+                        }));
+                      }}
+                      className="text-sm font-bold text-blue-600 transition hover:text-blue-700"
+                    >
+                      今日
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsReservationCalendarOpen(false)}
+                      className="text-sm font-bold text-slate-500 transition hover:text-slate-700"
+                    >
+                      閉じる
+                    </button>
+                  </div>
+                  {isLoadingAvailability ? (
+                    <div className="absolute inset-0 grid place-items-center bg-white/70 backdrop-blur-[1px]">
+                      <p className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 shadow-sm">
+                        休業日情報を読み込み中です
+                      </p>
+                    </div>
+                  ) : null}
+                  {availabilityError ? (
+                    <div className="border-t border-red-100 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700">
+                      {availabilityError}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <span className="min-h-4 text-xs font-semibold leading-4 text-red-600">
                 {fieldErrors.reservedDate}
               </span>
-            </label>
+            </div>
 
             <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
               ステータス
