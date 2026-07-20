@@ -112,21 +112,21 @@ function CalendarClockIcon(props: IconProps) {
 function MessageIcon(props: IconProps) {
   return (
     <svg
-      viewBox="0 0 32 24"
+      viewBox="0 0 36 30"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.9"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
       {...props}
     >
-      <path d="M29 10.8c0 3.8-5.4 6.9-12 6.9h-3.2L8.2 21v-4.5C6.2 15.2 5 13.2 5 11c0-3.9 5.4-7 12-7s12 3 12 6.8Z" />
+      <path d="M33 13.4c0 5.8-6.7 10.4-15 10.4h-1.5L11.2 27l1.3-4.2C6.9 21.2 3 17.6 3 13.4 3 7.6 9.7 3 18 3s15 4.6 15 10.4Z" />
       <text
-        x="17"
-        y="12.45"
+        x="18"
+        y="15.7"
         textAnchor="middle"
-        fontSize="5.7"
+        fontSize="6.4"
         fontWeight="700"
         fill="currentColor"
         stroke="none"
@@ -203,7 +203,7 @@ const navItems = [
     href: "/admin/line",
     label: "LINE配信",
     Icon: MessageIcon,
-    iconClassName: "h-[22px] w-[29px]",
+    iconClassName: "h-[22px] w-[28px]",
     match: (path: string) => path.startsWith("/admin/line"),
   },
 ];
@@ -300,7 +300,7 @@ export function AdminHeader({
                     : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
                 }`}
               >
-                <GearIcon className="h-6 w-6" />
+                <GearIcon className="h-[22px] w-[22px]" />
               </Link>
             </div>
           </div>
