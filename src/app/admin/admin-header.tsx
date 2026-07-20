@@ -203,14 +203,14 @@ const navItems = [
     href: "/admin/line",
     label: "LINE配信",
     Icon: MessageIcon,
-    iconClassName: "h-[22px] w-[28px]",
+    iconClassName: "h-[25px] w-[31px]",
     match: (path: string) => path.startsWith("/admin/line"),
   },
 ];
 
 const navButtonClassName = (active: boolean) =>
   [
-    "flex h-[42px] items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold shadow-sm transition",
+    "flex h-12 items-center justify-center gap-2 rounded-md border px-3.5 text-sm font-semibold shadow-sm transition",
     active
       ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
       : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50",
@@ -275,7 +275,7 @@ export function AdminHeader({
                   className={navButtonClassName(item.match(pathname))}
                 >
                   <item.Icon
-                    className={`${item.iconClassName ?? "h-[22px] w-[22px]"} shrink-0`}
+                    className={`${item.iconClassName ?? "h-6 w-6"} shrink-0`}
                   />
                   {item.label}
                 </Link>
@@ -283,16 +283,16 @@ export function AdminHeader({
               <button
                 type="button"
                 onClick={() => setIsConfirmingLogout(true)}
-                className="flex h-[42px] cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-red-600 hover:bg-red-600 hover:text-white"
+                className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-red-600 hover:bg-red-600 hover:text-white"
               >
-                <LogoutIcon className="h-[22px] w-[22px] shrink-0" />
+                <LogoutIcon className="h-6 w-6 shrink-0" />
                 ログアウト
               </button>
               <Link
                 href="/admin/settings"
                 aria-label="設定"
                 title="設定"
-                className={`grid h-[42px] w-[42px] place-items-center rounded-md border shadow-sm transition ${
+                className={`grid h-12 w-12 place-items-center rounded-md border shadow-sm transition ${
                   pathname.startsWith("/admin/settings/password") ||
                   pathname.startsWith("/admin/settings/account") ||
                   pathname === "/admin/settings"
@@ -300,7 +300,7 @@ export function AdminHeader({
                     : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
                 }`}
               >
-                <GearIcon className="h-[22px] w-[22px]" />
+                <GearIcon className="h-5 w-5" />
               </Link>
             </div>
           </div>
