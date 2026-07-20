@@ -25,7 +25,7 @@ function CalendarIcon(props: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.9"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -33,14 +33,14 @@ function CalendarIcon(props: IconProps) {
     >
       <path d="M8 2v4" />
       <path d="M16 2v4" />
-      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <rect x="3" y="4.5" width="18" height="16.5" rx="2" />
       <path d="M3 10h18" />
-      <path d="M8 14h.01" />
-      <path d="M12 14h.01" />
-      <path d="M16 14h.01" />
-      <path d="M8 18h.01" />
-      <path d="M12 18h.01" />
-      <path d="M16 18h.01" />
+      <rect x="6.8" y="12.8" width="2.4" height="2.1" rx=".35" fill="currentColor" stroke="none" />
+      <rect x="10.8" y="12.8" width="2.4" height="2.1" rx=".35" fill="currentColor" stroke="none" />
+      <rect x="14.8" y="12.8" width="2.4" height="2.1" rx=".35" fill="currentColor" stroke="none" />
+      <rect x="6.8" y="16.6" width="2.4" height="2.1" rx=".35" fill="currentColor" stroke="none" />
+      <rect x="10.8" y="16.6" width="2.4" height="2.1" rx=".35" fill="currentColor" stroke="none" />
+      <rect x="14.8" y="16.6" width="2.4" height="2.1" rx=".35" fill="currentColor" stroke="none" />
     </svg>
   );
 }
@@ -51,16 +51,16 @@ function UsersIcon(props: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.9"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
       {...props}
     >
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      <circle cx="8.5" cy="7.5" r="3.6" />
+      <path d="M2.5 20.5v-1.4a5.2 5.2 0 0 1 5.2-5.2h1.6a5.2 5.2 0 0 1 5.2 5.2v1.4" />
+      <circle cx="16.4" cy="8.4" r="3" />
+      <path d="M14.3 14.7a5 5 0 0 1 7.2 4.5v1.3" />
     </svg>
   );
 }
@@ -71,7 +71,7 @@ function CalendarOffIcon(props: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.9"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -79,10 +79,10 @@ function CalendarOffIcon(props: IconProps) {
     >
       <path d="M8 2v4" />
       <path d="M16 2v4" />
-      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <rect x="3" y="4.5" width="18" height="16.5" rx="2" />
       <path d="M3 10h18" />
-      <path d="m9 15 6 6" />
-      <path d="m15 15-6 6" />
+      <path d="m8.8 14.1 6.4 6.4" />
+      <path d="m15.2 14.1-6.4 6.4" />
     </svg>
   );
 }
@@ -93,7 +93,7 @@ function CalendarClockIcon(props: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.9"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -101,10 +101,10 @@ function CalendarClockIcon(props: IconProps) {
     >
       <path d="M8 2v4" />
       <path d="M16 2v4" />
-      <path d="M21 13V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7" />
+      <path d="M21 13V6.5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2V20a2 2 0 0 0 2 2h7" />
       <path d="M3 10h18" />
-      <circle cx="18" cy="18" r="4" />
-      <path d="M18 16v2l1.5 1" />
+      <circle cx="17.8" cy="17.8" r="4.3" />
+      <path d="M17.8 15.4v2.4l1.7 1" />
     </svg>
   );
 }
@@ -115,16 +115,24 @@ function MessageIcon(props: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.9"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
       {...props}
     >
-      <path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-6.5A8 8 0 1 1 21 12Z" />
-      <path d="M8 12h.01" />
-      <path d="M12 12h.01" />
-      <path d="M16 12h.01" />
+      <path d="M21 11.5c0 4-3.8 7.2-8.5 7.2h-2.6L5 22v-4.9a6.7 6.7 0 0 1-2-4.7C3 8.4 6.8 5.2 11.5 5.2S21 7.5 21 11.5Z" />
+      <text
+        x="11.9"
+        y="12.9"
+        textAnchor="middle"
+        fontSize="5"
+        fontWeight="700"
+        fill="currentColor"
+        stroke="none"
+      >
+        LINE
+      </text>
     </svg>
   );
 }
@@ -135,15 +143,33 @@ function LogoutIcon(props: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.9"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
       {...props}
     >
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <path d="M16 17l5-5-5-5" />
+      <path d="M10 21H5.5A2.5 2.5 0 0 1 3 18.5v-13A2.5 2.5 0 0 1 5.5 3H10" />
+      <path d="M15.5 17.5 21 12l-5.5-5.5" />
       <path d="M21 12H9" />
+    </svg>
+  );
+}
+
+function GearIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M12 2.5 14 4l2.5-.5 1.4 2.4-1.6 2 .5 2.1 2.2 1v2.8l-2.2 1-.5 2.1 1.6 2-1.4 2.4-2.5-.5-2 1.5-2-1.5-2.5.5-1.4-2.4 1.6-2-.5-2.1-2.2-1V11l2.2-1 .5-2.1-1.6-2 1.4-2.4L10 4l2-1.5Z" />
+      <circle cx="12" cy="12" r="3.4" />
     </svg>
   );
 }
@@ -247,7 +273,7 @@ export function AdminHeader({
                   href={item.href}
                   className={navButtonClassName(item.match(pathname))}
                 >
-                  <item.Icon className="h-4 w-4 shrink-0" />
+                  <item.Icon className="h-5 w-5 shrink-0" />
                   {item.label}
                 </Link>
               ))}
@@ -256,14 +282,14 @@ export function AdminHeader({
                 onClick={() => setIsConfirmingLogout(true)}
                 className="flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-red-600 hover:bg-red-600 hover:text-white"
               >
-                <LogoutIcon className="h-4 w-4 shrink-0" />
+                <LogoutIcon className="h-5 w-5 shrink-0" />
                 ログアウト
               </button>
               <Link
                 href="/admin/settings"
                 aria-label="設定"
                 title="設定"
-                className={`grid h-10 w-10 place-items-center rounded-md border text-xl shadow-sm transition ${
+                className={`grid h-10 w-10 place-items-center rounded-md border shadow-sm transition ${
                   pathname.startsWith("/admin/settings/password") ||
                   pathname.startsWith("/admin/settings/account") ||
                   pathname === "/admin/settings"
@@ -271,7 +297,7 @@ export function AdminHeader({
                     : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
                 }`}
               >
-                <span aria-hidden="true">⚙</span>
+                <GearIcon className="h-6 w-6" />
               </Link>
             </div>
           </div>
