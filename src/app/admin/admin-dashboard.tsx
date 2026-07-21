@@ -617,13 +617,17 @@ export function AdminDashboard() {
                       <span className="font-semibold text-slate-500">
                         代車希望
                       </span>
-                      <span className="font-bold text-slate-950">
-                        {selectedReservation.loanerCarRequested === null
-                          ? "—"
-                          : selectedReservation.loanerCarRequested
-                            ? "希望する"
-                            : "希望しない"}
-                      </span>
+                      {selectedReservation.loanerCarRequested ? (
+                        <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
+                          有り
+                        </span>
+                      ) : (
+                        <span className="font-bold text-slate-950">
+                          {selectedReservation.loanerCarRequested === null
+                            ? "—"
+                            : "無し"}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="w-40 shrink-0 text-sm">
