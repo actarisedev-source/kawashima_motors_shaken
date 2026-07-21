@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminInlineDatePicker } from "@/app/admin/shared/admin-inline-date-picker";
 import { LineEmojiPicker } from "./line-emoji-picker";
+import { LineImageDropzone } from "./line-image-dropzone";
 import { prepareLineImage } from "./line-image-client";
 
 type Filters = {
@@ -137,7 +138,6 @@ export function LineScheduledDistribution() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [processingImage, setProcessingImage] = useState(false);
-  const imageInputRef = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<CustomerOption[]>([]);
@@ -265,7 +265,6 @@ export function LineScheduledDistribution() {
     } catch (error) {
       setImageFile(null);
       setImagePreviewUrl("");
-      if (imageInputRef.current) imageInputRef.current.value = "";
       setMessage(error instanceof Error ? error.message : "画像の処理に失敗しました。");
     } finally {
       setProcessingImage(false);
@@ -275,7 +274,6 @@ export function LineScheduledDistribution() {
   function removeImage() {
     setImageFile(null);
     setImagePreviewUrl("");
-    if (imageInputRef.current) imageInputRef.current.value = "";
   }
 
   function openConfirmation() {
@@ -434,18 +432,13 @@ export function LineScheduledDistribution() {
             }}
             className="rounded-md border border-slate-300 px-3 py-2 text-base font-normal outline-none focus:border-blue-500"
           />
-          <div className="grid gap-2">
-            <label className="text-sm font-semibold text-slate-700">添付画像</label>
-            <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" disabled={processingImage} onChange={(event) => void handleImageChange(event.target.files?.[0] ?? null)} className="block w-full rounded-md border border-slate-300 bg-white text-sm text-slate-600 file:mr-4 file:h-11 file:cursor-pointer file:border-0 file:border-r file:border-slate-300 file:bg-slate-50 file:px-4 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-50" />
-            <p className="text-xs text-slate-500">jpg・jpeg・png・webp / 10MB以内 / 1枚</p>
-            {processingImage ? <p className="text-sm font-semibold text-blue-700">画像を最適化しています...</p> : null}
-            {imageFile ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm">
-                <span className="font-semibold text-blue-900">{imageFile.name}（{Math.ceil(imageFile.size / 1024)}KB）</span>
-                <button type="button" onClick={removeImage} className="font-semibold text-red-600 hover:text-red-700">画像を削除</button>
-              </div>
-            ) : null}
-          </div>
+          <LineImageDropzone
+            file={imageFile}
+            onRemove={removeImage}
+            onSelectFile={handleImageChange}
+            previewUrl={imagePreviewUrl}
+            processing={processingImage}
+          />
           <span className="min-h-5 text-xs font-semibold text-red-600">{errors.content}</span>
           <p className="text-xs leading-6 text-slate-500">
             使用可能: {"{{name}} {{phone}} {{vehicle_name}} {{plate_number}} {{shaken_expiry_date}} {{reservation_date}} {{age}}"}
