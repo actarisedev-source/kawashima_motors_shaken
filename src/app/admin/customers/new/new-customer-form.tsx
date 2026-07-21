@@ -123,7 +123,7 @@ export function NewCustomerForm() {
             <div className="border-b border-slate-200 px-5 py-4">
               <h2 className="text-base font-semibold">顧客情報</h2>
             </div>
-            <div className="grid gap-4 p-5 md:grid-cols-2">
+            <div className="grid items-start gap-4 p-5 md:grid-cols-2">
               <label className="grid gap-2 text-sm font-medium text-slate-800">
                 氏名
                 <input
