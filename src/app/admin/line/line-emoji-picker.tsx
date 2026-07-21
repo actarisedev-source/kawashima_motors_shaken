@@ -8,28 +8,163 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 
+const recentEmojiStorageKey = "kawashima-line-recent-emojis";
+const recentEmojiUpdatedEvent = "kawashima-line-recent-emojis-updated";
+const maxRecentEmojis = 16;
+
+const recommendedEmojis = [
+  "😊",
+  "🙇",
+  "🙏",
+  "❤️",
+  "👍",
+  "✨",
+  "📢",
+  "📅",
+  "🚗",
+  "✅",
+  "⚠️",
+  "➡️",
+] as const;
+
 const emojiCategories = [
   {
-    label: "よく使う",
-    emojis: ["😊", "🙇", "🙏", "❤️", "👍", "✨", "📢", "📅", "🚗", "✅", "⚠️", "➡️"],
-  },
-  {
-    label: "顔・感情",
-    emojis: ["😊", "😂", "😄", "😃", "🙂", "🙇", "🙏", "👏", "👍", "💕", "❤️", "🎉"],
+    label: "顔",
+    emojis: [
+      "😊",
+      "😄",
+      "😃",
+      "😆",
+      "😂",
+      "🤣",
+      "🙂",
+      "😉",
+      "😌",
+      "😍",
+      "🥰",
+      "😘",
+      "😎",
+      "🤔",
+      "😢",
+      "😭",
+      "😅",
+      "🙇",
+      "🙏",
+      "🤝",
+    ],
   },
   {
     label: "記号",
-    emojis: ["✅", "☑️", "⚠️", "❗", "❓", "➡️", "⬇️", "⭐", "✨", "⭕", "❌", "💡"],
+    emojis: [
+      "❤️",
+      "💕",
+      "💙",
+      "💚",
+      "💛",
+      "🧡",
+      "💜",
+      "👍",
+      "👎",
+      "👏",
+      "🙌",
+      "✨",
+      "⭐",
+      "💫",
+      "✅",
+      "☑️",
+      "❌",
+      "⭕",
+      "⚠️",
+      "❗",
+      "❓",
+      "➡️",
+      "⬅️",
+      "⬆️",
+      "⬇️",
+      "💡",
+      "🔴",
+      "🔵",
+      "🟢",
+      "🟡",
+    ],
   },
   {
-    label: "予定・連絡",
-    emojis: ["📢", "📅", "⏰", "📞", "✉️", "🎁", "🎉", "📍", "📝", "🔔", "📣", "💬"],
+    label: "予定",
+    emojis: [
+      "📅",
+      "🗓️",
+      "⏰",
+      "⌚",
+      "📞",
+      "📱",
+      "📢",
+      "🔔",
+      "📝",
+      "✉️",
+      "📩",
+      "📣",
+      "💬",
+      "📍",
+      "🎉",
+      "🎊",
+      "🎁",
+      "🌸",
+      "🌻",
+      "🍁",
+      "🎄",
+      "🎍",
+      "🎈",
+      "🕐",
+    ],
   },
   {
-    label: "車・整備",
-    emojis: ["🚗", "🚙", "🔧", "🛠️", "⚙️", "🔩", "🧰", "🅿️", "⛽", "🚘", "🚐", "🏁"],
+    label: "車・他",
+    emojis: [
+      "🚗",
+      "🚙",
+      "🚕",
+      "🚌",
+      "🚚",
+      "🚐",
+      "🚘",
+      "🔧",
+      "🛠️",
+      "⚙️",
+      "🧰",
+      "🔩",
+      "⛽",
+      "🛞",
+      "🅿️",
+      "🏁",
+      "🏠",
+      "🏢",
+      "☀️",
+      "☁️",
+      "☔",
+      "❄️",
+      "🌈",
+      "🌟",
+    ],
   },
 ] as const;
+
+function parseRecentEmojis(value: string | null) {
+  if (!value) return [];
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return Array.from(
+      new Set(
+        parsed.filter(
+          (item): item is string => typeof item === "string" && item.length > 0,
+        ),
+      ),
+    ).slice(0, maxRecentEmojis);
+  } catch {
+    return [];
+  }
+}
 
 type LineEmojiPickerProps = {
   label: string;
@@ -56,6 +191,49 @@ export function LineEmojiPicker({
   const selectionRef = useRef({ start: value.length, end: value.length });
   const [open, setOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState(0);
+  const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
+
+  const displayedCategories = [
+    {
+      label: "よく使う",
+      emojis: recentEmojis.length ? recentEmojis : recommendedEmojis,
+    },
+    ...emojiCategories,
+  ];
+
+  useEffect(() => {
+    try {
+      setRecentEmojis(
+        parseRecentEmojis(window.localStorage.getItem(recentEmojiStorageKey)),
+      );
+    } catch {
+      setRecentEmojis([]);
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === recentEmojiStorageKey) {
+        setRecentEmojis(parseRecentEmojis(event.newValue));
+      }
+    };
+    const handleRecentEmojiUpdate = (event: Event) => {
+      setRecentEmojis(
+        (event as CustomEvent<string[]>).detail.slice(0, maxRecentEmojis),
+      );
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(
+      recentEmojiUpdatedEvent,
+      handleRecentEmojiUpdate,
+    );
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(
+        recentEmojiUpdatedEvent,
+        handleRecentEmojiUpdate,
+      );
+    };
+  }, []);
 
   useEffect(() => {
     selectionRef.current = {
@@ -110,6 +288,25 @@ export function LineEmojiPicker({
     selectionRef.current = { start: nextCursor, end: nextCursor };
     onValueChange(nextValue);
 
+    const nextRecentEmojis = [
+      emoji,
+      ...recentEmojis.filter((item) => item !== emoji),
+    ].slice(0, maxRecentEmojis);
+    setRecentEmojis(nextRecentEmojis);
+    try {
+      window.localStorage.setItem(
+        recentEmojiStorageKey,
+        JSON.stringify(nextRecentEmojis),
+      );
+    } catch {
+      // The picker remains usable when browser storage is unavailable.
+    }
+    window.dispatchEvent(
+      new CustomEvent<string[]>(recentEmojiUpdatedEvent, {
+        detail: nextRecentEmojis,
+      }),
+    );
+
     window.requestAnimationFrame(() => {
       const textarea = textareaRef.current;
       textarea?.focus();
@@ -145,21 +342,21 @@ export function LineEmojiPicker({
             <div
               role="dialog"
               aria-label="絵文字を選択"
-              className="absolute right-0 top-full z-40 mt-2 w-[min(320px,calc(100vw-3rem))] rounded-md border border-slate-200 bg-white p-3 shadow-lg"
+              className="absolute right-0 top-full z-40 mt-2 w-[min(390px,calc(100vw-2rem))] rounded-md border border-slate-200 bg-white p-3 shadow-lg"
             >
               <div
                 role="tablist"
                 aria-label="絵文字カテゴリ"
-                className="flex gap-1 overflow-x-auto border-b border-slate-200 pb-2"
+                className="grid grid-cols-3 gap-1 border-b border-slate-200 pb-2 sm:grid-cols-5"
               >
-                {emojiCategories.map((category, index) => (
+                {displayedCategories.map((category, index) => (
                   <button
                     key={category.label}
                     type="button"
                     role="tab"
                     aria-selected={activeCategory === index}
                     onClick={() => setActiveCategory(index)}
-                    className={`shrink-0 cursor-pointer px-2 py-1 text-xs font-semibold transition-colors ${
+                    className={`min-w-0 cursor-pointer px-1 py-1 text-[11px] font-semibold transition-colors ${
                       activeCategory === index
                         ? "text-blue-700"
                         : "text-slate-500 hover:text-slate-800"
@@ -169,8 +366,8 @@ export function LineEmojiPicker({
                   </button>
                 ))}
               </div>
-              <div className="mt-3 grid grid-cols-6 gap-1">
-                {emojiCategories[activeCategory].emojis.map((emoji) => (
+              <div className="mt-3 grid max-h-60 grid-cols-6 gap-1 overflow-y-auto pr-1 sm:grid-cols-8">
+                {displayedCategories[activeCategory].emojis.map((emoji) => (
                   <button
                     key={emoji}
                     type="button"
