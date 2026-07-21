@@ -371,7 +371,7 @@ export function LineDistribution() {
         >
           {(
             [
-              ["manual", "手動配信"],
+              ["manual", "即時配信"],
               ["scheduled", "予約配信"],
               ["automations", "自動配信設定"],
               ["history", "配信履歴"],
@@ -563,7 +563,7 @@ export function LineDistribution() {
             <div>
               <h2 className="text-lg font-bold">配信履歴</h2>
               <p className="mt-1 text-sm text-slate-500">
-                手動配信・テスト送信・自動配信の最新20件を表示します。
+                即時配信・テスト送信・自動配信の最新20件を表示します。
               </p>
             </div>
             {historyMessage ? (
