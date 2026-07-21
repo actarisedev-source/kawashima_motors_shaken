@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { LineEmojiPicker } from "./line-emoji-picker";
 
 type AutomationType =
   | "shaken_60_days"
@@ -246,24 +247,19 @@ export function LineAutomationSettings() {
                     />
                   </label>
                 ) : null}
-                <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                  {setting.automation_type === "reservation_completion"
-                    ? "メッセージ本文"
-                    : "配信本文"}
-                  <textarea
-                    value={setting.body}
-                    onChange={(event) =>
-                      updateSetting(
-                        setting.automation_type,
-                        "body",
-                        event.target.value,
-                      )
-                    }
-                    rows={12}
-                    maxLength={5000}
-                    className="rounded-[5px] border border-slate-300 px-3 py-2 text-base font-normal leading-7 outline-none focus:border-blue-500"
-                  />
-                </label>
+                <LineEmojiPicker
+                  label={
+                    setting.automation_type === "reservation_completion"
+                      ? "メッセージ本文"
+                      : "配信本文"
+                  }
+                  value={setting.body}
+                  onValueChange={(value) =>
+                    updateSetting(setting.automation_type, "body", value)
+                  }
+                  rows={12}
+                  className="rounded-[5px] border border-slate-300 px-3 py-2 text-base font-normal leading-7 outline-none focus:border-blue-500"
+                />
                 <p className="text-xs leading-6 text-slate-500">
                   使用可能: {setting.automation_type === "reservation_completion"
                     ? "{{reservation_datetime}} {{customer_name}} {{vehicle_name}} {{plate_number}}"

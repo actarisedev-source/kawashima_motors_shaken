@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminHeader } from "../admin-header";
 import { LineAutomationSettings } from "./line-automation-settings";
+import { LineEmojiPicker } from "./line-emoji-picker";
 import { prepareLineImage } from "./line-image-client";
 import { LineScheduledDistribution } from "./line-scheduled-distribution";
 
@@ -411,10 +412,12 @@ export function LineDistribution() {
               配信タイトル
               <input value={title} onChange={(e) => setTitle(e.target.value)} className="h-11 rounded-md border border-slate-300 px-3 text-base font-normal outline-none focus:border-blue-500" />
             </label>
-            <label className="grid gap-2 text-sm font-semibold text-slate-700">
-              配信本文
-              <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={10} maxLength={5000} className="rounded-md border border-slate-300 px-3 py-2 text-base font-normal outline-none focus:border-blue-500" />
-            </label>
+            <LineEmojiPicker
+              label="配信本文"
+              value={body}
+              onValueChange={setBody}
+              className="rounded-md border border-slate-300 px-3 py-2 text-base font-normal outline-none focus:border-blue-500"
+            />
             <div className="grid gap-2">
               <label className="text-sm font-semibold text-slate-700">
                 添付画像

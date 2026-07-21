@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LineEmojiPicker } from "./line-emoji-picker";
 import { prepareLineImage } from "./line-image-client";
 
 type Filters = {
@@ -427,10 +428,15 @@ export function LineScheduledDistribution() {
             配信タイトル
             <input value={title} onChange={(event) => { setTitle(event.target.value); setErrors((current) => ({ ...current, content: "" })); }} className="h-11 rounded-md border border-slate-300 px-3 text-base font-normal outline-none focus:border-blue-500" />
           </label>
-          <label className="grid gap-2 text-sm font-semibold text-slate-700">
-            配信本文
-            <textarea value={body} onChange={(event) => { setBody(event.target.value); setErrors((current) => ({ ...current, content: "" })); }} rows={10} maxLength={5000} className="rounded-md border border-slate-300 px-3 py-2 text-base font-normal outline-none focus:border-blue-500" />
-          </label>
+          <LineEmojiPicker
+            label="配信本文"
+            value={body}
+            onValueChange={(value) => {
+              setBody(value);
+              setErrors((current) => ({ ...current, content: "" }));
+            }}
+            className="rounded-md border border-slate-300 px-3 py-2 text-base font-normal outline-none focus:border-blue-500"
+          />
           <div className="grid gap-2">
             <label className="text-sm font-semibold text-slate-700">添付画像</label>
             <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" disabled={processingImage} onChange={(event) => void handleImageChange(event.target.files?.[0] ?? null)} className="block w-full rounded-md border border-slate-300 bg-white text-sm text-slate-600 file:mr-4 file:h-11 file:cursor-pointer file:border-0 file:border-r file:border-slate-300 file:bg-slate-50 file:px-4 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-50" />
