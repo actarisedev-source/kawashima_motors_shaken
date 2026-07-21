@@ -219,6 +219,8 @@ export function NewCustomerForm() {
                   onSelectDate={setShakenExpiryDate}
                   selectedDate={shakenExpiryDate}
                   showCalendarIcon
+                  showMonthYearSelectors
+                  yearSelectionFutureYears={20}
                 />
                 <input
                   type="hidden"

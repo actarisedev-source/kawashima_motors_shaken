@@ -523,6 +523,8 @@ export function AdminNewReservationModal({
                 minDate={null}
                 selectedDate={inspectionExpiresOn}
                 showCalendarIcon
+                showMonthYearSelectors
+                yearSelectionFutureYears={20}
                 onSelectDate={setInspectionExpiresOn}
               />
               <input

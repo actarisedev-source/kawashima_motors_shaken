@@ -65,6 +65,7 @@ type AdminInlineDatePickerProps = {
   selectedDate: string;
   showCalendarIcon?: boolean;
   showMonthYearSelectors?: boolean;
+  yearSelectionFutureYears?: number;
 };
 
 export function AdminInlineDatePicker({
@@ -84,6 +85,7 @@ export function AdminInlineDatePicker({
   selectedDate,
   showCalendarIcon = false,
   showMonthYearSelectors = false,
+  yearSelectionFutureYears = 0,
 }: AdminInlineDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -100,13 +102,17 @@ export function AdminInlineDatePicker({
       ? Number(maximumDate.slice(0, 4))
       : currentYear;
     const firstYear = Math.min(1900, monthDate.getFullYear());
-    const lastYear = Math.max(currentYear, maximumYear, monthDate.getFullYear());
+    const lastYear = Math.max(
+      currentYear + Math.max(0, yearSelectionFutureYears),
+      maximumYear,
+      monthDate.getFullYear(),
+    );
 
     return Array.from(
       { length: lastYear - firstYear + 1 },
       (_, index) => lastYear - index,
     );
-  }, [maximumDate, monthDate, todayKey]);
+  }, [maximumDate, monthDate, todayKey, yearSelectionFutureYears]);
 
   useEffect(() => {
     if (!isOpen) return;
