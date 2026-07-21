@@ -30,6 +30,26 @@ const formatCalendarMonthLabel = (date: Date) => {
   return `${year}年（令和${year - 2018}年）${date.getMonth() + 1}月`;
 };
 
+const formatCalendarYearOption = (year: number) => {
+  const era =
+    year >= 2019
+      ? { name: "令和", firstYear: 2019 }
+      : year >= 1989
+        ? { name: "平成", firstYear: 1989 }
+        : year >= 1926
+          ? { name: "昭和", firstYear: 1926 }
+          : year >= 1912
+            ? { name: "大正", firstYear: 1912 }
+            : year >= 1868
+              ? { name: "明治", firstYear: 1868 }
+              : null;
+
+  if (!era) return `${year}年`;
+
+  const eraYear = year - era.firstYear + 1;
+  return `${year}年（${era.name}${eraYear === 1 ? "元" : eraYear}年）`;
+};
+
 type AdminInlineDatePickerProps = {
   dropdownClassName?: string;
   error?: string;
@@ -198,7 +218,7 @@ export function AdminInlineDatePicker({
                 >
                   {selectableYears.map((year) => (
                     <option key={year} value={year}>
-                      {year}年
+                      {formatCalendarYearOption(year)}
                     </option>
                   ))}
                 </select>
