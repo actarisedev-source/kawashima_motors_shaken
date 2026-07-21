@@ -3,26 +3,13 @@ begin;
 alter table public.reservations
   add column if not exists loaner_car_requested boolean;
 
--- Remove this migration's public signature when the migration is retried.
+-- Keep the existing 15-argument function available for the current
+-- Production deployment. Only this migration's 16-argument overload is
+-- replaced when the migration is retried.
 drop function if exists public.create_reservation_atomic(
-  text, text, text, text, text, date, text, text, date, timestamptz, text, text, text, text, boolean, text
+  text, text, text, text, text, date, text, text, date, timestamptz,
+  text, text, text, text, boolean, text
 );
-
--- Keep the existing atomic reservation and customer update logic intact.
-do $$
-begin
-  if to_regprocedure(
-    'public.create_reservation_atomic(text,text,text,text,text,date,text,text,date,timestamp with time zone,text,text,text,text,text)'
-  ) is not null
-  and to_regprocedure(
-    'public.create_reservation_atomic_customer_core(text,text,text,text,text,date,text,text,date,timestamp with time zone,text,text,text,text,text)'
-  ) is null then
-    alter function public.create_reservation_atomic(
-      text, text, text, text, text, date, text, text, date, timestamptz, text, text, text, text, text
-    ) rename to create_reservation_atomic_customer_core;
-  end if;
-end;
-$$;
 
 create function public.create_reservation_atomic(
   p_customer_name text,
@@ -64,9 +51,12 @@ begin
       message = 'reservation_invalid_loaner_car_requested';
   end if;
 
+  -- PostgreSQL resolves this 15-argument call to the existing function.
+  -- Its slot locking, holiday checks, customer/vehicle handling, and LINE
+  -- linking logic remain the single implementation of reservation creation.
   select *
   into v_result
-  from public.create_reservation_atomic_customer_core(
+  from public.create_reservation_atomic(
     p_customer_name,
     p_customer_kana,
     p_phone,
@@ -100,26 +90,15 @@ begin
 end;
 $$;
 
-revoke all on function public.create_reservation_atomic_customer_core(
-  text, text, text, text, text, date, text, text, date, timestamptz, text, text, text, text, text
-) from public, anon, authenticated, service_role;
-
+-- Do not alter the existing 15-argument function's privileges.
 revoke all on function public.create_reservation_atomic(
-  text, text, text, text, text, date, text, text, date, timestamptz, text, text, text, text, boolean, text
+  text, text, text, text, text, date, text, text, date, timestamptz,
+  text, text, text, text, boolean, text
 ) from public, anon, authenticated;
 
 grant execute on function public.create_reservation_atomic(
-  text, text, text, text, text, date, text, text, date, timestamptz, text, text, text, text, boolean, text
+  text, text, text, text, text, date, text, text, date, timestamptz,
+  text, text, text, text, boolean, text
 ) to service_role;
-
-update public.line_automation_settings
-set body = replace(
-  body,
-  E'ナンバー\n{{plate_number}}\n\n━━━━━━━━━━━━━━',
-  E'ナンバー\n{{plate_number}}\n\n代車希望\n{{loaner_car_requested}}\n\n━━━━━━━━━━━━━━'
-),
-updated_at = now()
-where automation_type = 'reservation_completion'
-  and body not like '%{{loaner_car_requested}}%';
 
 commit;
