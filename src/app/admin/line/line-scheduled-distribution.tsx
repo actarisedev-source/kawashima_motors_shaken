@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AdminInlineDatePicker } from "@/app/admin/shared/admin-inline-date-picker";
 import { LineEmojiPicker } from "./line-emoji-picker";
 import { prepareLineImage } from "./line-image-client";
 
@@ -382,20 +383,16 @@ export function LineScheduledDistribution() {
         <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-bold">配信日時</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-2 text-sm font-semibold text-slate-700">
-              配信日
-              <input
-                type="date"
-                min={todayInJapan()}
-                value={scheduledDate}
-                onChange={(event) => {
-                  setScheduledDate(event.target.value);
-                  setErrors((current) => ({ ...current, date: "" }));
-                }}
-                className={`h-11 rounded-md border px-3 text-base font-normal outline-none focus:border-blue-500 ${errors.date ? "border-red-400" : "border-slate-300"}`}
-              />
-              <span className="min-h-5 text-xs font-semibold text-red-600">{errors.date}</span>
-            </label>
+            <AdminInlineDatePicker
+              error={errors.date}
+              label="配信日"
+              minDate={todayInJapan()}
+              onSelectDate={(dateKey) => {
+                setScheduledDate(dateKey);
+                setErrors((current) => ({ ...current, date: "" }));
+              }}
+              selectedDate={scheduledDate}
+            />
             <label className="grid gap-2 text-sm font-semibold text-slate-700">
               配信時刻
               <select
