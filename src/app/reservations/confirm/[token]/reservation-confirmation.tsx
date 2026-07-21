@@ -9,6 +9,7 @@ type ReservationConfirmationItem = {
   id: string;
   reservedAt: string;
   status: ReservationStatus;
+  loanerCarRequested: boolean | null;
   customerName: string;
   phone: string;
   vehicleModel: string;
@@ -182,6 +183,16 @@ export function ReservationConfirmation({ token }: { token: string }) {
                 <dt className="text-sm text-slate-500">電話番号</dt>
                 <dd className="mt-1 font-semibold text-slate-950">
                   {reservation.phone || "未登録"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm text-slate-500">代車希望</dt>
+                <dd className="mt-1 font-semibold text-slate-950">
+                  {reservation.loanerCarRequested === null
+                    ? "—"
+                    : reservation.loanerCarRequested
+                      ? "希望する"
+                      : "希望しない"}
                 </dd>
               </div>
             </dl>

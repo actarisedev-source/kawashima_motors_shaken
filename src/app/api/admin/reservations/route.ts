@@ -38,6 +38,7 @@ const buildReservationItem = ({
   phone,
   vehicleModel,
   licensePlate,
+  loanerCarRequested,
   createdAt,
 }: {
   reservationId: string;
@@ -48,6 +49,7 @@ const buildReservationItem = ({
   phone: string;
   vehicleModel: string;
   licensePlate: string | null;
+  loanerCarRequested: boolean | null;
   createdAt: string;
 }) => ({
   id: reservationId,
@@ -58,6 +60,7 @@ const buildReservationItem = ({
   phone,
   vehicleModel,
   licensePlate: licensePlate ?? "",
+  loanerCarRequested,
   createdAt,
 });
 
@@ -128,6 +131,7 @@ export async function GET(request: NextRequest) {
       phone: customer?.phone ?? "",
       vehicleModel: vehicle?.model_name ?? "未登録",
       licensePlate: vehicle?.plate_number ?? "",
+      loanerCarRequested: reservation.loaner_car_requested ?? null,
       createdAt: reservation.created_at,
     };
   });
@@ -170,6 +174,7 @@ export async function POST(request: NextRequest) {
       phone: result.phone,
       vehicleModel: result.vehicleModel,
       licensePlate: result.licensePlate,
+      loanerCarRequested: result.loanerCarRequested,
       createdAt: new Date().toISOString(),
     }),
   });

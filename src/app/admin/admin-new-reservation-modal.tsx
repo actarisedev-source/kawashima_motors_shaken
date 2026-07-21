@@ -20,6 +20,7 @@ export type AdminReservationItem = {
   phone: string;
   vehicleModel: string;
   licensePlate: string;
+  loanerCarRequested: boolean | null;
   status: ReservationStatus;
   createdAt: string;
 };
@@ -59,6 +60,7 @@ type FieldErrors = {
   phone: string;
   customerKana: string;
   birthDate: string;
+  loanerCarRequested: string;
 };
 
 const emptyFieldErrors: FieldErrors = {
@@ -68,6 +70,7 @@ const emptyFieldErrors: FieldErrors = {
   phone: "",
   customerKana: "",
   birthDate: "",
+  loanerCarRequested: "",
 };
 
 const formatMonth = (dateKey: string) => dateKey.slice(0, 7);
@@ -191,6 +194,9 @@ export function AdminNewReservationModal({
     const customerKana = String(formData.get("customerKana") ?? "").trim();
     const phone = normalizePhone(String(formData.get("phone") ?? ""));
     const birthDate = String(formData.get("birthDate") ?? "").trim();
+    const loanerCarRequestedValue = String(
+      formData.get("loanerCarRequested") ?? "",
+    );
     const slot = selectedDay?.slots?.[reservedTime];
     const nextFieldErrors: FieldErrors = {
       reservedDate:
@@ -210,6 +216,9 @@ export function AdminNewReservationModal({
         birthDate && birthDate > todayKey
           ? "生年月日は今日以前の日付を選択してください。"
           : "",
+      loanerCarRequested: loanerCarRequestedValue
+        ? ""
+        : "代車希望を選択してください。",
     };
 
     if (reservedTime && isPastAdminSlot(reservedDate, reservedTime)) {
@@ -238,6 +247,7 @@ export function AdminNewReservationModal({
       vehicleModel: String(formData.get("vehicleModel") ?? "").trim() || undefined,
       licensePlate: String(formData.get("licensePlate") ?? "").trim(),
       inspectionExpiresOn: String(formData.get("inspectionExpiresOn") ?? "").trim(),
+      loanerCarRequested: loanerCarRequestedValue === "true",
       reservedAt: `${reservedDate}T${reservedTime}:00+09:00`,
       note: String(formData.get("note") ?? "").trim(),
     });
@@ -534,6 +544,43 @@ export function AdminNewReservationModal({
               />
             </div>
           </div>
+
+          <fieldset className="grid gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+            <legend className="px-1 text-sm font-bold text-slate-800">
+              代車希望
+            </legend>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              {[
+                { value: "true", label: "希望する" },
+                { value: "false", label: "希望しない" },
+              ].map((option) => (
+                <label
+                  key={option.value}
+                  className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700"
+                >
+                  <input
+                    type="radio"
+                    name="loanerCarRequested"
+                    value={option.value}
+                    onChange={() =>
+                      setFieldErrors((current) => ({
+                        ...current,
+                        loanerCarRequested: "",
+                      }))
+                    }
+                    className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs font-medium text-slate-500">
+              ※代車の空き状況により、ご希望に添えない場合があります。
+            </p>
+            <span className="min-h-4 text-xs font-semibold leading-4 text-red-600">
+              {fieldErrors.loanerCarRequested}
+            </span>
+          </fieldset>
 
           <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
             ご要望

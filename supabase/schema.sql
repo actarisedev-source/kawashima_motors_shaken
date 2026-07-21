@@ -59,6 +59,7 @@ create table reservations (
   reserved_at timestamptz not null,
   confirmation_token text not null default encode(gen_random_bytes(32), 'hex'),
   status reservation_status not null default '受付中',
+  loaner_car_requested boolean,
   note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

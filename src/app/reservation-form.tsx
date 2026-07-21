@@ -71,6 +71,7 @@ type ReservationDraft = {
   licensePlate: string;
   inspectionExpiresOn: string;
   birthDate: string;
+  loanerCarRequested: boolean;
   note: string;
 };
 
@@ -79,6 +80,7 @@ type FieldErrors = {
   phone: string;
   birthDate: string;
   reservationDateTime: string;
+  loanerCarRequested: string;
 };
 
 type SlotMark = "○" | "△" | "×";
@@ -89,6 +91,7 @@ const emptyFieldErrors: FieldErrors = {
   phone: "",
   birthDate: "",
   reservationDateTime: "",
+  loanerCarRequested: "",
 };
 
 const privacyPolicyText =
@@ -252,6 +255,8 @@ export function ReservationForm({
   const customerKanaInputRef = useRef<HTMLInputElement | null>(null);
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
   const birthDateInputRef = useRef<HTMLInputElement | null>(null);
+  const loanerCarRequestedRef = useRef<HTMLFieldSetElement | null>(null);
+  const loanerCarRequestedInputRef = useRef<HTMLInputElement | null>(null);
   const privacyConsentInputRef = useRef<HTMLInputElement | null>(null);
   const submissionInFlightRef = useRef(false);
   const showConfirmationRef = useRef(false);
@@ -468,6 +473,9 @@ export function ReservationForm({
     const normalizedPhone = normalizePhone(phone);
     const vehicleModel = String(formData.get("vehicleModel") ?? "").trim();
     const birthDate = String(formData.get("birthDate") ?? "").trim();
+    const loanerCarRequestedValue = String(
+      formData.get("loanerCarRequested") ?? "",
+    );
     const nextFieldErrors: FieldErrors = {
       customerName: customerName ? "" : "お名前を入力してください。",
       phone: normalizedPhone ? "" : "電話番号を入力してください。",
@@ -477,6 +485,9 @@ export function ReservationForm({
           : "",
       reservationDateTime:
         selectedDate && selectedTime ? "" : "予約日時を選択してください。",
+      loanerCarRequested: loanerCarRequestedValue
+        ? ""
+        : "代車希望を選択してください。",
     };
     const hasFieldError = Object.values(nextFieldErrors).some(Boolean);
     const hasKanaError = !isValidHiragana(customerKana);
@@ -522,6 +533,12 @@ export function ReservationForm({
               focus: birthDateInputRef.current,
             }
           : { target: null },
+        nextFieldErrors.loanerCarRequested
+          ? {
+              target: loanerCarRequestedRef.current,
+              focus: loanerCarRequestedInputRef.current,
+            }
+          : { target: null },
         hasPrivacyConsentError
           ? {
               target: privacyConsentInputRef.current,
@@ -555,6 +572,7 @@ export function ReservationForm({
         formData.get("inspectionExpiresOn") ?? "",
       ).trim(),
       birthDate,
+      loanerCarRequested: loanerCarRequestedValue === "true",
       note: String(formData.get("note") ?? "").trim(),
     });
     setSubmitState({ status: "idle", message: "" });
@@ -594,6 +612,7 @@ export function ReservationForm({
           vehicleModel: reservationDraft.vehicleModel || undefined,
           licensePlate: reservationDraft.licensePlate,
           inspectionExpiresOn: reservationDraft.inspectionExpiresOn,
+          loanerCarRequested: reservationDraft.loanerCarRequested,
           reservedAt: `${reservationDraft.reservedDate}T${reservationDraft.reservedTime}:00+09:00`,
           note: reservationDraft.note,
           lineIdToken: lineIdToken || undefined,
@@ -691,6 +710,10 @@ export function ReservationForm({
       ["ナンバー", reservationDraft.licensePlate || "未入力"],
       ["車検満了日", reservationDraft.inspectionExpiresOn || "未入力"],
       ["生年月日", reservationDraft.birthDate || "未入力"],
+      [
+        "代車希望",
+        reservationDraft.loanerCarRequested ? "希望する" : "希望しない",
+      ],
     ];
 
     return (
@@ -1119,6 +1142,52 @@ export function ReservationForm({
           </span>
         </label>
       </div>
+
+      <fieldset
+        ref={loanerCarRequestedRef}
+        className="grid gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 sm:p-4"
+      >
+        <legend className="px-1 text-sm font-bold text-zinc-800">
+          代車希望
+        </legend>
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          {[
+            { value: "true", label: "希望する" },
+            { value: "false", label: "希望しない" },
+          ].map((option, index) => (
+            <label
+              key={option.value}
+              className="flex cursor-pointer items-center gap-2 text-sm font-bold text-zinc-800"
+            >
+              <input
+                ref={index === 0 ? loanerCarRequestedInputRef : undefined}
+                type="radio"
+                name="loanerCarRequested"
+                value={option.value}
+                defaultChecked={
+                  reservationDraft
+                    ? String(reservationDraft.loanerCarRequested) === option.value
+                    : false
+                }
+                onChange={() =>
+                  setFieldErrors((current) => ({
+                    ...current,
+                    loanerCarRequested: "",
+                  }))
+                }
+                className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500"
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
+        <p className="text-xs font-medium text-zinc-500">
+          ※代車の空き状況により、ご希望に添えない場合があります。
+        </p>
+        <span className="min-h-4 text-xs font-semibold leading-4 text-red-600">
+          {fieldErrors.loanerCarRequested}
+        </span>
+      </fieldset>
 
       <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
         ご要望

@@ -262,7 +262,7 @@ export function LineAutomationSettings() {
                 />
                 <p className="text-xs leading-6 text-slate-500">
                   使用可能: {setting.automation_type === "reservation_completion"
-                    ? "{{reservation_datetime}} {{customer_name}} {{vehicle_name}} {{plate_number}}"
+                    ? "{{reservation_datetime}} {{customer_name}} {{vehicle_name}} {{plate_number}} {{loaner_car_requested}}"
                     : "{{name}} {{phone}} {{vehicle_name}} {{plate_number}} {{shaken_expiry_date}} {{reservation_date}}"}
                 </p>
               </div>

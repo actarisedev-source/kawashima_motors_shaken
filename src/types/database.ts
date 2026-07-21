@@ -94,6 +94,7 @@ export type Database = {
           reserved_at: string;
           confirmation_token: string;
           status: Database["public"]["Enums"]["reservation_status"];
+          loaner_car_requested: boolean | null;
           note: string | null;
           created_at: string;
           updated_at: string;
@@ -105,6 +106,7 @@ export type Database = {
           reserved_at: string;
           confirmation_token?: string;
           status?: Database["public"]["Enums"]["reservation_status"];
+          loaner_car_requested?: boolean | null;
           note?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -343,6 +345,7 @@ export type Database = {
           p_line_user_id: string | null;
           p_line_display_name: string | null;
           p_line_picture_url: string | null;
+          p_loaner_car_requested: boolean;
           p_slot_type?: string;
         };
         Returns: Array<{

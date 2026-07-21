@@ -87,6 +87,7 @@ export async function GET(
       id: reservation.id,
       reservedAt: reservation.reserved_at,
       status: reservation.status,
+      loanerCarRequested: reservation.loaner_car_requested ?? null,
       customerName: customerResult.data.name,
       phone: customerResult.data.phone ?? "",
       vehicleModel: vehicleResult.data.model_name,

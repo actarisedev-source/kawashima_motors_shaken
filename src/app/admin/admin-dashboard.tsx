@@ -613,6 +613,18 @@ export function AdminDashboard() {
                     <p className="mt-2 text-2xl font-bold text-slate-950">
                       {selectedReservation.customerName} 様
                     </p>
+                    <div className="mt-3 flex items-center gap-3 text-sm">
+                      <span className="font-semibold text-slate-500">
+                        代車希望
+                      </span>
+                      <span className="font-bold text-slate-950">
+                        {selectedReservation.loanerCarRequested === null
+                          ? "—"
+                          : selectedReservation.loanerCarRequested
+                            ? "希望する"
+                            : "希望しない"}
+                      </span>
+                    </div>
                   </div>
                   <div className="w-40 shrink-0 text-sm">
                     <label className="sr-only" htmlFor="reservation-status">
@@ -752,10 +764,11 @@ export function AdminDashboard() {
         <table className="w-full table-fixed border-collapse text-sm">
           <thead>
             <tr className="bg-slate-100 text-left">
-              <th className="w-[16%] border border-slate-400 px-3 py-2">時間</th>
-              <th className="w-[30%] border border-slate-400 px-3 py-2">お名前</th>
-              <th className="w-[27%] border border-slate-400 px-3 py-2">車種</th>
-              <th className="w-[27%] border border-slate-400 px-3 py-2">ナンバー</th>
+              <th className="w-[14%] border border-slate-400 px-3 py-2">時間</th>
+              <th className="w-[25%] border border-slate-400 px-3 py-2">お名前</th>
+              <th className="w-[22%] border border-slate-400 px-3 py-2">車種</th>
+              <th className="w-[22%] border border-slate-400 px-3 py-2">ナンバー</th>
+              <th className="w-[17%] border border-slate-400 px-3 py-2">代車希望</th>
             </tr>
           </thead>
           <tbody>
@@ -772,6 +785,13 @@ export function AdminDashboard() {
                 </td>
                 <td className="border border-slate-400 px-3 py-3">
                   {item.licensePlate || "未登録"}
+                </td>
+                <td className="border border-slate-400 px-3 py-3">
+                  {item.loanerCarRequested === null
+                    ? "—"
+                    : item.loanerCarRequested
+                      ? "希望する"
+                      : "希望しない"}
                 </td>
               </tr>
             ))}

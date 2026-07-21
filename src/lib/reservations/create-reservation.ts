@@ -24,6 +24,7 @@ export type ReservationCreateRequest = {
   licensePlate?: string;
   inspectionExpiresOn?: string;
   reservedAt?: string;
+  loanerCarRequested?: boolean;
   note?: string;
   lineIdToken?: string;
 };
@@ -45,6 +46,7 @@ type ReservationCreateResult =
       vehicleModel: string;
       licensePlate: string | null;
       reservedAt: string;
+      loanerCarRequested: boolean;
       lineLinkWarning: string | null;
       lineLinked: boolean;
     }
@@ -115,6 +117,7 @@ export async function createReservation({
     normalizeOptional(body.inspectionExpiresOn),
   );
   const reservedAt = normalizeOptional(body.reservedAt);
+  const loanerCarRequested = body.loanerCarRequested;
   const note = normalizeOptional(body.note);
   const lineIdToken = normalizeOptional(body.lineIdToken);
 
@@ -148,6 +151,14 @@ export async function createReservation({
       ok: false,
       statusCode: 400,
       message: "車検満了日の形式が正しくありません。",
+    };
+  }
+
+  if (typeof loanerCarRequested !== "boolean") {
+    return {
+      ok: false,
+      statusCode: 400,
+      message: "代車希望を選択してください。",
     };
   }
 
@@ -211,6 +222,7 @@ export async function createReservation({
       p_line_user_id: lineProfile?.sub ?? null,
       p_line_display_name: lineProfile?.name ?? null,
       p_line_picture_url: lineProfile?.picture ?? null,
+      p_loaner_car_requested: loanerCarRequested,
       p_slot_type: "shaken",
     })
     .single();
@@ -231,6 +243,8 @@ export async function createReservation({
       reservation_invalid_gender: "性別の選択内容が正しくありません。",
       reservation_invalid_birth_date:
         "生年月日は今日以前の日付を入力してください。",
+      reservation_invalid_loaner_car_requested:
+        "代車希望を選択してください。",
     };
     const errorKey = reservationError?.message ?? "";
 
@@ -256,6 +270,7 @@ export async function createReservation({
     reservedAt: reservedDate,
     vehicleModel: vehicleModel ?? "未登録",
     licensePlate,
+    loanerCarRequested,
   });
 
   return {
@@ -275,6 +290,7 @@ export async function createReservation({
     vehicleModel: vehicleModel ?? "未登録",
     licensePlate,
     reservedAt: reservedDate.toISOString(),
+    loanerCarRequested,
     lineLinkWarning: reservation.line_link_warning ?? lineLinkWarning,
     lineLinked: reservation.line_linked,
   };

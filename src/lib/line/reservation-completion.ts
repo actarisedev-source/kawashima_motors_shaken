@@ -9,6 +9,7 @@ type ReservationCompletionNotificationInput = {
   reservedAt: Date;
   vehicleModel: string;
   licensePlate: string | null;
+  loanerCarRequested: boolean;
 };
 
 const reservationCompletionAutomationType = "reservation_completion";
@@ -31,6 +32,9 @@ const defaultReservationCompletionSetting = {
 
 ナンバー
 {{plate_number}}
+
+代車希望
+{{loaner_car_requested}}
 
 ━━━━━━━━━━━━━━
 
@@ -69,6 +73,9 @@ const renderReservationCompletionMessage = (
     customer_name: customerName,
     vehicle_name: input.vehicleModel,
     plate_number: input.licensePlate ?? "未登録",
+    loaner_car_requested: input.loanerCarRequested
+      ? "希望する"
+      : "希望しない",
   };
   return template.replace(/\{\{([a-z_]+)\}\}/g, (_, key: string) =>
     key in values ? values[key] : `{{${key}}}`,
