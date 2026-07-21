@@ -39,11 +39,14 @@ type AdminInlineDatePickerProps = {
   isLoading?: boolean;
   label: string;
   loadingMessage?: string;
-  minDate?: string;
+  maxDate?: string | null;
+  minDate?: string | null;
   onOpenChange?: (open: boolean) => void;
   onSelectDate: (dateKey: string) => void;
   onVisibleMonthChange?: (month: string) => void;
   selectedDate: string;
+  showCalendarIcon?: boolean;
+  showMonthYearSelectors?: boolean;
 };
 
 export function AdminInlineDatePicker({
@@ -55,11 +58,14 @@ export function AdminInlineDatePicker({
   isLoading = false,
   label,
   loadingMessage = "休業日情報を読み込み中です",
+  maxDate,
   minDate,
   onOpenChange,
   onSelectDate,
   onVisibleMonthChange,
   selectedDate,
+  showCalendarIcon = false,
+  showMonthYearSelectors = false,
 }: AdminInlineDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -67,8 +73,22 @@ export function AdminInlineDatePicker({
     getDateFromDateKey(selectedDate || getJstDateKey(new Date())),
   );
   const todayKey = getJstDateKey(new Date());
-  const minimumDate = minDate ?? todayKey;
+  const minimumDate = minDate === undefined ? todayKey : minDate;
+  const maximumDate = maxDate ?? null;
   const calendarDates = useMemo(() => getCalendarDates(monthDate), [monthDate]);
+  const selectableYears = useMemo(() => {
+    const currentYear = Number(todayKey.slice(0, 4));
+    const maximumYear = maximumDate
+      ? Number(maximumDate.slice(0, 4))
+      : currentYear;
+    const firstYear = Math.min(1900, monthDate.getFullYear());
+    const lastYear = Math.max(currentYear, maximumYear, monthDate.getFullYear());
+
+    return Array.from(
+      { length: lastYear - firstYear + 1 },
+      (_, index) => lastYear - index,
+    );
+  }, [maximumDate, monthDate, todayKey]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -92,7 +112,7 @@ export function AdminInlineDatePicker({
     onOpenChange?.(open);
     if (open) {
       const nextMonthDate = getDateFromDateKey(
-        selectedDate || minimumDate || todayKey,
+        selectedDate || minimumDate || maximumDate || todayKey,
       );
       setMonthDate(nextMonthDate);
       onVisibleMonthChange?.(formatAdminCalendarMonth(nextMonthDate));
@@ -105,6 +125,12 @@ export function AdminInlineDatePicker({
       monthDate.getMonth() + amount,
       1,
     );
+    setMonthDate(nextMonthDate);
+    onVisibleMonthChange?.(formatAdminCalendarMonth(nextMonthDate));
+  }
+
+  function setVisibleMonth(year: number, month: number) {
+    const nextMonthDate = new Date(year, month, 1);
     setMonthDate(nextMonthDate);
     onVisibleMonthChange?.(formatAdminCalendarMonth(nextMonthDate));
   }
@@ -131,9 +157,26 @@ export function AdminInlineDatePicker({
         <span>
           {selectedDate ? formatAdminCalendarSelectedDate(selectedDate) : "未選択"}
         </span>
-        <span className="text-base text-slate-500" aria-hidden="true">
-          ▾
-        </span>
+        {showCalendarIcon ? (
+          <svg
+            aria-hidden="true"
+            className="h-5 w-5 shrink-0 text-slate-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M7 3v3m10-3v3M4.5 9h15m-14 11h13a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-13a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1Z"
+            />
+          </svg>
+        ) : (
+          <span className="text-base text-slate-500" aria-hidden="true">
+            ▾
+          </span>
+        )}
       </button>
       {isOpen ? (
         <div
@@ -143,9 +186,42 @@ export function AdminInlineDatePicker({
           ].join(" ")}
         >
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
-            <p className="text-xl font-bold text-slate-950">
-              {formatCalendarMonthLabel(monthDate)}
-            </p>
+            {showMonthYearSelectors ? (
+              <div className="flex min-w-0 items-center gap-2">
+                <select
+                  aria-label="年を選択"
+                  value={monthDate.getFullYear()}
+                  onChange={(event) =>
+                    setVisibleMonth(Number(event.target.value), monthDate.getMonth())
+                  }
+                  className="h-10 min-w-28 rounded-md border border-slate-300 bg-white px-2 text-sm font-bold text-slate-950 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                >
+                  {selectableYears.map((year) => (
+                    <option key={year} value={year}>
+                      {year}年
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="月を選択"
+                  value={monthDate.getMonth()}
+                  onChange={(event) =>
+                    setVisibleMonth(monthDate.getFullYear(), Number(event.target.value))
+                  }
+                  className="h-10 min-w-20 rounded-md border border-slate-300 bg-white px-2 text-sm font-bold text-slate-950 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                >
+                  {Array.from({ length: 12 }, (_, index) => (
+                    <option key={index} value={index}>
+                      {index + 1}月
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <p className="text-xl font-bold text-slate-950">
+                {formatCalendarMonthLabel(monthDate)}
+              </p>
+            )}
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -188,12 +264,18 @@ export function AdminInlineDatePicker({
               const isCurrentMonth = date.getMonth() === monthDate.getMonth();
               const isSelected = dateKey === selectedDate;
               const isToday = dateKey === todayKey;
-              const isBeforeMinDate = dateKey < minimumDate;
+              const isBeforeMinDate = Boolean(
+                minimumDate && dateKey < minimumDate,
+              );
+              const isAfterMaxDate = Boolean(
+                maximumDate && dateKey > maximumDate,
+              );
               const isHoliday = Boolean(isDateHoliday?.(dateKey));
               const disabled =
                 isLoading ||
                 !isCurrentMonth ||
                 isBeforeMinDate ||
+                isAfterMaxDate ||
                 Boolean(isDateDisabled?.(dateKey));
 
               return (
@@ -227,9 +309,17 @@ export function AdminInlineDatePicker({
           <div className="flex items-center justify-between border-t border-slate-200 px-5 py-3">
             <button
               type="button"
-              disabled={todayKey < minimumDate || Boolean(isDateDisabled?.(todayKey))}
+              disabled={
+                Boolean(minimumDate && todayKey < minimumDate) ||
+                Boolean(maximumDate && todayKey > maximumDate) ||
+                Boolean(isDateDisabled?.(todayKey))
+              }
               onClick={() => {
-                if (todayKey >= minimumDate && !isDateDisabled?.(todayKey)) {
+                if (
+                  (!minimumDate || todayKey >= minimumDate) &&
+                  (!maximumDate || todayKey <= maximumDate) &&
+                  !isDateDisabled?.(todayKey)
+                ) {
                   selectDate(todayKey);
                 }
               }}
