@@ -153,6 +153,7 @@ export function NewCustomerForm() {
               </label>
               <div>
                 <AdminInlineDatePicker
+                  className="gap-2 font-medium text-slate-800"
                   dropdownClassName="right-0 w-[min(86vw,600px)]"
                   label="生年月日"
                   maxDate={getTodayJstDateKey()}

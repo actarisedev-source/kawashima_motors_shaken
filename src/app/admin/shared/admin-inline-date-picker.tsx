@@ -49,6 +49,7 @@ const formatCalendarMonthLabel = (date: Date) =>
   `${formatCalendarYearOption(date.getFullYear())}${date.getMonth() + 1}月`;
 
 type AdminInlineDatePickerProps = {
+  className?: string;
   dropdownClassName?: string;
   error?: string;
   errorMessage?: string;
@@ -69,6 +70,7 @@ type AdminInlineDatePickerProps = {
 };
 
 export function AdminInlineDatePicker({
+  className,
   dropdownClassName = "left-0 w-[min(86vw,600px)]",
   error,
   errorMessage,
@@ -167,7 +169,10 @@ export function AdminInlineDatePicker({
   return (
     <div
       ref={pickerRef}
-      className="relative grid gap-1.5 text-sm font-semibold text-slate-700"
+      className={[
+        "relative grid text-sm",
+        className ?? "gap-1.5 font-semibold text-slate-700",
+      ].join(" ")}
     >
       {label}
       <button
