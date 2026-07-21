@@ -991,9 +991,16 @@ export function ReservationForm({
         ) : null}
       </section>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          お名前
+      <section className="mt-5 grid gap-3 sm:gap-4">
+        <h2 className="text-base font-bold text-zinc-900">お客様情報</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              お名前
+              <span className="ml-1 text-xs font-semibold text-red-600">
+                （必須）
+              </span>
+            </span>
           <input
             ref={customerNameInputRef}
             name="customerName"
@@ -1018,9 +1025,14 @@ export function ReservationForm({
           >
             {fieldErrors.customerName}
           </span>
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          ふりがな
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              ふりがな
+              <span className="ml-1 text-xs font-semibold text-red-600">
+                （必須）
+              </span>
+            </span>
           <input
             ref={customerKanaInputRef}
             name="customerKana"
@@ -1046,9 +1058,14 @@ export function ReservationForm({
           >
             {customerKanaError}
           </span>
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          電話番号
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              電話番号
+              <span className="ml-1 text-xs font-semibold text-red-600">
+                （必須）
+              </span>
+            </span>
           <input
             ref={phoneInputRef}
             name="phone"
@@ -1073,9 +1090,14 @@ export function ReservationForm({
           >
             {fieldErrors.phone}
           </span>
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          性別（任意）
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              性別
+              <span className="ml-1 text-xs font-semibold text-zinc-500">
+                （任意）
+              </span>
+            </span>
           <select
             name="gender"
             defaultValue={reservationDraft?.gender ?? ""}
@@ -1086,27 +1108,84 @@ export function ReservationForm({
             <option value="女性">女性</option>
           </select>
           <span aria-hidden="true" className="min-h-4" />
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          車種（任意）
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              生年月日
+              <span className="ml-1 text-xs font-semibold text-zinc-500">
+                （任意）
+              </span>
+            </span>
+            <input
+              ref={birthDateInputRef}
+              name="birthDate"
+              type="date"
+              max={currentTodayKey}
+              defaultValue={reservationDraft?.birthDate ?? ""}
+              aria-invalid={fieldErrors.birthDate ? "true" : "false"}
+              aria-describedby="birth-date-error"
+              onChange={() =>
+                setFieldErrors((current) => ({ ...current, birthDate: "" }))
+              }
+              className={
+                fieldErrors.birthDate
+                  ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
+                  : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
+              }
+            />
+            <span
+              id="birth-date-error"
+              className="min-h-4 text-xs font-semibold leading-4 text-red-600"
+            >
+              {fieldErrors.birthDate}
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section className="grid gap-3 sm:gap-4">
+        <header>
+          <h2 className="text-base font-bold text-zinc-900">お車情報</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            わかる範囲でご入力ください。
+          </p>
+        </header>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              車種
+              <span className="ml-1 text-xs font-semibold text-zinc-500">
+                （任意）
+              </span>
+            </span>
           <input
             name="vehicleModel"
             defaultValue={reservationDraft?.vehicleModel ?? ""}
             className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
           />
           <span aria-hidden="true" className="min-h-4" />
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          ナンバー（任意）
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              ナンバー
+              <span className="ml-1 text-xs font-semibold text-zinc-500">
+                （任意）
+              </span>
+            </span>
           <input
             name="licensePlate"
             defaultValue={reservationDraft?.licensePlate ?? ""}
             className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
           />
           <span aria-hidden="true" className="min-h-4" />
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          車検満了日（任意）
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              車検満了日
+              <span className="ml-1 text-xs font-semibold text-zinc-500">
+                （任意）
+              </span>
+            </span>
           <input
             name="inspectionExpiresOn"
             type="date"
@@ -1114,34 +1193,9 @@ export function ReservationForm({
             className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
           />
           <span aria-hidden="true" className="min-h-4" />
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          生年月日（任意）
-          <input
-            ref={birthDateInputRef}
-            name="birthDate"
-            type="date"
-            max={currentTodayKey}
-            defaultValue={reservationDraft?.birthDate ?? ""}
-            aria-invalid={fieldErrors.birthDate ? "true" : "false"}
-            aria-describedby="birth-date-error"
-            onChange={() =>
-              setFieldErrors((current) => ({ ...current, birthDate: "" }))
-            }
-            className={
-              fieldErrors.birthDate
-                ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
-                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
-            }
-          />
-          <span
-            id="birth-date-error"
-            className="min-h-4 text-xs font-semibold leading-4 text-red-600"
-          >
-            {fieldErrors.birthDate}
-          </span>
-        </label>
-      </div>
+          </label>
+        </div>
+      </section>
 
       <fieldset
         ref={loanerCarRequestedRef}
