@@ -794,8 +794,8 @@ export function AdminDashboard() {
                   {item.loanerCarRequested === null
                     ? "—"
                     : item.loanerCarRequested
-                      ? "希望する"
-                      : "希望しない"}
+                      ? "有り"
+                      : "無し"}
                 </td>
               </tr>
             ))}
