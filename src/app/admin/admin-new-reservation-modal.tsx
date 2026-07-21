@@ -100,6 +100,8 @@ export function AdminNewReservationModal({
     return initialDate < today ? today : initialDate;
   });
   const [reservedTime, setReservedTime] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [inspectionExpiresOn, setInspectionExpiresOn] = useState("");
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>(
     {},
   );
@@ -479,21 +481,25 @@ export function AdminNewReservationModal({
               </select>
               <span aria-hidden="true" className="min-h-4" />
             </label>
-            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-              生年月日
-              <input
-                name="birthDate"
-                type="date"
-                max={todayKey}
-                className={[
-                  "h-11 rounded-md border px-3 text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100",
-                  fieldErrors.birthDate ? "border-red-400" : "border-slate-300",
-                ].join(" ")}
+            <div>
+              <AdminInlineDatePicker
+                label="生年月日"
+                maxDate={todayKey}
+                minDate={null}
+                selectedDate={birthDate}
+                showCalendarIcon
+                showMonthYearSelectors
+                error={fieldErrors.birthDate}
+                onSelectDate={(dateKey) => {
+                  setBirthDate(dateKey);
+                  setFieldErrors((current) => ({
+                    ...current,
+                    birthDate: "",
+                  }));
+                }}
               />
-              <span className="min-h-4 text-xs font-semibold leading-4 text-red-600">
-                {fieldErrors.birthDate}
-              </span>
-            </label>
+              <input type="hidden" name="birthDate" value={birthDate} />
+            </div>
             <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
               車種
               <input
@@ -510,15 +516,21 @@ export function AdminNewReservationModal({
               />
               <span aria-hidden="true" className="min-h-4" />
             </label>
-            <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-              車検満了日
-              <input
-                name="inspectionExpiresOn"
-                type="date"
-                className="h-11 rounded-md border border-slate-300 px-3 text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+            <div>
+              <AdminInlineDatePicker
+                dropdownClassName="right-0 w-[min(86vw,600px)]"
+                label="車検満了日"
+                minDate={null}
+                selectedDate={inspectionExpiresOn}
+                showCalendarIcon
+                onSelectDate={setInspectionExpiresOn}
               />
-              <span aria-hidden="true" className="min-h-4" />
-            </label>
+              <input
+                type="hidden"
+                name="inspectionExpiresOn"
+                value={inspectionExpiresOn}
+              />
+            </div>
           </div>
 
           <label className="grid gap-1.5 text-sm font-semibold text-slate-700">

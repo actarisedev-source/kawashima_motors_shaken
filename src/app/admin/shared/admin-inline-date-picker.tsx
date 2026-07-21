@@ -25,11 +25,6 @@ const getCalendarDates = (monthDate: Date) => {
   });
 };
 
-const formatCalendarMonthLabel = (date: Date) => {
-  const year = date.getFullYear();
-  return `${year}年（令和${year - 2018}年）${date.getMonth() + 1}月`;
-};
-
 const formatCalendarYearOption = (year: number) => {
   const era =
     year >= 2019
@@ -49,6 +44,9 @@ const formatCalendarYearOption = (year: number) => {
   const eraYear = year - era.firstYear + 1;
   return `${year}年（${era.name}${eraYear === 1 ? "元" : eraYear}年）`;
 };
+
+const formatCalendarMonthLabel = (date: Date) =>
+  `${formatCalendarYearOption(date.getFullYear())}${date.getMonth() + 1}月`;
 
 type AdminInlineDatePickerProps = {
   dropdownClassName?: string;
