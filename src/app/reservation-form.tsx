@@ -1238,9 +1238,11 @@ export function ReservationForm({
         <p className="text-xs font-medium text-zinc-500">
           ※代車の空き状況により、ご希望に添えない場合があります。
         </p>
-        <span className="min-h-4 text-xs font-semibold leading-4 text-red-600">
-          {fieldErrors.loanerCarRequested}
-        </span>
+        {fieldErrors.loanerCarRequested ? (
+          <span className="text-xs font-semibold leading-4 text-red-600">
+            {fieldErrors.loanerCarRequested}
+          </span>
+        ) : null}
       </fieldset>
 
       <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
