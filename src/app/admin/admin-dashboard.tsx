@@ -526,10 +526,10 @@ export function AdminDashboard() {
                               予約なし
                             </span>
                           </td>
-                          <td className="px-3 py-4">
+                          <td className="px-3 py-4 text-center">
                             <EmptyTableCellMark />
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="px-4 py-4 text-center">
                             <EmptyTableCellMark />
                           </td>
                           <td className="px-4 py-4 text-right text-xl font-semibold text-slate-300">
