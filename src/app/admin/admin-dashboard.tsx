@@ -491,8 +491,10 @@ export function AdminDashboard() {
                     <th className="px-4 py-3">時間</th>
                     <th className="px-4 py-3">予約状況</th>
                     <th className="px-4 py-3">予約内容</th>
-                    <th className="whitespace-nowrap px-3 py-3">代車希望</th>
-                    <th className="px-4 py-3">ステータス</th>
+                    <th className="whitespace-nowrap px-3 py-3 text-center">
+                      代車希望
+                    </th>
+                    <th className="px-4 py-3 text-center">ステータス</th>
                     <th className="w-10 px-4 py-3" aria-label="予約詳細" />
                   </tr>
                 </thead>
@@ -592,7 +594,7 @@ export function AdminDashboard() {
                               {item.customerName} 様
                             </span>
                           </td>
-                          <td className="px-3 py-4">
+                          <td className="px-3 py-4 text-center">
                             {item.loanerCarRequested === true ? (
                               <span className="inline-flex items-center whitespace-nowrap rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
                                 有り
@@ -609,7 +611,7 @@ export function AdminDashboard() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="px-4 py-4 text-center">
                             <span
                               className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
                                 item.status,
