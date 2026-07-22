@@ -613,7 +613,7 @@ export function AdminDashboard() {
                           </td>
                           <td className="px-4 py-4 text-center">
                             <span
-                              className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
+                              className={`inline-flex w-20 items-center justify-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClassName(
                                 item.status,
                               )}`}
                             >
