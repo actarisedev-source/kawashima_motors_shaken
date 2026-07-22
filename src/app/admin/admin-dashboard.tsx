@@ -479,6 +479,7 @@ export function AdminDashboard() {
                     <th className="px-4 py-3">時間</th>
                     <th className="px-4 py-3">予約状況</th>
                     <th className="px-4 py-3">予約内容</th>
+                    <th className="whitespace-nowrap px-3 py-3">代車希望</th>
                     <th className="px-4 py-3">ステータス</th>
                     <th className="w-10 px-4 py-3" aria-label="予約詳細" />
                   </tr>
@@ -511,6 +512,11 @@ export function AdminDashboard() {
                           <td className="px-4 py-4">
                             <span className="text-sm font-medium text-slate-500">
                               予約なし
+                            </span>
+                          </td>
+                          <td className="px-3 py-4">
+                            <span className="text-sm font-semibold text-slate-400">
+                              —
                             </span>
                           </td>
                           <td className="px-4 py-4">
@@ -577,6 +583,23 @@ export function AdminDashboard() {
                             <span className="text-sm font-semibold text-blue-700">
                               {item.customerName} 様
                             </span>
+                          </td>
+                          <td className="px-3 py-4">
+                            {item.loanerCarRequested === true ? (
+                              <span className="inline-flex items-center whitespace-nowrap rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
+                                有り
+                              </span>
+                            ) : (
+                              <span
+                                className={
+                                  item.loanerCarRequested === null
+                                    ? "text-sm font-semibold text-slate-400"
+                                    : "text-sm font-medium text-slate-700"
+                                }
+                              >
+                                {item.loanerCarRequested === null ? "—" : "無し"}
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-4">
                             <span
