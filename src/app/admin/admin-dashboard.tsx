@@ -81,6 +81,18 @@ const statusClassName = (status: ReservationStatus) => {
   }
 };
 
+function EmptyTableCellMark() {
+  return (
+    <>
+      <span className="sr-only">該当なし</span>
+      <span
+        aria-hidden="true"
+        className="inline-block h-px w-3 rounded-full bg-slate-400 align-middle"
+      />
+    </>
+  );
+}
+
 export function AdminDashboard() {
   const [items, setItems] = useState<ReservationItem[]>([]);
   const [availability, setAvailability] = useState<
@@ -515,14 +527,10 @@ export function AdminDashboard() {
                             </span>
                           </td>
                           <td className="px-3 py-4">
-                            <span className="text-sm font-semibold text-slate-400">
-                              —
-                            </span>
+                            <EmptyTableCellMark />
                           </td>
                           <td className="px-4 py-4">
-                            <span className="text-sm font-semibold text-slate-400">
-                              -
-                            </span>
+                            <EmptyTableCellMark />
                           </td>
                           <td className="px-4 py-4 text-right text-xl font-semibold text-slate-300">
                             <span aria-hidden="true">›</span>
