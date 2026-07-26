@@ -440,9 +440,6 @@ export function LineScheduledDistribution() {
             processing={processingImage}
           />
           <span className="min-h-5 text-xs font-semibold text-red-600">{errors.content}</span>
-          <p className="text-xs leading-6 text-slate-500">
-            使用可能: {"{{name}} {{phone}} {{vehicle_name}} {{plate_number}} {{shaken_expiry_date}} {{reservation_date}} {{age}}"}
-          </p>
         </section>
 
         <section className="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
