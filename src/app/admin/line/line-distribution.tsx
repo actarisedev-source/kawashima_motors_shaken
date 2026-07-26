@@ -88,12 +88,12 @@ const groups = [
 ];
 
 const variableSamples: Record<string, string> = {
-  name: "山田 太郎",
+  name: "川島 太郎",
   phone: "090-1234-5678",
   vehicle_name: "プリウス",
-  plate_number: "静岡 300 あ 12-34",
-  shaken_expiry_date: "2026/08/31",
-  reservation_date: "2026/07/10 10:00",
+  plate_number: "長野 300 あ 12-34",
+  shaken_expiry_date: "○○年○○月○○日",
+  reservation_date: "○○年○○月○○日 ○○:○○",
   age: "40",
 };
 
