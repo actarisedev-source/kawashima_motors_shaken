@@ -487,8 +487,11 @@ export function LineScheduledDistribution() {
         </section>
         <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-bold">配信プレビュー</h2>
+          <p className="text-xs text-slate-500">
+            ※差し込み項目はサンプルデータで表示しています。
+          </p>
           <div className="min-h-48 whitespace-pre-wrap rounded-md bg-[#8cabd9] p-4 text-sm leading-6">
-            {previewBody ? <div className="ml-auto max-w-[90%] rounded-md bg-white p-3 shadow-sm">{previewMessage(previewBody)}</div> : null}
+            {previewBody ? <div className="ml-auto max-w-[90%] whitespace-pre-wrap rounded-md bg-white p-3 shadow-sm">{previewMessage(previewBody)}</div> : null}
             {imagePreviewUrl ? (
               <div className="ml-auto mt-2 max-w-[90%] overflow-hidden rounded-md bg-white shadow-sm first:mt-0">
                 <Image src={imagePreviewUrl} alt="予約配信画像プレビュー" width={640} height={480} unoptimized className="h-auto max-h-80 w-full object-contain" />

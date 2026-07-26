@@ -470,9 +470,12 @@ export function LineDistribution() {
           </section>
           <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold">配信プレビュー</h2>
+            <p className="text-xs text-slate-500">
+              ※差し込み項目はサンプルデータで表示しています。
+            </p>
             <div className="min-h-48 whitespace-pre-wrap rounded-md bg-[#8cabd9] p-4 text-sm leading-6">
               {body ? (
-                <div className="ml-auto max-w-[90%] rounded-md bg-white p-3 shadow-sm">
+                <div className="ml-auto max-w-[90%] whitespace-pre-wrap rounded-md bg-white p-3 shadow-sm">
                   {previewMessage(body)}
                 </div>
               ) : null}
