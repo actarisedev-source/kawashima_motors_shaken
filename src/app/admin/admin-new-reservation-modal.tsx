@@ -373,7 +373,7 @@ export function AdminNewReservationModal({
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-5">
           <div>
             <h2 id="new-reservation-title" className="text-lg font-bold">
-              新規予約
+              予約登録
             </h2>
             <p className="mt-1 text-sm text-slate-500">
               電話受付や店頭受付の予約を登録します。

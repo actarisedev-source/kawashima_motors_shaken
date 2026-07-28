@@ -450,7 +450,7 @@ export function AdminDashboard() {
                 onClick={() => setIsNewReservationOpen(true)}
                 className="h-11 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
               >
-                ＋ 新規予約
+                ＋ 予約登録
               </button>
             </div>
           </div>

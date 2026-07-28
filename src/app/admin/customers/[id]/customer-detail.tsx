@@ -852,7 +852,7 @@ export function CustomerDetail({
                       onClick={() => setIsNewReservationOpen(true)}
                       className="h-10 rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
                     >
-                      ＋ 新規予約
+                      ＋ 予約登録
                     </button>
                     <button
                       type="button"
