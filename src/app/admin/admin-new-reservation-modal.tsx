@@ -25,6 +25,23 @@ export type AdminReservationItem = {
   createdAt: string;
 };
 
+export type AdminReservationCustomerContext = {
+  id: string;
+  name: string;
+  nameKana: string;
+  phone: string;
+  gender: "男性" | "女性" | "未設定";
+  birthDate: string | null;
+  lineStatus: string;
+  lineDisplayName: string | null;
+  vehicles: {
+    id: string;
+    modelName: string;
+    plateNumber: string;
+    shakenExpiryDate: string | null;
+  }[];
+};
+
 type SlotAvailability = {
   time: string;
   reservedCount: number;
@@ -56,6 +73,7 @@ type CreateReservationResponse = {
 type FieldErrors = {
   reservedDate: string;
   reservedTime: string;
+  vehicleId: string;
   customerName: string;
   phone: string;
   customerKana: string;
@@ -66,6 +84,7 @@ type FieldErrors = {
 const emptyFieldErrors: FieldErrors = {
   reservedDate: "",
   reservedTime: "",
+  vehicleId: "",
   customerName: "",
   phone: "",
   customerKana: "",
@@ -91,10 +110,14 @@ const isPastAdminSlot = (date: string, time: string) => {
 
 export function AdminNewReservationModal({
   initialDate,
+  customerContext,
+  completionMessage = "登録が完了しました",
   onClose,
   onCreated,
 }: {
   initialDate: string;
+  customerContext?: AdminReservationCustomerContext;
+  completionMessage?: string;
   onClose: () => void;
   onCreated: (item: AdminReservationItem) => void;
 }) {
@@ -103,8 +126,20 @@ export function AdminNewReservationModal({
     return initialDate < today ? today : initialDate;
   });
   const [reservedTime, setReservedTime] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [inspectionExpiresOn, setInspectionExpiresOn] = useState("");
+  const [selectedVehicleId, setSelectedVehicleId] = useState(() =>
+    customerContext?.vehicles.length === 1
+      ? customerContext.vehicles[0].id
+      : "",
+  );
+  const initialSelectedVehicle = customerContext?.vehicles.find(
+    (vehicle) => vehicle.id === selectedVehicleId,
+  );
+  const [birthDate, setBirthDate] = useState(
+    customerContext?.birthDate ?? "",
+  );
+  const [inspectionExpiresOn, setInspectionExpiresOn] = useState(
+    initialSelectedVehicle?.shakenExpiryDate ?? "",
+  );
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>(
     {},
   );
@@ -126,6 +161,9 @@ export function AdminNewReservationModal({
 
   const selectedDay = availability[reservedDate];
   const selectedHoliday = selectedDay?.holiday ?? null;
+  const selectedVehicle = customerContext?.vehicles.find(
+    (vehicle) => vehicle.id === selectedVehicleId,
+  );
   const todayKey = getNowJstDateKey();
 
   const selectedMonth = useMemo(() => formatMonth(reservedDate), [reservedDate]);
@@ -190,10 +228,27 @@ export function AdminNewReservationModal({
     }
 
     const formData = new FormData(form);
-    const customerName = String(formData.get("customerName") ?? "").trim();
-    const customerKana = String(formData.get("customerKana") ?? "").trim();
-    const phone = normalizePhone(String(formData.get("phone") ?? ""));
-    const birthDate = String(formData.get("birthDate") ?? "").trim();
+    const customerName =
+      customerContext?.name.trim() ??
+      String(formData.get("customerName") ?? "").trim();
+    const customerKana =
+      customerContext?.nameKana.trim() ??
+      String(formData.get("customerKana") ?? "").trim();
+    const phone = normalizePhone(
+      customerContext?.phone ?? String(formData.get("phone") ?? ""),
+    );
+    const submittedBirthDate =
+      customerContext?.birthDate ??
+      String(formData.get("birthDate") ?? "").trim();
+    const vehicleModel =
+      selectedVehicle?.modelName ??
+      String(formData.get("vehicleModel") ?? "").trim();
+    const licensePlate =
+      selectedVehicle?.plateNumber ??
+      String(formData.get("licensePlate") ?? "").trim();
+    const submittedInspectionExpiresOn = selectedVehicle
+      ? selectedVehicle.shakenExpiryDate ?? ""
+      : String(formData.get("inspectionExpiresOn") ?? "").trim();
     const loanerCarRequestedValue = String(
       formData.get("loanerCarRequested") ?? "",
     );
@@ -204,6 +259,10 @@ export function AdminNewReservationModal({
           ? "予約日は本日以降を選択してください。"
           : "",
       reservedTime: reservedTime ? "" : "予約時間を選択してください。",
+      vehicleId:
+        customerContext?.vehicles.length && !selectedVehicle
+          ? "予約する車両を選択してください。"
+          : "",
       customerName: customerName ? "" : "氏名を入力してください。",
       phone: !phone
         ? "電話番号を入力してください。"
@@ -213,7 +272,7 @@ export function AdminNewReservationModal({
       customerKana:
         customerKana && !isValidHiragana(customerKana) ? kanaErrorMessage : "",
       birthDate:
-        birthDate && birthDate > todayKey
+        submittedBirthDate && submittedBirthDate > todayKey
           ? "生年月日は今日以前の日付を選択してください。"
           : "",
       loanerCarRequested: loanerCarRequestedValue
@@ -239,14 +298,20 @@ export function AdminNewReservationModal({
     }
 
     setPendingReservation({
+      customerId: customerContext?.id,
+      vehicleId: selectedVehicle?.id,
       customerName,
       customerKana,
       phone,
-      gender: String(formData.get("gender") ?? "") || undefined,
-      birthDate: birthDate || undefined,
-      vehicleModel: String(formData.get("vehicleModel") ?? "").trim() || undefined,
-      licensePlate: String(formData.get("licensePlate") ?? "").trim(),
-      inspectionExpiresOn: String(formData.get("inspectionExpiresOn") ?? "").trim(),
+      gender:
+        customerContext?.gender === "未設定"
+          ? undefined
+          : (customerContext?.gender ??
+            (String(formData.get("gender") ?? "") || undefined)),
+      birthDate: submittedBirthDate || undefined,
+      vehicleModel: vehicleModel || undefined,
+      licensePlate,
+      inspectionExpiresOn: submittedInspectionExpiresOn,
       loanerCarRequested: loanerCarRequestedValue === "true",
       reservedAt: `${reservedDate}T${reservedTime}:00+09:00`,
       note: String(formData.get("note") ?? "").trim(),
@@ -438,6 +503,142 @@ export function AdminNewReservationModal({
             </span>
           </div>
 
+          {customerContext ? (
+            <>
+              <section className="rounded-md border border-blue-100 bg-blue-50/60 p-4">
+                <p className="text-xs font-semibold text-blue-700">予約対象</p>
+                <p className="mt-1 text-lg font-bold text-slate-950">
+                  {customerContext.name} 様
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-slate-600">
+                  <span>{customerContext.phone}</span>
+                  <span>
+                    LINE：
+                    {customerContext.lineStatus}
+                    {customerContext.lineDisplayName
+                      ? `（${customerContext.lineDisplayName}）`
+                      : ""}
+                  </span>
+                </div>
+              </section>
+
+              <section className="grid gap-4 rounded-md border border-slate-200 bg-slate-50 p-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">予約車両</h3>
+                  <p className="mt-1 text-xs font-medium text-slate-500">
+                    顧客情報に登録されている車両を使用します。
+                  </p>
+                </div>
+
+                {customerContext.vehicles.length > 1 ? (
+                  <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                    車両を選択
+                    <select
+                      value={selectedVehicleId}
+                      onChange={(event) => {
+                        const nextVehicleId = event.target.value;
+                        const nextVehicle = customerContext.vehicles.find(
+                          (vehicle) => vehicle.id === nextVehicleId,
+                        );
+                        setSelectedVehicleId(nextVehicleId);
+                        setInspectionExpiresOn(
+                          nextVehicle?.shakenExpiryDate ?? "",
+                        );
+                        setFieldErrors((current) => ({
+                          ...current,
+                          vehicleId: "",
+                        }));
+                      }}
+                      className={[
+                        "h-11 rounded-md border bg-white px-3 text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100",
+                        fieldErrors.vehicleId
+                          ? "border-red-400"
+                          : "border-slate-300",
+                      ].join(" ")}
+                    >
+                      <option value="">車両を選択してください</option>
+                      {customerContext.vehicles.map((vehicle) => (
+                        <option key={vehicle.id} value={vehicle.id}>
+                          {vehicle.modelName || "車種未登録"}（
+                          {vehicle.plateNumber || "ナンバー未登録"}）
+                        </option>
+                      ))}
+                    </select>
+                    {fieldErrors.vehicleId ? (
+                      <span className="text-xs font-semibold leading-4 text-red-600">
+                        {fieldErrors.vehicleId}
+                      </span>
+                    ) : null}
+                  </label>
+                ) : null}
+
+                {selectedVehicle ? (
+                  <dl className="grid gap-3 rounded-md border border-slate-200 bg-white p-4 sm:grid-cols-3">
+                    <div>
+                      <dt className="text-xs font-semibold text-slate-500">
+                        車種
+                      </dt>
+                      <dd className="mt-1 text-sm font-bold text-slate-900">
+                        {selectedVehicle.modelName || "－"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold text-slate-500">
+                        ナンバー
+                      </dt>
+                      <dd className="mt-1 text-sm font-bold text-slate-900">
+                        {selectedVehicle.plateNumber || "－"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold text-slate-500">
+                        車検満了日
+                      </dt>
+                      <dd className="mt-1 text-sm font-bold text-slate-900">
+                        {selectedVehicle.shakenExpiryDate || "－"}
+                      </dd>
+                    </div>
+                  </dl>
+                ) : customerContext.vehicles.length === 0 ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                      車種
+                      <input
+                        name="vehicleModel"
+                        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                      ナンバー
+                      <input
+                        name="licensePlate"
+                        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+                    <div>
+                      <AdminInlineDatePicker
+                        dropdownClassName="right-0 w-[min(86vw,600px)]"
+                        label="車検満了日"
+                        minDate={null}
+                        selectedDate={inspectionExpiresOn}
+                        showCalendarIcon
+                        showMonthYearSelectors
+                        yearSelectionFutureYears={20}
+                        onSelectDate={setInspectionExpiresOn}
+                      />
+                      <input
+                        type="hidden"
+                        name="inspectionExpiresOn"
+                        value={inspectionExpiresOn}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            </>
+          ) : null}
+
+          {!customerContext ? (
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
               氏名
@@ -544,6 +745,7 @@ export function AdminNewReservationModal({
               />
             </div>
           </div>
+          ) : null}
 
           <fieldset className="grid gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
             <legend className="px-1 text-sm font-bold text-slate-800">
@@ -678,7 +880,7 @@ export function AdminNewReservationModal({
               id="new-reservation-complete-title"
               className="text-lg font-bold text-slate-950"
             >
-              登録が完了しました
+              {completionMessage}
             </h3>
             <div className="mt-5 flex justify-end">
               <button

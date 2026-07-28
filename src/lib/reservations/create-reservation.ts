@@ -15,6 +15,8 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { normalizeDateInput } from "@/lib/vehicles/shaken-expiry";
 
 export type ReservationCreateRequest = {
+  customerId?: string;
+  vehicleId?: string;
   customerName?: string;
   customerKana?: string;
   phone?: string;
@@ -65,6 +67,11 @@ const normalizeOptional = (value: unknown) => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+const normalizeGender = (
+  value: string | null,
+): "男性" | "女性" | null =>
+  value === "男性" || value === "女性" ? value : null;
+
 const getJstTime = (date: Date) =>
   new Intl.DateTimeFormat("ja-JP", {
     hour: "2-digit",
@@ -101,25 +108,104 @@ export async function createReservation({
   mode: ReservationCreateMode;
   requestUrl: string;
 }): Promise<ReservationCreateResult> {
-  const customerName = normalizeOptional(body.customerName);
-  const customerKana = normalizeOptional(body.customerKana);
-  const phone = normalizeOptional(body.phone);
-  const normalizedPhone = phone ? normalizePhone(phone) : "";
-  const gender = normalizeOptional(body.gender);
-  const normalizedGender =
-    gender === "男性" || gender === "女性"
-      ? gender
-      : null;
-  const birthDate = normalizeBirthDateInput(normalizeOptional(body.birthDate));
-  const vehicleModel = normalizeOptional(body.vehicleModel);
-  const licensePlate = normalizeOptional(body.licensePlate);
-  const shakenExpiryDate = normalizeDateInput(
+  const requestedCustomerId = normalizeOptional(body.customerId);
+  const requestedVehicleId = normalizeOptional(body.vehicleId);
+  let customerName = normalizeOptional(body.customerName);
+  let customerKana = normalizeOptional(body.customerKana);
+  let phone = normalizeOptional(body.phone);
+  let normalizedPhone = phone ? normalizePhone(phone) : "";
+  let gender = normalizeOptional(body.gender);
+  let normalizedGender = normalizeGender(gender);
+  let birthDate = normalizeBirthDateInput(normalizeOptional(body.birthDate));
+  let vehicleModel = normalizeOptional(body.vehicleModel);
+  let licensePlate = normalizeOptional(body.licensePlate);
+  let shakenExpiryDate = normalizeDateInput(
     normalizeOptional(body.inspectionExpiresOn),
   );
   const reservedAt = normalizeOptional(body.reservedAt);
   const loanerCarRequested = body.loanerCarRequested;
   const note = normalizeOptional(body.note);
   const lineIdToken = normalizeOptional(body.lineIdToken);
+
+  if (
+    (requestedCustomerId || requestedVehicleId) &&
+    mode !== "admin"
+  ) {
+    return {
+      ok: false,
+      statusCode: 400,
+      message: "顧客指定の予約は管理画面から登録してください。",
+    };
+  }
+
+  if (requestedVehicleId && !requestedCustomerId) {
+    return {
+      ok: false,
+      statusCode: 400,
+      message: "車両を指定する場合は顧客情報が必要です。",
+    };
+  }
+
+  if (requestedCustomerId) {
+    const { data: existingCustomer, error: customerError } = await supabaseServer
+      .from("customers")
+      .select("id,name,name_kana,phone,gender,birth_date")
+      .eq("id", requestedCustomerId)
+      .maybeSingle();
+
+    if (customerError) {
+      return {
+        ok: false,
+        statusCode: 500,
+        message: customerError.message,
+      };
+    }
+
+    if (!existingCustomer) {
+      return {
+        ok: false,
+        statusCode: 400,
+        message: "指定された顧客が見つかりません。",
+      };
+    }
+
+    customerName = normalizeOptional(existingCustomer.name);
+    customerKana = normalizeOptional(existingCustomer.name_kana);
+    phone = normalizeOptional(existingCustomer.phone);
+    normalizedPhone = phone ? normalizePhone(phone) : "";
+    gender = normalizeOptional(existingCustomer.gender);
+    normalizedGender = normalizeGender(gender);
+    birthDate = normalizeBirthDateInput(existingCustomer.birth_date);
+
+    if (requestedVehicleId) {
+      const { data: existingVehicle, error: vehicleError } = await supabaseServer
+        .from("vehicles")
+        .select("id,customer_id,model_name,plate_number,shaken_expiry_date")
+        .eq("id", requestedVehicleId)
+        .eq("customer_id", requestedCustomerId)
+        .maybeSingle();
+
+      if (vehicleError) {
+        return {
+          ok: false,
+          statusCode: 500,
+          message: vehicleError.message,
+        };
+      }
+
+      if (!existingVehicle) {
+        return {
+          ok: false,
+          statusCode: 400,
+          message: "指定された車両が顧客情報に登録されていません。",
+        };
+      }
+
+      vehicleModel = normalizeOptional(existingVehicle.model_name);
+      licensePlate = normalizeOptional(existingVehicle.plate_number);
+      shakenExpiryDate = normalizeDateInput(existingVehicle.shaken_expiry_date);
+    }
+  }
 
   if (
     !customerName ||
@@ -216,7 +302,7 @@ export async function createReservation({
       p_birth_date: birthDate,
       p_vehicle_model: vehicleModel,
       p_license_plate: licensePlate,
-      p_shaken_expiry_date: shakenExpiryDate,
+      p_shaken_expiry_date: requestedVehicleId ? null : shakenExpiryDate,
       p_reserved_at: reservedDate.toISOString(),
       p_note: note,
       p_line_user_id: lineProfile?.sub ?? null,
@@ -263,9 +349,49 @@ export async function createReservation({
     };
   }
 
+  if (
+    requestedCustomerId &&
+    reservation.customer_id !== requestedCustomerId
+  ) {
+    await supabaseServer
+      .from("reservations")
+      .delete()
+      .eq("id", reservation.reservation_id);
+
+    return {
+      ok: false,
+      statusCode: 500,
+      message: "予約と顧客情報の紐付けに失敗しました。",
+    };
+  }
+
+  let linkedVehicleId = reservation.vehicle_id;
+
+  if (requestedVehicleId && reservation.vehicle_id !== requestedVehicleId) {
+    const { error: vehicleLinkError } = await supabaseServer
+      .from("reservations")
+      .update({ vehicle_id: requestedVehicleId })
+      .eq("id", reservation.reservation_id);
+
+    if (vehicleLinkError) {
+      await supabaseServer
+        .from("reservations")
+        .delete()
+        .eq("id", reservation.reservation_id);
+
+      return {
+        ok: false,
+        statusCode: 500,
+        message: "予約と車両情報の紐付けに失敗しました。",
+      };
+    }
+
+    linkedVehicleId = requestedVehicleId;
+  }
+
   await sendReservationCompletionNotification({
     customerId: reservation.customer_id,
-    vehicleId: reservation.vehicle_id,
+    vehicleId: linkedVehicleId,
     reservationId: reservation.reservation_id,
     reservedAt: reservedDate,
     vehicleModel: vehicleModel ?? "未登録",
@@ -284,7 +410,7 @@ export async function createReservation({
       requestUrl,
     ).toString(),
     customerId: reservation.customer_id,
-    vehicleId: reservation.vehicle_id,
+    vehicleId: linkedVehicleId,
     customerName,
     phone,
     vehicleModel: vehicleModel ?? "未登録",
