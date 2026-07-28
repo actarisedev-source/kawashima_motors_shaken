@@ -22,6 +22,7 @@ import {
   type AdminCalendarDayAvailability,
   type AdminCalendarReservationCounts,
 } from "./shared/admin-date-calendar-modal";
+import { AdminStatusDropdown } from "./shared/admin-status-dropdown";
 
 const reservationStatuses = ["受付中", "確定", "完了", "キャンセル"] as const;
 
@@ -717,26 +718,18 @@ export function AdminDashboard() {
                     </div>
                   </div>
                   <div className="w-40 shrink-0 text-sm">
-                    <label className="sr-only" htmlFor="reservation-status">
-                      ステータス
-                    </label>
-                    <select
-                      id="reservation-status"
+                    <AdminStatusDropdown
                       value={selectedReservation.status}
+                      options={selectedReservationStatusOptions}
                       disabled={selectedReservationStatusDisabled}
-                      onChange={(event) =>
-                        handleStatusChange(event.target.value as ReservationStatus)
+                      label="ステータス"
+                      onChange={(status) =>
+                        handleStatusChange(status as ReservationStatus)
                       }
-                      className={`h-8 min-h-8 w-28 rounded-full border px-3 text-center text-sm font-semibold outline-none ring-1 transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${statusClassName(
+                      buttonClassName={`h-8 min-h-8 w-28 rounded-full border px-3 text-center text-sm font-semibold ring-1 transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${statusClassName(
                         selectedReservation.status,
                       )}`}
-                    >
-                      {selectedReservationStatusOptions.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
+                    />
                     {selectedReservationDateIsPast ? (
                       <span className="mt-2 block w-40 whitespace-normal text-left text-xs font-medium leading-relaxed text-slate-500">
                         {selectedReservation.status === "完了"
