@@ -299,16 +299,67 @@ type LineEmojiPickerProps = {
   label: string;
   value: string;
   onValueChange: (value: string) => void;
+  insertItems?: LineInsertItem[];
   rows?: number;
   maxLength?: number;
   className?: string;
   disabled?: boolean;
 };
 
+export type LineInsertItem = {
+  label: string;
+  token: string;
+  icon:
+    | "person"
+    | "phone"
+    | "car"
+    | "number"
+    | "date"
+    | "reservation"
+    | "loaner";
+};
+
+const materialIconPaths: Record<LineInsertItem["icon"], string> = {
+  person:
+    "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4Zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4Z",
+  phone:
+    "m6.62 10.79 2.2-2.2-3.47-3.47-2.2 2.2c-.45.45-.58 1.12-.33 1.7 2.1 4.91 6.03 8.84 10.94 10.94.58.25 1.25.12 1.7-.33l2.2-2.2-3.47-3.47-2.2 2.2c-2.3-1.17-4.19-3.06-5.37-5.37Z",
+  car:
+    "M18.92 6.01A1.5 1.5 0 0 0 17.5 5h-11a1.5 1.5 0 0 0-1.42 1.01L3 12v8h2v-2h14v2h2v-8l-2.08-5.99ZM6.85 7h10.3l1.04 3H5.81l1.04-3ZM19 16H5v-4h14v4Zm-11.5-3A1.5 1.5 0 1 0 7.5 16a1.5 1.5 0 0 0 0-3Zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z",
+  number:
+    "M9 3 8 7H4v2h3.5l-1 4H3v2h3l-1 4h2l1-4h5l-1 4h2l1-4h4v-2h-3.5l1-4H20V7h-3l1-4h-2l-1 4h-5l1-4H9Zm.5 6h5l-1 4h-5l1-4Z",
+  date:
+    "M19 4h-1V2h-2v2H8V2H6v2H5a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3Zm1 15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8h16v8Zm0-10H4V7a1 1 0 0 1 1-1h1v2h2V6h8v2h2V6h1a1 1 0 0 1 1 1v2Z",
+  reservation:
+    "M19 4h-1V2h-2v2H8V2H6v2H5a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h7v-2H5a1 1 0 0 1-1-1v-8h16v2h2V7a3 3 0 0 0-3-3Zm1 5H4V7a1 1 0 0 1 1-1h1v2h2V6h8v2h2V6h1a1 1 0 0 1 1 1v2Zm-2 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm1.5 4.5h-2.25V16h1.5v1h.75v1.5Z",
+  loaner:
+    "M18.92 6.01A1.5 1.5 0 0 0 17.5 5h-11a1.5 1.5 0 0 0-1.42 1.01L3 12v6h2v2h2v-2h10v2h2v-2h2v-6l-2.08-5.99ZM6.85 7h10.3l1.04 3H5.81l1.04-3ZM19 16H5v-4h14v4Zm-11.5-3A1.5 1.5 0 1 0 7.5 16a1.5 1.5 0 0 0 0-3Zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z",
+};
+
+function MaterialInsertIcon({
+  name,
+  className = "h-4 w-4",
+}: {
+  name: LineInsertItem["icon"];
+  className?: string;
+}) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className={className}
+      fill="currentColor"
+    >
+      <path d={materialIconPaths[name]} />
+    </svg>
+  );
+}
+
 export function LineEmojiPicker({
   label,
   value,
   onValueChange,
+  insertItems,
   rows = 10,
   maxLength = 5000,
   className = "",
@@ -322,6 +373,7 @@ export function LineEmojiPicker({
   const selectionRef = useRef({ start: value.length, end: value.length });
   const hasTextareaSelectionRef = useRef(false);
   const [open, setOpen] = useState(false);
+  const [insertMenuOpen, setInsertMenuOpen] = useState(false);
   const [activeCategory, setActiveCategory] =
     useState<EmojiCategoryId>("favorites");
   const [searchQuery, setSearchQuery] = useState("");
@@ -433,7 +485,7 @@ export function LineEmojiPicker({
   }, [value]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open && !insertMenuOpen) return;
 
     const handlePointerDown = (event: PointerEvent) => {
       if (
@@ -441,11 +493,13 @@ export function LineEmojiPicker({
         !pickerRef.current.contains(event.target as Node)
       ) {
         setOpen(false);
+        setInsertMenuOpen(false);
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
+        setInsertMenuOpen(false);
         textareaRef.current?.focus();
       }
     };
@@ -456,7 +510,7 @@ export function LineEmojiPicker({
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open]);
+  }, [insertMenuOpen, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -497,25 +551,19 @@ export function LineEmojiPicker({
     );
   }
 
-  function insertEmoji(emoji: string) {
+  function insertTextAtSelection(text: string) {
     if (disabled) return false;
 
     const { start, end } = hasTextareaSelectionRef.current
       ? selectionRef.current
       : { start: value.length, end: value.length };
-    const nextValue = `${value.slice(0, start)}${emoji}${value.slice(end)}`;
+    const nextValue = `${value.slice(0, start)}${text}${value.slice(end)}`;
     if (nextValue.length > maxLength) return false;
 
-    const nextCursor = start + emoji.length;
+    const nextCursor = start + text.length;
     selectionRef.current = { start: nextCursor, end: nextCursor };
     hasTextareaSelectionRef.current = true;
     onValueChange(nextValue);
-    saveRecentEmojis(
-      [emoji, ...recentEmojis.filter((item) => item !== emoji)].slice(
-        0,
-        maxRecentEmojis,
-      ),
-    );
 
     window.requestAnimationFrame(() => {
       const textarea = textareaRef.current;
@@ -523,6 +571,16 @@ export function LineEmojiPicker({
       textarea?.setSelectionRange(nextCursor, nextCursor);
     });
     return true;
+  }
+
+  function insertEmoji(emoji: string) {
+    if (!insertTextAtSelection(emoji)) return;
+    saveRecentEmojis(
+      [emoji, ...recentEmojis.filter((item) => item !== emoji)].slice(
+        0,
+        maxRecentEmojis,
+      ),
+    );
   }
 
   function toggleFavorite(emoji: string) {
@@ -568,18 +626,79 @@ export function LineEmojiPicker({
       <div className="flex items-center justify-between gap-3">
         <label htmlFor={textareaId}>{label}</label>
         <div ref={pickerRef} className="relative flex items-center gap-2">
+          {insertItems?.length ? (
+            <button
+              type="button"
+              aria-expanded={insertMenuOpen}
+              aria-haspopup="menu"
+              disabled={disabled}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setOpen(false);
+                setInsertMenuOpen((current) => !current);
+              }}
+              className="flex h-8 cursor-pointer items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="currentColor"
+              >
+                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2Z" />
+              </svg>
+              差し込み
+            </button>
+          ) : null}
+
           <button
             type="button"
             aria-expanded={open}
             aria-haspopup="dialog"
             disabled={disabled}
             onPointerDown={(event) => event.preventDefault()}
-            onClick={() => setOpen((current) => !current)}
+            onClick={() => {
+              setInsertMenuOpen(false);
+              setOpen((current) => !current);
+            }}
             className="flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-blue-200 bg-white px-2.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span aria-hidden="true">😊</span>
             絵文字
           </button>
+
+          {insertItems?.length && insertMenuOpen ? (
+            <div
+              role="menu"
+              aria-label="差し込み項目"
+              className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-md border border-slate-700 bg-slate-900 p-2 text-white shadow-xl"
+            >
+              <p className="px-3 py-2 text-xs font-bold text-slate-300">
+                差し込み項目
+              </p>
+              <div className="grid gap-0.5">
+                {insertItems.map((item) => (
+                  <button
+                    key={item.token}
+                    type="button"
+                    role="menuitem"
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      insertTextAtSelection(item.token);
+                      setInsertMenuOpen(false);
+                    }}
+                    className="flex min-h-10 cursor-pointer items-center gap-3 rounded px-3 text-left text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-800 focus-visible:bg-slate-800 focus-visible:outline-none"
+                  >
+                    <MaterialInsertIcon
+                      name={item.icon}
+                      className="h-[18px] w-[18px] shrink-0 text-blue-300"
+                    />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {open ? (
             <div

@@ -393,6 +393,10 @@ export async function createReservation({
     customerId: reservation.customer_id,
     vehicleId: linkedVehicleId,
     reservationId: reservation.reservation_id,
+    reservedAt: reservedDate,
+    vehicleModel: vehicleModel ?? "未登録",
+    licensePlate,
+    loanerCarRequested,
   });
 
   return {
