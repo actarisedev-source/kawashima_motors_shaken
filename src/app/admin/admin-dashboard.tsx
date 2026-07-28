@@ -359,6 +359,33 @@ export function AdminDashboard() {
 
     return map;
   }, [items]);
+  const upcomingMonthlyReservationCounts = useMemo(() => {
+    const countsByMonth = new Map<string, number>();
+
+    for (const item of items) {
+      const monthKey = getJstDateKey(item.reservedAt).slice(0, 7);
+      countsByMonth.set(monthKey, (countsByMonth.get(monthKey) ?? 0) + 1);
+    }
+
+    const [currentYear, currentMonth] = getJstDateKey(new Date())
+      .split("-")
+      .map(Number);
+
+    return Array.from({ length: 4 }, (_, offset) => {
+      const monthDate = new Date(
+        Date.UTC(currentYear, currentMonth - 1 + offset, 1),
+      );
+      const year = monthDate.getUTCFullYear();
+      const monthNumber = monthDate.getUTCMonth() + 1;
+      const monthKey = `${year}-${String(monthNumber).padStart(2, "0")}`;
+
+      return {
+        key: monthKey,
+        label: `${monthNumber}月`,
+        count: countsByMonth.get(monthKey) ?? 0,
+      };
+    });
+  }, [items]);
 
   const selectedDateItems = useMemo(
     () => itemsByDate.get(selectedDate) ?? [],
@@ -421,37 +448,63 @@ export function AdminDashboard() {
         ) : null}
 
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-wrap items-end gap-2 sm:gap-3">
-            <div className="grid gap-1.5 text-sm font-semibold text-slate-700">
-              日付選択
-              <button
-                type="button"
-                onClick={() => setIsCalendarOpen(true)}
-                className="flex h-11 min-w-[190px] cursor-pointer items-center justify-between gap-3 rounded-md border border-slate-300 bg-white px-3 text-left text-sm font-semibold text-slate-950 outline-none transition hover:border-blue-300 hover:bg-blue-50 focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-                aria-haspopup="dialog"
-                aria-expanded={isCalendarOpen}
-              >
-                <span>{formatSelectedDate(selectedDate)}</span>
-                <span className="text-blue-600" aria-hidden="true">
-                  ▼
-                </span>
-              </button>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="flex flex-wrap items-end gap-2 sm:gap-3">
+              <div className="grid gap-1.5 text-sm font-semibold text-slate-700">
+                日付選択
+                <button
+                  type="button"
+                  onClick={() => setIsCalendarOpen(true)}
+                  className="flex h-11 min-w-[190px] cursor-pointer items-center justify-between gap-3 rounded-md border border-slate-300 bg-white px-3 text-left text-sm font-semibold text-slate-950 outline-none transition hover:border-blue-300 hover:bg-blue-50 focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                  aria-haspopup="dialog"
+                  aria-expanded={isCalendarOpen}
+                >
+                  <span>{formatSelectedDate(selectedDate)}</span>
+                  <span className="text-blue-600" aria-hidden="true">
+                    ▼
+                  </span>
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => selectRelativeDate(0)}
+                  className="h-11 cursor-pointer rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
+                >
+                  今日
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsNewReservationOpen(true)}
+                  className="h-11 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                >
+                  ＋ 予約登録
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <button
-                type="button"
-                onClick={() => selectRelativeDate(0)}
-                className="h-11 cursor-pointer rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
-              >
-                今日
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsNewReservationOpen(true)}
-                className="h-11 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-              >
-                ＋ 予約登録
-              </button>
+
+            <div
+              className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 xl:w-auto xl:min-w-[440px]"
+              aria-label="今後4か月の予約件数"
+            >
+              {upcomingMonthlyReservationCounts.map((summary) => (
+                <div
+                  key={summary.key}
+                  className="flex min-h-[78px] flex-col items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm"
+                >
+                  <span className="text-sm font-semibold text-slate-600">
+                    {summary.label}
+                  </span>
+                  <span className="mt-1 flex items-baseline justify-center text-blue-600">
+                    <span className="text-2xl font-bold leading-none">
+                      {summary.count}
+                    </span>
+                    <span className="ml-0.5 text-xs font-semibold text-slate-700">
+                      件
+                    </span>
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </section>
