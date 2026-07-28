@@ -84,21 +84,6 @@ const groups = [
   },
 ];
 
-const variableSamples: Record<string, string> = {
-  name: "川島 太郎",
-  phone: "090-1234-5678",
-  vehicle_name: "プリウス",
-  plate_number: "長野 300 あ 12-34",
-  shaken_expiry_date: "○○年○○月○○日",
-  reservation_date: "○○年○○月○○日 ○○:○○",
-  age: "40",
-};
-
-const previewMessage = (body: string) =>
-  body.replace(/\{\{([a-z_]+)\}\}/g, (_, key: string) =>
-    key in variableSamples ? variableSamples[key] : `{{${key}}}`,
-  );
-
 const todayInJapan = () =>
   new Intl.DateTimeFormat("sv-SE", {
     year: "numeric",
@@ -487,11 +472,8 @@ export function LineScheduledDistribution() {
         </section>
         <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-bold">配信プレビュー</h2>
-          <p className="text-xs text-slate-500">
-            ※差し込み項目はサンプルデータで表示しています。
-          </p>
           <div className="min-h-48 whitespace-pre-wrap rounded-md bg-[#8cabd9] p-4 text-sm leading-6">
-            {previewBody ? <div className="ml-auto max-w-[90%] whitespace-pre-wrap rounded-md bg-white p-3 shadow-sm">{previewMessage(previewBody)}</div> : null}
+            {previewBody ? <div className="ml-auto max-w-[90%] whitespace-pre-wrap rounded-md bg-white p-3 shadow-sm">{previewBody}</div> : null}
             {imagePreviewUrl ? (
               <div className="ml-auto mt-2 max-w-[90%] overflow-hidden rounded-md bg-white shadow-sm first:mt-0">
                 <Image src={imagePreviewUrl} alt="予約配信画像プレビュー" width={640} height={480} unoptimized className="h-auto max-h-80 w-full object-contain" />

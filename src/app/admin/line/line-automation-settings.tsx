@@ -1,10 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  LineEmojiPicker,
-  type LineInsertItem,
-} from "./line-emoji-picker";
+import { LineEmojiPicker } from "./line-emoji-picker";
 
 type AutomationType =
   | "shaken_60_days"
@@ -43,22 +40,6 @@ const automationDisplayOrder: AutomationType[] = [
   "reservation_previous_day",
   "shaken_30_days",
   "shaken_60_days",
-];
-
-const reservationCompletionInsertItems: LineInsertItem[] = [
-  { label: "お名前", token: "{{customer_name}}", icon: "person" },
-  { label: "車種", token: "{{vehicle_name}}", icon: "car" },
-  { label: "ナンバー", token: "{{plate_number}}", icon: "number" },
-  {
-    label: "予約日時",
-    token: "{{reservation_datetime}}",
-    icon: "reservation",
-  },
-  {
-    label: "代車希望",
-    token: "{{loaner_car_requested}}",
-    icon: "loaner",
-  },
 ];
 
 const formatDateTime = (value: string | null) =>
@@ -275,11 +256,6 @@ export function LineAutomationSettings() {
                   value={setting.body}
                   onValueChange={(value) =>
                     updateSetting(setting.automation_type, "body", value)
-                  }
-                  insertItems={
-                    setting.automation_type === "reservation_completion"
-                      ? reservationCompletionInsertItems
-                      : undefined
                   }
                   rows={12}
                   className="rounded-[5px] border border-slate-300 px-3 py-2 text-base font-normal leading-7 outline-none focus:border-blue-500"

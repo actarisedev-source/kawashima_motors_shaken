@@ -6,10 +6,6 @@ type ReservationCompletionNotificationInput = {
   customerId: string;
   vehicleId: string;
   reservationId: string;
-  reservedAt: Date;
-  vehicleModel: string;
-  licensePlate: string | null;
-  loanerCarRequested: boolean | null;
 };
 
 const reservationCompletionAutomationType = "reservation_completion";
@@ -20,23 +16,7 @@ const defaultReservationCompletionSetting = {
 
 川島モータースです。
 
-以下の内容でご予約を受け付けました。
-
-━━━━━━━━━━━━━━
-
-ご予約日時
-{{reservation_datetime}}
-
-車種
-{{vehicle_name}}
-
-ナンバー
-{{plate_number}}
-
-代車希望
-{{loaner_car_requested}}
-
-━━━━━━━━━━━━━━
+ご予約を受け付けました。
 
 内容を確認後、担当者よりご連絡いたします。
 
@@ -52,52 +32,6 @@ const defaultReservationCompletionSetting = {
 川島モータース`,
 };
 
-const formatReservationDate = (value: Date) =>
-  new Intl.DateTimeFormat("ja-JP", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Tokyo",
-  }).format(value);
-
-const renderReservationCompletionMessage = (
-  template: string,
-  input: ReservationCompletionNotificationInput,
-  customerName: string,
-) => {
-  const loanerCarRequested =
-    input.loanerCarRequested === null
-      ? "—"
-      : input.loanerCarRequested
-        ? "希望する"
-        : "希望しない";
-  const values: Record<string, string> = {
-    reservation_datetime: formatReservationDate(input.reservedAt),
-    customer_name: customerName,
-    vehicle_name: input.vehicleModel,
-    plate_number: input.licensePlate ?? "未登録",
-    loaner_car_requested: loanerCarRequested,
-  };
-  const rendered = template.replace(/\{\{([a-z_]+)\}\}/g, (_, key: string) =>
-    key in values ? values[key] : `{{${key}}}`,
-  );
-
-  if (template.includes("{{loaner_car_requested}}")) {
-    return rendered;
-  }
-
-  const divider = "\n\n━━━━━━━━━━━━━━";
-  const dividerIndex = rendered.lastIndexOf(divider);
-  const loanerSection = `\n\n代車希望\n${loanerCarRequested}`;
-
-  return dividerIndex >= 0
-    ? `${rendered.slice(0, dividerIndex)}${loanerSection}${rendered.slice(dividerIndex)}`
-    : `${rendered}${loanerSection}`;
-};
-
 export async function sendReservationCompletionNotification(
   input: ReservationCompletionNotificationInput,
 ) {
@@ -106,7 +40,7 @@ export async function sendReservationCompletionNotification(
       await Promise.all([
         supabaseServer
           .from("customers")
-          .select("name,line_user_id,line_status")
+          .select("line_user_id,line_status")
           .eq("id", input.customerId)
           .maybeSingle(),
         supabaseServer
@@ -152,11 +86,7 @@ export async function sendReservationCompletionNotification(
       return;
     }
 
-    const body = renderReservationCompletionMessage(
-      setting.body,
-      input,
-      customer.name,
-    );
+    const body = setting.body;
     const accessToken = getLineConfig().channelAccessToken;
     let status: "成功" | "失敗" = "成功";
     let errorMessage: string | null = null;

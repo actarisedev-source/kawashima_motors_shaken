@@ -1,6 +1,5 @@
 import {
   getLineAudience,
-  renderLineMessage,
   type LineAudienceFilters,
 } from "@/lib/line/audience";
 import {
@@ -68,15 +67,13 @@ export async function sendLineDistribution(input: SendLineDistributionInput) {
   for (const member of audience) {
     const lineUserId = member.customer.line_user_id;
     if (!lineUserId) continue;
-    const renderedBody = input.messageBody
-      ? renderLineMessage(input.messageBody, member)
-      : "";
+    const messageBody = input.messageBody;
     let status: "成功" | "失敗" = "成功";
     let errorMessage: string | null = null;
 
     try {
       const messages: LinePushMessage[] = [];
-      if (renderedBody) messages.push({ type: "text", text: renderedBody });
+      if (messageBody) messages.push({ type: "text", text: messageBody });
       if (input.imageUrl) {
         messages.push({
           type: "image",
@@ -100,7 +97,7 @@ export async function sendLineDistribution(input: SendLineDistributionInput) {
         line_user_id: lineUserId,
         target_type: targetType,
         title: input.title,
-        body: renderedBody,
+        body: messageBody,
         image_url: input.imageUrl,
         status,
         error_message: errorMessage,

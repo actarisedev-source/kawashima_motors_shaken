@@ -133,39 +133,6 @@ export async function getLineAutomationTargets(
   return targets;
 }
 
-const formatDate = (value: string | null | undefined) =>
-  value ? value.replaceAll("-", "/") : "未登録";
-
-const formatReservationDate = (value: string | null | undefined) =>
-  value
-    ? new Intl.DateTimeFormat("ja-JP", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-        timeZone: "Asia/Tokyo",
-      }).format(new Date(value))
-    : "未登録";
-
-export function renderLineAutomationMessage(
-  template: string,
-  target: LineAutomationTarget,
-) {
-  const values: Record<string, string> = {
-    name: target.customer.name,
-    phone: target.customer.phone ?? "未登録",
-    vehicle_name: target.vehicle?.model_name ?? "未登録",
-    plate_number: target.vehicle?.plate_number ?? "未登録",
-    shaken_expiry_date: formatDate(target.vehicle?.shaken_expiry_date),
-    reservation_date: formatReservationDate(target.reservation?.reserved_at),
-  };
-  return template.replace(/\{\{([a-z_]+)\}\}/g, (_, key: string) =>
-    key in values ? values[key] : `{{${key}}}`,
-  );
-}
-
 const successfulTargetKeys = async (
   automationType: LineAutomationType,
   targetDate: string,
@@ -266,11 +233,11 @@ export async function sendLineAutomation(
   for (const target of pending) {
     const lineUserId = target.customer.line_user_id;
     if (!lineUserId) continue;
-    const renderedBody = renderLineAutomationMessage(setting.body, target);
+    const messageBody = setting.body;
     let status: "成功" | "失敗" = "成功";
     let errorMessage: string | null = null;
     try {
-      await pushLineTextMessage(accessToken, lineUserId, renderedBody);
+      await pushLineTextMessage(accessToken, lineUserId, messageBody);
       successCount += 1;
     } catch (error) {
       status = "失敗";
@@ -288,7 +255,7 @@ export async function sendLineAutomation(
           ? `自動配信テスト: ${lineAutomationDefinitions[setting.automation_type].label}`
           : lineAutomationDefinitions[setting.automation_type].label,
         title: setting.title,
-        body: renderedBody,
+        body: messageBody,
         status,
         error_message: errorMessage,
         sent_at: status === "成功" ? new Date().toISOString() : null,
