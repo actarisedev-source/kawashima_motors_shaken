@@ -18,6 +18,11 @@ export type AdminCalendarReservationCounts = {
   confirmed: number;
 };
 
+export const adminCalendarReservationCountDotClassNames = {
+  accepting: "bg-amber-400",
+  confirmed: "bg-emerald-400",
+} as const;
+
 export const formatAdminCalendarMonth = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 
@@ -207,14 +212,14 @@ export function AdminDateCalendarModal({
                       <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-semibold">
                         <span className="inline-flex items-center gap-1.5 px-2 py-1 text-slate-600">
                           <span
-                            className="h-2 w-2 rounded-full bg-amber-400"
+                            className={`h-2 w-2 rounded-full ${adminCalendarReservationCountDotClassNames.accepting}`}
                             aria-hidden="true"
                           />
                           受付中 {counts.accepting}件
                         </span>
                         <span className="inline-flex items-center gap-1.5 px-2 py-1 text-slate-600">
                           <span
-                            className="h-2 w-2 rounded-full bg-emerald-400"
+                            className={`h-2 w-2 rounded-full ${adminCalendarReservationCountDotClassNames.confirmed}`}
                             aria-hidden="true"
                           />
                           確認済 {counts.confirmed}件

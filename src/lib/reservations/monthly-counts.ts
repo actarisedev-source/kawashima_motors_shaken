@@ -10,6 +10,15 @@ type ReservationForMonthlySummary = {
   status: string;
 };
 
+export type MonthlyReservationSummary = {
+  key: string;
+  label: string;
+  accepting: number;
+  confirmed: number;
+  completed: number;
+  count: number;
+};
+
 const jstYearMonthFormatter = new Intl.DateTimeFormat("sv-SE", {
   year: "numeric",
   month: "2-digit",
@@ -53,7 +62,7 @@ export const getUpcomingJstMonthRanges = (
 export const summarizeReservationsByJstMonth = (
   reservations: ReservationForMonthlySummary[],
   ranges: JstMonthRange[],
-) =>
+): MonthlyReservationSummary[] =>
   ranges.map((range) => {
     const startTime = range.start.getTime();
     const endTime = range.end.getTime();
