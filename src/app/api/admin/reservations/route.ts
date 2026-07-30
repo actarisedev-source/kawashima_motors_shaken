@@ -5,10 +5,6 @@ import {
   createReservation,
   type ReservationCreateRequest,
 } from "@/lib/reservations/create-reservation";
-import {
-  countReservationsByJstMonth,
-  getUpcomingJstMonthRanges,
-} from "@/lib/reservations/monthly-counts";
 import { getJstDateKey } from "@/lib/reservations/slots";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
@@ -73,33 +69,14 @@ export async function GET(request: NextRequest) {
     return unauthorizedResponse();
   }
 
-  const monthRanges = getUpcomingJstMonthRanges();
-  const summaryStart = monthRanges[0].start.toISOString();
-  const summaryEnd = monthRanges.at(-1)!.end.toISOString();
-  const [reservationsResult, monthlyReservationsResult] = await Promise.all([
-    supabaseServer
-      .from("reservations")
-      .select("*")
-      .order("created_at", { ascending: false }),
-    supabaseServer
-      .from("reservations")
-      .select("reserved_at,status")
-      .neq("status", "キャンセル")
-      .gte("reserved_at", summaryStart)
-      .lt("reserved_at", summaryEnd),
-  ]);
-  const { data: reservations, error: reservationsError } = reservationsResult;
+  const { data: reservations, error: reservationsError } = await supabaseServer
+    .from("reservations")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   if (reservationsError) {
     return NextResponse.json(
       { ok: false, message: reservationsError.message },
-      { status: 500 },
-    );
-  }
-
-  if (monthlyReservationsResult.error) {
-    return NextResponse.json(
-      { ok: false, message: monthlyReservationsResult.error.message },
       { status: 500 },
     );
   }
@@ -159,14 +136,7 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  return NextResponse.json({
-    ok: true,
-    items,
-    monthlyReservationCounts: countReservationsByJstMonth(
-      monthlyReservationsResult.data ?? [],
-      monthRanges,
-    ),
-  });
+  return NextResponse.json({ ok: true, items });
 }
 
 export async function POST(request: NextRequest) {

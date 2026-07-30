@@ -1,22 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  countReservationsByJstMonth,
+  countAdminCalendarReservationsByJstMonth,
   getUpcomingJstMonthRanges,
 } from "../src/lib/reservations/monthly-counts.ts";
 
-test("JSTの月初から翌月月初までを半開区間で集計する", () => {
+test("予約カレンダーの日別件数を対象月だけ合計する", () => {
   const ranges = getUpcomingJstMonthRanges(
     new Date("2026-07-15T12:00:00+09:00"),
   );
-  const counts = countReservationsByJstMonth(
-    [
-      { reserved_at: "2026-06-30T14:59:59.999Z", status: "確定" },
-      { reserved_at: "2026-06-30T15:00:00.000Z", status: "受付中" },
-      { reserved_at: "2026-07-31T14:59:59.999Z", status: "完了" },
-      { reserved_at: "2026-07-31T15:00:00.000Z", status: "確定" },
-      { reserved_at: "2026-08-31T14:59:59.999Z", status: "キャンセル" },
-    ],
+  const counts = countAdminCalendarReservationsByJstMonth(
+    {
+      "2026-06-30": { accepting: 4, confirmed: 2 },
+      "2026-07-01": { accepting: 1, confirmed: 0 },
+      "2026-07-07": { accepting: 1, confirmed: 0 },
+      "2026-07-18": { accepting: 1, confirmed: 0 },
+      "2026-07-23": { accepting: 1, confirmed: 1 },
+      "2026-08-01": { accepting: 0, confirmed: 1 },
+    },
     ranges,
   );
 
@@ -39,7 +40,7 @@ test("JSTの月初から翌月月初までを半開区間で集計する", () =>
       },
     ],
   );
-  assert.equal(counts[0].count, 2);
+  assert.equal(counts[0].count, 5);
   assert.equal(counts[1].count, 1);
 });
 

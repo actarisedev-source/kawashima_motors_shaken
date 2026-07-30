@@ -5,9 +5,9 @@ export type JstMonthRange = {
   end: Date;
 };
 
-type ReservationForMonthlyCount = {
-  reserved_at: string;
-  status: string;
+type AdminCalendarCounts = {
+  accepting: number;
+  confirmed: number;
 };
 
 const jstYearMonthFormatter = new Intl.DateTimeFormat("sv-SE", {
@@ -50,23 +50,19 @@ export const getUpcomingJstMonthRanges = (
   });
 };
 
-export const countReservationsByJstMonth = (
-  reservations: ReservationForMonthlyCount[],
+export const countAdminCalendarReservationsByJstMonth = (
+  countsByDate: Record<string, AdminCalendarCounts>,
   ranges: JstMonthRange[],
 ) =>
   ranges.map((range) => {
-    const startTime = range.start.getTime();
-    const endTime = range.end.getTime();
-    const count = reservations.reduce((total, reservation) => {
-      if (reservation.status === "キャンセル") {
-        return total;
-      }
-
-      const reservedAt = new Date(reservation.reserved_at).getTime();
-      return reservedAt >= startTime && reservedAt < endTime
-        ? total + 1
-        : total;
-    }, 0);
+    const monthPrefix = `${range.key}-`;
+    const count = Object.entries(countsByDate).reduce(
+      (total, [dateKey, counts]) =>
+        dateKey.startsWith(monthPrefix)
+          ? total + counts.accepting + counts.confirmed
+          : total,
+      0,
+    );
 
     return {
       key: range.key,

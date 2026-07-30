@@ -6,7 +6,10 @@ import {
   getJstTimeKey,
   reservationTimeSlots,
 } from "@/lib/reservations/slots";
-import { getUpcomingJstMonthRanges } from "@/lib/reservations/monthly-counts";
+import {
+  countAdminCalendarReservationsByJstMonth,
+  getUpcomingJstMonthRanges,
+} from "@/lib/reservations/monthly-counts";
 import { AdminHeader } from "./admin-header";
 import {
   AdminNewReservationModal,
@@ -53,12 +56,6 @@ type AvailabilityResponse = {
   ok: boolean;
   message?: string;
   days?: Record<string, DayAvailability>;
-};
-
-type MonthlyReservationCount = {
-  key: string;
-  label: string;
-  count: number;
 };
 
 type LoadState =
@@ -129,15 +126,6 @@ export function AdminDashboard() {
   const [pendingStatusChange, setPendingStatusChange] =
     useState<PendingStatusChange | null>(null);
   const [printedAt, setPrintedAt] = useState(() => new Date());
-  const [upcomingMonthlyReservationCounts, setUpcomingMonthlyReservationCounts] =
-    useState<MonthlyReservationCount[]>(() =>
-      getUpcomingJstMonthRanges().map(({ key, label }) => ({
-        key,
-        label,
-        count: 0,
-      })),
-    );
-
   const month = formatMonth(monthDate);
   const selectedCustomerId = selectedReservation?.customerId ?? null;
 
@@ -150,16 +138,10 @@ export function AdminDashboard() {
     const result = (await response.json()) as {
       ok: boolean;
       items?: ReservationItem[];
-      monthlyReservationCounts?: MonthlyReservationCount[];
       message?: string;
     };
 
-    if (
-      !response.ok ||
-      !result.ok ||
-      !result.items ||
-      !result.monthlyReservationCounts
-    ) {
+    if (!response.ok || !result.ok || !result.items) {
       setLoadState({
         status: "error",
         message: result.message ?? "予約一覧の取得に失敗しました。",
@@ -168,7 +150,6 @@ export function AdminDashboard() {
     }
 
     setItems(result.items);
-    setUpcomingMonthlyReservationCounts(result.monthlyReservationCounts);
     setSelectedReservation((current) =>
       current
         ? (result.items?.find((item) => item.id === current.id) ?? null)
@@ -399,6 +380,14 @@ export function AdminDashboard() {
 
     return counts;
   }, [itemsByDate]);
+  const upcomingMonthlyReservationCounts = useMemo(
+    () =>
+      countAdminCalendarReservationsByJstMonth(
+        reservationCountsByDate,
+        getUpcomingJstMonthRanges(),
+      ),
+    [reservationCountsByDate],
+  );
   const selectedAvailability = availability[selectedDate];
   const selectedHoliday = availability[selectedDate]?.holiday ?? null;
   const selectedReservationDateIsPast = selectedReservation
