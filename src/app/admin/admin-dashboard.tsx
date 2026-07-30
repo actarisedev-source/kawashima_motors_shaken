@@ -7,8 +7,8 @@ import {
   reservationTimeSlots,
 } from "@/lib/reservations/slots";
 import {
-  countAdminCalendarReservationsByJstMonth,
   getUpcomingJstMonthRanges,
+  summarizeReservationsByJstMonth,
 } from "@/lib/reservations/monthly-counts";
 import { AdminHeader } from "./admin-header";
 import {
@@ -125,6 +125,9 @@ export function AdminDashboard() {
   const [isNewReservationOpen, setIsNewReservationOpen] = useState(false);
   const [pendingStatusChange, setPendingStatusChange] =
     useState<PendingStatusChange | null>(null);
+  const [openMonthlySummaryKey, setOpenMonthlySummaryKey] = useState<
+    string | null
+  >(null);
   const [printedAt, setPrintedAt] = useState(() => new Date());
   const month = formatMonth(monthDate);
   const selectedCustomerId = selectedReservation?.customerId ?? null;
@@ -295,6 +298,36 @@ export function AdminDashboard() {
   }, [month]);
 
   useEffect(() => {
+    if (!openMonthlySummaryKey) {
+      return;
+    }
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (
+        event.target instanceof Element &&
+        !event.target.closest(
+          `[data-monthly-summary-card="${openMonthlySummaryKey}"]`,
+        )
+      ) {
+        setOpenMonthlySummaryKey(null);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenMonthlySummaryKey(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [openMonthlySummaryKey]);
+
+  useEffect(() => {
     if (!selectedCustomerId) {
       setSelectedCustomer(null);
       setCustomerLoading(false);
@@ -382,11 +415,11 @@ export function AdminDashboard() {
   }, [itemsByDate]);
   const upcomingMonthlyReservationCounts = useMemo(
     () =>
-      countAdminCalendarReservationsByJstMonth(
-        reservationCountsByDate,
+      summarizeReservationsByJstMonth(
+        items,
         getUpcomingJstMonthRanges(),
       ),
-    [reservationCountsByDate],
+    [items],
   );
   const selectedAvailability = availability[selectedDate];
   const selectedHoliday = availability[selectedDate]?.holiday ?? null;
@@ -472,24 +505,84 @@ export function AdminDashboard() {
               className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 xl:w-auto xl:min-w-[440px]"
               aria-label="今後4か月の予約件数"
             >
-              {upcomingMonthlyReservationCounts.map((summary) => (
-                <div
-                  key={summary.key}
-                  className="flex min-h-[78px] flex-col items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm"
-                >
-                  <span className="text-sm font-semibold text-slate-600">
-                    {summary.label}
-                  </span>
-                  <span className="mt-1 flex items-baseline justify-center text-blue-600">
-                    <span className="text-2xl font-bold leading-none">
-                      {summary.count}
-                    </span>
-                    <span className="ml-0.5 text-xs font-semibold text-slate-700">
-                      件
-                    </span>
-                  </span>
-                </div>
-              ))}
+              {upcomingMonthlyReservationCounts.map((summary) => {
+                const tooltipId = `monthly-summary-${summary.key}`;
+                const tooltipOpen = openMonthlySummaryKey === summary.key;
+
+                return (
+                  <div
+                    key={summary.key}
+                    className="group relative"
+                    data-monthly-summary-card={summary.key}
+                  >
+                    <button
+                      type="button"
+                      aria-controls={tooltipId}
+                      aria-expanded={tooltipOpen}
+                      onPointerUp={(event) => {
+                        if (event.pointerType !== "mouse") {
+                          setOpenMonthlySummaryKey((current) =>
+                            current === summary.key ? null : summary.key,
+                          );
+                        }
+                      }}
+                      onClick={(event) => {
+                        if (event.detail === 0) {
+                          setOpenMonthlySummaryKey((current) =>
+                            current === summary.key ? null : summary.key,
+                          );
+                        }
+                      }}
+                      className="flex min-h-[78px] w-full cursor-pointer flex-col items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                    >
+                      <span className="text-sm font-semibold text-slate-600">
+                        {summary.label}
+                      </span>
+                      <span className="mt-1 flex items-baseline justify-center text-blue-600">
+                        <span className="text-2xl font-bold leading-none">
+                          {summary.count}
+                        </span>
+                        <span className="ml-0.5 text-xs font-semibold text-slate-700">
+                          件
+                        </span>
+                      </span>
+                    </button>
+                    <div
+                      id={tooltipId}
+                      role="tooltip"
+                      className={`absolute bottom-full left-1/2 z-30 mb-2 w-48 -translate-x-1/2 rounded-md border border-slate-200 bg-white p-3 text-xs text-slate-700 shadow-lg transition-opacity ${
+                        tooltipOpen
+                          ? "visible opacity-100"
+                          : "invisible opacity-0 group-hover:visible group-hover:opacity-100"
+                      }`}
+                    >
+                      <p className="mb-2 text-sm font-semibold text-slate-900">
+                        {summary.label}予約状況
+                      </p>
+                      <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5">
+                        <dt>受付中</dt>
+                        <dd className="text-right font-semibold">
+                          {summary.accepting}件
+                        </dd>
+                        <dt>確認済</dt>
+                        <dd className="text-right font-semibold">
+                          {summary.confirmed}件
+                        </dd>
+                        <dt>完了</dt>
+                        <dd className="text-right font-semibold">
+                          {summary.completed}件
+                        </dd>
+                        <dt className="mt-1 border-t border-slate-200 pt-2 font-semibold text-slate-900">
+                          合計
+                        </dt>
+                        <dd className="mt-1 border-t border-slate-200 pt-2 text-right font-bold text-slate-900">
+                          {summary.count}件
+                        </dd>
+                      </dl>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>

@@ -1,23 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  countAdminCalendarReservationsByJstMonth,
   getUpcomingJstMonthRanges,
+  summarizeReservationsByJstMonth,
 } from "../src/lib/reservations/monthly-counts.ts";
 
-test("予約カレンダーの日別件数を対象月だけ合計する", () => {
+test("対象月の受付中・確定・完了だけをステータス別に集計する", () => {
   const ranges = getUpcomingJstMonthRanges(
     new Date("2026-07-15T12:00:00+09:00"),
   );
-  const counts = countAdminCalendarReservationsByJstMonth(
-    {
-      "2026-06-30": { accepting: 4, confirmed: 2 },
-      "2026-07-01": { accepting: 1, confirmed: 0 },
-      "2026-07-07": { accepting: 1, confirmed: 0 },
-      "2026-07-18": { accepting: 1, confirmed: 0 },
-      "2026-07-23": { accepting: 1, confirmed: 1 },
-      "2026-08-01": { accepting: 0, confirmed: 1 },
-    },
+  const summaries = summarizeReservationsByJstMonth(
+    [
+      { reservedAt: "2026-06-30T14:59:59.999Z", status: "受付中" },
+      { reservedAt: "2026-06-30T15:00:00.000Z", status: "受付中" },
+      { reservedAt: "2026-07-07T00:00:00.000Z", status: "完了" },
+      { reservedAt: "2026-07-23T02:00:00.000Z", status: "確定" },
+      { reservedAt: "2026-07-23T03:00:00.000Z", status: "キャンセル" },
+      { reservedAt: "2026-07-31T14:59:59.999Z", status: "完了" },
+      { reservedAt: "2026-07-31T15:00:00.000Z", status: "受付中" },
+    ],
     ranges,
   );
 
@@ -40,8 +41,22 @@ test("予約カレンダーの日別件数を対象月だけ合計する", () =>
       },
     ],
   );
-  assert.equal(counts[0].count, 5);
-  assert.equal(counts[1].count, 1);
+  assert.deepEqual(summaries[0], {
+    key: "2026-07",
+    label: "7月",
+    accepting: 1,
+    confirmed: 1,
+    completed: 2,
+    count: 4,
+  });
+  assert.deepEqual(summaries[1], {
+    key: "2026-08",
+    label: "8月",
+    accepting: 1,
+    confirmed: 0,
+    completed: 0,
+    count: 1,
+  });
 });
 
 test("12月から翌年1月への年またぎを正しく処理する", () => {

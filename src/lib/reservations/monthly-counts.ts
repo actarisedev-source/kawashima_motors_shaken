@@ -5,9 +5,9 @@ export type JstMonthRange = {
   end: Date;
 };
 
-type AdminCalendarCounts = {
-  accepting: number;
-  confirmed: number;
+type ReservationForMonthlySummary = {
+  reservedAt: string;
+  status: string;
 };
 
 const jstYearMonthFormatter = new Intl.DateTimeFormat("sv-SE", {
@@ -50,23 +50,39 @@ export const getUpcomingJstMonthRanges = (
   });
 };
 
-export const countAdminCalendarReservationsByJstMonth = (
-  countsByDate: Record<string, AdminCalendarCounts>,
+export const summarizeReservationsByJstMonth = (
+  reservations: ReservationForMonthlySummary[],
   ranges: JstMonthRange[],
 ) =>
   ranges.map((range) => {
-    const monthPrefix = `${range.key}-`;
-    const count = Object.entries(countsByDate).reduce(
-      (total, [dateKey, counts]) =>
-        dateKey.startsWith(monthPrefix)
-          ? total + counts.accepting + counts.confirmed
-          : total,
-      0,
-    );
+    const startTime = range.start.getTime();
+    const endTime = range.end.getTime();
+    let accepting = 0;
+    let confirmed = 0;
+    let completed = 0;
+
+    for (const reservation of reservations) {
+      const reservedAt = new Date(reservation.reservedAt).getTime();
+
+      if (reservedAt < startTime || reservedAt >= endTime) {
+        continue;
+      }
+
+      if (reservation.status === "受付中") {
+        accepting += 1;
+      } else if (reservation.status === "確定") {
+        confirmed += 1;
+      } else if (reservation.status === "完了") {
+        completed += 1;
+      }
+    }
 
     return {
       key: range.key,
       label: range.label,
-      count,
+      accepting,
+      confirmed,
+      completed,
+      count: accepting + confirmed + completed,
     };
   });
