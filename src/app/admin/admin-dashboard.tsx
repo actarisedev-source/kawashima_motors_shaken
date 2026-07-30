@@ -6,6 +6,7 @@ import {
   getJstTimeKey,
   reservationTimeSlots,
 } from "@/lib/reservations/slots";
+import { getUpcomingJstMonthRanges } from "@/lib/reservations/monthly-counts";
 import { AdminHeader } from "./admin-header";
 import {
   AdminNewReservationModal,
@@ -52,6 +53,12 @@ type AvailabilityResponse = {
   ok: boolean;
   message?: string;
   days?: Record<string, DayAvailability>;
+};
+
+type MonthlyReservationCount = {
+  key: string;
+  label: string;
+  count: number;
 };
 
 type LoadState =
@@ -122,6 +129,14 @@ export function AdminDashboard() {
   const [pendingStatusChange, setPendingStatusChange] =
     useState<PendingStatusChange | null>(null);
   const [printedAt, setPrintedAt] = useState(() => new Date());
+  const [upcomingMonthlyReservationCounts, setUpcomingMonthlyReservationCounts] =
+    useState<MonthlyReservationCount[]>(() =>
+      getUpcomingJstMonthRanges().map(({ key, label }) => ({
+        key,
+        label,
+        count: 0,
+      })),
+    );
 
   const month = formatMonth(monthDate);
   const selectedCustomerId = selectedReservation?.customerId ?? null;
@@ -135,10 +150,16 @@ export function AdminDashboard() {
     const result = (await response.json()) as {
       ok: boolean;
       items?: ReservationItem[];
+      monthlyReservationCounts?: MonthlyReservationCount[];
       message?: string;
     };
 
-    if (!response.ok || !result.ok || !result.items) {
+    if (
+      !response.ok ||
+      !result.ok ||
+      !result.items ||
+      !result.monthlyReservationCounts
+    ) {
       setLoadState({
         status: "error",
         message: result.message ?? "予約一覧の取得に失敗しました。",
@@ -147,6 +168,7 @@ export function AdminDashboard() {
     }
 
     setItems(result.items);
+    setUpcomingMonthlyReservationCounts(result.monthlyReservationCounts);
     setSelectedReservation((current) =>
       current
         ? (result.items?.find((item) => item.id === current.id) ?? null)
@@ -212,6 +234,7 @@ export function AdminDashboard() {
     );
     setLoadState({ status: "ready", message: "" });
     setUpdatingId(null);
+    void loadReservations();
   }
 
   function handleStatusChange(status: ReservationStatus) {
@@ -360,34 +383,6 @@ export function AdminDashboard() {
 
     return map;
   }, [items]);
-  const upcomingMonthlyReservationCounts = useMemo(() => {
-    const countsByMonth = new Map<string, number>();
-
-    for (const item of items) {
-      const monthKey = getJstDateKey(item.reservedAt).slice(0, 7);
-      countsByMonth.set(monthKey, (countsByMonth.get(monthKey) ?? 0) + 1);
-    }
-
-    const [currentYear, currentMonth] = getJstDateKey(new Date())
-      .split("-")
-      .map(Number);
-
-    return Array.from({ length: 4 }, (_, offset) => {
-      const monthDate = new Date(
-        Date.UTC(currentYear, currentMonth - 1 + offset, 1),
-      );
-      const year = monthDate.getUTCFullYear();
-      const monthNumber = monthDate.getUTCMonth() + 1;
-      const monthKey = `${year}-${String(monthNumber).padStart(2, "0")}`;
-
-      return {
-        key: monthKey,
-        label: `${monthNumber}月`,
-        count: countsByMonth.get(monthKey) ?? 0,
-      };
-    });
-  }, [items]);
-
   const selectedDateItems = useMemo(
     () => itemsByDate.get(selectedDate) ?? [],
     [itemsByDate, selectedDate],

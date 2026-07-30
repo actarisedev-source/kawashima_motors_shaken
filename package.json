@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:monthly-counts": "node --test --experimental-strip-types tests/monthly-reservation-counts.test.mjs"
   },
   "dependencies": {
     "@line/liff": "^2.29.0",
