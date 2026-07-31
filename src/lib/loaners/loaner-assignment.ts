@@ -206,3 +206,10 @@ export const getLoanerAssignmentError = (error: {
 
   return { status: 500, message: "代車割当の処理に失敗しました。" };
 };
+
+export const isLoanerAssignmentOverlapError = (error: {
+  code?: string;
+  message?: string;
+}) =>
+  error.code === "23P01" ||
+  (error.message ?? "").includes("loaner_assignment_overlap");

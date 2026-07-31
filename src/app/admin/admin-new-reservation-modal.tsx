@@ -9,6 +9,10 @@ import {
   reservationTimeSlots,
 } from "@/lib/reservations/slots";
 import type { ReservationCreateRequest } from "@/lib/reservations/create-reservation";
+import {
+  LoanerAssignmentPicker,
+  type SelectedLoaner,
+} from "./loaners/loaner-assignment-picker";
 import { AdminInlineDatePicker } from "./shared/admin-inline-date-picker";
 
 type ReservationStatus = "受付中" | "確定" | "完了" | "キャンセル";
@@ -22,6 +26,16 @@ export type AdminReservationItem = {
   vehicleModel: string;
   licensePlate: string;
   loanerCarRequested: boolean | null;
+  loanerAssignment: {
+    id: string;
+    status: "scheduled" | "checked_out";
+    scheduledStartAt: string;
+    scheduledEndAt: string;
+    vehicle: Pick<
+      SelectedLoaner,
+      "id" | "vehicleName" | "displayName" | "plateNumber" | "category"
+    >;
+  } | null;
   status: ReservationStatus;
   createdAt: string;
 };
@@ -69,6 +83,17 @@ type CreateReservationResponse = {
   ok: boolean;
   message?: string;
   item?: AdminReservationItem;
+};
+
+type CreateAssignmentResponse = {
+  ok: boolean;
+  message?: string;
+  item?: {
+    id: string;
+    status: "scheduled" | "checked_out";
+    scheduledStartAt: string;
+    scheduledEndAt: string;
+  };
 };
 
 type FieldErrors = {
@@ -141,6 +166,11 @@ export function AdminNewReservationModal({
   const [inspectionExpiresOn, setInspectionExpiresOn] = useState(
     initialSelectedVehicle?.shakenExpiryDate ?? "",
   );
+  const [loanerCarRequested, setLoanerCarRequested] = useState(false);
+  const [loanerStartDate, setLoanerStartDate] = useState(reservedDate);
+  const [loanerEndDate, setLoanerEndDate] = useState("");
+  const [selectedLoaner, setSelectedLoaner] =
+    useState<SelectedLoaner | null>(null);
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>(
     {},
   );
@@ -159,6 +189,7 @@ export function AdminNewReservationModal({
     useState<ReservationCreateRequest | null>(null);
   const [completedReservation, setCompletedReservation] =
     useState<AdminReservationItem | null>(null);
+  const [completionWarning, setCompletionWarning] = useState("");
 
   const selectedDay = availability[reservedDate];
   const selectedHoliday = selectedDay?.holiday ?? null;
@@ -340,8 +371,63 @@ export function AdminNewReservationModal({
         return;
       }
 
+      let completedItem = result.item;
+      let warning = "";
+
+      if (
+        pendingReservation.loanerCarRequested === true &&
+        selectedLoaner &&
+        loanerStartDate &&
+        loanerEndDate
+      ) {
+        try {
+          const assignmentResponse = await fetch("/api/admin/loaner-assignments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              reservationId: result.item.id,
+              loanerVehicleId: selectedLoaner.id,
+              startDate: loanerStartDate,
+              endDate: loanerEndDate,
+            }),
+          });
+          const assignmentResult =
+            (await assignmentResponse.json()) as CreateAssignmentResponse;
+
+          if (
+            !assignmentResponse.ok ||
+            !assignmentResult.ok ||
+            !assignmentResult.item
+          ) {
+            warning =
+              "予約は登録されましたが、代車の割り当てに失敗しました。予約詳細から再度割り当ててください。";
+          } else {
+            completedItem = {
+              ...result.item,
+              loanerAssignment: {
+                id: assignmentResult.item.id,
+                status: assignmentResult.item.status,
+                scheduledStartAt: assignmentResult.item.scheduledStartAt,
+                scheduledEndAt: assignmentResult.item.scheduledEndAt,
+                vehicle: {
+                  id: selectedLoaner.id,
+                  vehicleName: selectedLoaner.vehicleName,
+                  displayName: selectedLoaner.displayName,
+                  plateNumber: selectedLoaner.plateNumber,
+                  category: selectedLoaner.category,
+                },
+              },
+            };
+          }
+        } catch {
+          warning =
+            "予約は登録されましたが、代車の割り当てに失敗しました。予約詳細から再度割り当ててください。";
+        }
+      }
+
       setPendingReservation(null);
-      setCompletedReservation(result.item);
+      setCompletionWarning(warning);
+      setCompletedReservation(completedItem);
     } catch {
       setPendingReservation(null);
       setSubmitError("通信に失敗しました。時間をおいてもう一度お試しください。");
@@ -409,6 +495,9 @@ export function AdminNewReservationModal({
               onVisibleMonthChange={setReservationCalendarMonth}
               onSelectDate={(dateKey) => {
                 setReservedDate(dateKey);
+                setLoanerStartDate(dateKey);
+                setLoanerEndDate("");
+                setSelectedLoaner(null);
                 setFieldErrors((current) => ({
                   ...current,
                   reservedDate: "",
@@ -762,13 +851,18 @@ export function AdminNewReservationModal({
                     type="radio"
                     name="loanerCarRequested"
                     value={option.value}
-                    defaultChecked={option.value === "false"}
-                    onChange={() =>
+                    checked={loanerCarRequested === (option.value === "true")}
+                    onChange={() => {
+                      const requested = option.value === "true";
+                      setLoanerCarRequested(requested);
+                      if (!requested) {
+                        setSelectedLoaner(null);
+                      }
                       setFieldErrors((current) => ({
                         ...current,
                         loanerCarRequested: "",
-                      }))
-                    }
+                      }));
+                    }}
                     className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
                   {option.label}
@@ -779,6 +873,22 @@ export function AdminNewReservationModal({
               <span className="text-xs font-semibold leading-4 text-red-600">
                 {fieldErrors.loanerCarRequested}
               </span>
+            ) : null}
+            {loanerCarRequested ? (
+              <LoanerAssignmentPicker
+                startDate={loanerStartDate}
+                endDate={loanerEndDate}
+                selectedLoaner={selectedLoaner}
+                onStartDateChange={(date) => {
+                  setLoanerStartDate(date);
+                  setSelectedLoaner(null);
+                }}
+                onEndDateChange={(date) => {
+                  setLoanerEndDate(date);
+                  setSelectedLoaner(null);
+                }}
+                onSelectLoaner={setSelectedLoaner}
+              />
             ) : null}
           </fieldset>
 
@@ -881,6 +991,11 @@ export function AdminNewReservationModal({
             >
               {completionMessage}
             </h3>
+            {completionWarning ? (
+              <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold leading-relaxed text-amber-800">
+                {completionWarning}
+              </p>
+            ) : null}
             <div className="mt-5 flex justify-end">
               <button
                 type="button"

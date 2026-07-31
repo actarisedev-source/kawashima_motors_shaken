@@ -11,6 +11,10 @@ import {
   summarizeReservationsByJstMonth,
 } from "@/lib/reservations/monthly-counts";
 import { getAdminLoanerRequestLabel } from "@/lib/reservations/admin-loaner-request";
+import {
+  formatLoanerDate,
+  getLoanerReturnDateKey,
+} from "@/lib/loaners/loaner-period";
 import { AdminHeader } from "./admin-header";
 import {
   AdminNewReservationModal,
@@ -29,6 +33,11 @@ import {
 } from "./shared/admin-date-calendar-modal";
 import { AdminStatusDropdown } from "./shared/admin-status-dropdown";
 import { MonthlyReservationSummaryCard } from "./monthly-reservation-summary-card";
+import {
+  LoanerAssignmentPicker,
+  type SelectedLoaner,
+} from "./loaners/loaner-assignment-picker";
+import { LoanerCategoryBadge } from "./loaners/loaner-category-badge";
 
 const reservationStatuses = ["受付中", "確定", "完了", "キャンセル"] as const;
 
@@ -127,6 +136,14 @@ export function AdminDashboard() {
   const [isNewReservationOpen, setIsNewReservationOpen] = useState(false);
   const [pendingStatusChange, setPendingStatusChange] =
     useState<PendingStatusChange | null>(null);
+  const [isLoanerAssignmentOpen, setIsLoanerAssignmentOpen] = useState(false);
+  const [loanerStartDate, setLoanerStartDate] = useState("");
+  const [loanerEndDate, setLoanerEndDate] = useState("");
+  const [selectedLoaner, setSelectedLoaner] =
+    useState<SelectedLoaner | null>(null);
+  const [loanerAssignmentError, setLoanerAssignmentError] = useState("");
+  const [loanerAssignmentNotice, setLoanerAssignmentNotice] = useState("");
+  const [isAssigningLoaner, setIsAssigningLoaner] = useState(false);
   const [printedAt, setPrintedAt] = useState(() => new Date());
   const month = formatMonth(monthDate);
   const selectedCustomerId = selectedReservation?.customerId ?? null;
@@ -291,6 +308,67 @@ export function AdminDashboard() {
     void refreshAll();
   }
 
+  function openLoanerAssignment() {
+    if (!selectedReservation) return;
+    setLoanerStartDate(getJstDateKey(selectedReservation.reservedAt));
+    setLoanerEndDate("");
+    setSelectedLoaner(null);
+    setLoanerAssignmentError("");
+    setLoanerAssignmentNotice("");
+    setIsLoanerAssignmentOpen(true);
+  }
+
+  async function assignSelectedLoaner() {
+    if (
+      !selectedReservation ||
+      !selectedLoaner ||
+      !loanerStartDate ||
+      !loanerEndDate ||
+      isAssigningLoaner
+    ) {
+      return;
+    }
+
+    setIsAssigningLoaner(true);
+    setLoanerAssignmentError("");
+    setLoanerAssignmentNotice("");
+
+    try {
+      const response = await fetch("/api/admin/loaner-assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reservationId: selectedReservation.id,
+          loanerVehicleId: selectedLoaner.id,
+          startDate: loanerStartDate,
+          endDate: loanerEndDate,
+        }),
+      });
+      const result = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+      };
+
+      if (!response.ok || !result.ok) {
+        setLoanerAssignmentError(
+          result.message ?? "代車の割り当てに失敗しました。",
+        );
+        return;
+      }
+
+      await loadReservations();
+      setLoanerAssignmentNotice("代車を割り当てました。");
+      setIsLoanerAssignmentOpen(false);
+      setSelectedLoaner(null);
+    } catch {
+      setLoanerAssignmentError(
+        "通信に失敗しました。時間をおいてもう一度お試しください。",
+      );
+    } finally {
+      setIsAssigningLoaner(false);
+    }
+  }
+
   useEffect(() => {
     void refreshAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -345,6 +423,15 @@ export function AdminDashboard() {
 
     return () => controller.abort();
   }, [selectedCustomerId]);
+
+  useEffect(() => {
+    setIsLoanerAssignmentOpen(false);
+    setLoanerStartDate("");
+    setLoanerEndDate("");
+    setSelectedLoaner(null);
+    setLoanerAssignmentError("");
+    setLoanerAssignmentNotice("");
+  }, [selectedReservation?.id]);
 
   const itemsByDate = useMemo(() => {
     const map = new Map<string, ReservationItem[]>();
@@ -685,7 +772,8 @@ export function AdminDashboard() {
                           )}
                         </span>
                       </div>
-                      {selectedReservation.loanerCarRequested === true ? (
+                      {selectedReservation.loanerCarRequested === true &&
+                      !selectedReservation.loanerAssignment ? (
                         <p className="mt-2 w-fit rounded-md bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
                           代車はまだ割り当てられていません
                         </p>
@@ -720,6 +808,114 @@ export function AdminDashboard() {
                     ) : null}
                   </div>
                 </div>
+                {selectedReservation.loanerAssignment ? (
+                  <section className="border-b border-slate-200 bg-slate-50/70 px-4 py-4 sm:px-5">
+                    <h3 className="text-sm font-bold text-slate-800">割り当て済み代車</h3>
+                    <div className="mt-3 rounded-md border border-blue-100 bg-white p-4">
+                      <LoanerCategoryBadge
+                        category={selectedReservation.loanerAssignment.vehicle.category}
+                      />
+                      <p className="mt-2 font-bold text-slate-950">
+                        {selectedReservation.loanerAssignment.vehicle.displayName}
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-600">
+                        {selectedReservation.loanerAssignment.vehicle.vehicleName} / {selectedReservation.loanerAssignment.vehicle.plateNumber}
+                      </p>
+                      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+                        <div>
+                          <dt className="font-semibold text-slate-500">貸出開始日</dt>
+                          <dd className="mt-1 font-bold text-slate-800">
+                            {formatLoanerDate(
+                              getJstDateKey(
+                                selectedReservation.loanerAssignment.scheduledStartAt,
+                              ),
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="font-semibold text-slate-500">返却予定日</dt>
+                          <dd className="mt-1 font-bold text-slate-800">
+                            {formatLoanerDate(
+                              getLoanerReturnDateKey(
+                                selectedReservation.loanerAssignment.scheduledEndAt,
+                              ),
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="font-semibold text-slate-500">状態</dt>
+                          <dd className="mt-1 font-bold text-slate-800">
+                            {selectedReservation.loanerAssignment.status === "checked_out"
+                              ? "貸出中"
+                              : "予約済み"}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                  </section>
+                ) : selectedReservation.loanerCarRequested === true ? (
+                  <section className="border-b border-slate-200 px-4 py-4 sm:px-5">
+                    {!isLoanerAssignmentOpen ? (
+                      <button
+                        type="button"
+                        onClick={openLoanerAssignment}
+                        className="h-11 w-full rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto"
+                      >
+                        空いている代車を検索
+                      </button>
+                    ) : (
+                      <div className="grid gap-4">
+                        <LoanerAssignmentPicker
+                          startDate={loanerStartDate}
+                          endDate={loanerEndDate}
+                          selectedLoaner={selectedLoaner}
+                          onStartDateChange={(date) => {
+                            setLoanerStartDate(date);
+                            setSelectedLoaner(null);
+                            setLoanerAssignmentError("");
+                          }}
+                          onEndDateChange={(date) => {
+                            setLoanerEndDate(date);
+                            setSelectedLoaner(null);
+                            setLoanerAssignmentError("");
+                          }}
+                          onSelectLoaner={(loaner) => {
+                            setSelectedLoaner(loaner);
+                            setLoanerAssignmentError("");
+                          }}
+                        />
+                        {loanerAssignmentError ? (
+                          <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                            {loanerAssignmentError}
+                          </p>
+                        ) : null}
+                        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                          <button
+                            type="button"
+                            disabled={isAssigningLoaner}
+                            onClick={() => setIsLoanerAssignmentOpen(false)}
+                            className="h-10 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                          >
+                            キャンセル
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!selectedLoaner || isAssigningLoaner}
+                            onClick={() => void assignSelectedLoaner()}
+                            className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                          >
+                            {isAssigningLoaner ? "割り当て中..." : "代車を割り当てる"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                ) : null}
+                {loanerAssignmentNotice ? (
+                  <p className="border-b border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 sm:px-5">
+                    {loanerAssignmentNotice}
+                  </p>
+                ) : null}
                 <ReservationCustomerSummary
                   customer={selectedCustomer}
                   loading={customerLoading}

@@ -15,6 +15,8 @@ type ReservationStatus = (typeof reservationStatuses)[number];
 type ReservationRow = Database["public"]["Tables"]["reservations"]["Row"];
 type CustomerRow = Database["public"]["Tables"]["customers"]["Row"];
 type VehicleRow = Database["public"]["Tables"]["vehicles"]["Row"];
+type LoanerVehicleRow =
+  Database["public"]["Tables"]["loaner_vehicles"]["Row"];
 
 const isReservationStatus = (value: unknown): value is ReservationStatus =>
   typeof value === "string" &&
@@ -39,6 +41,7 @@ const buildReservationItem = ({
   vehicleModel,
   licensePlate,
   loanerCarRequested,
+  loanerAssignment = null,
   createdAt,
 }: {
   reservationId: string;
@@ -50,6 +53,19 @@ const buildReservationItem = ({
   vehicleModel: string;
   licensePlate: string | null;
   loanerCarRequested: boolean | null;
+  loanerAssignment?: {
+    id: string;
+    status: "scheduled" | "checked_out";
+    scheduledStartAt: string;
+    scheduledEndAt: string;
+    vehicle: {
+      id: string;
+      vehicleName: string;
+      displayName: string;
+      plateNumber: string;
+      category: "rental" | "owned" | "sales";
+    };
+  } | null;
   createdAt: string;
 }) => ({
   id: reservationId,
@@ -61,6 +77,7 @@ const buildReservationItem = ({
   vehicleModel,
   licensePlate: licensePlate ?? "",
   loanerCarRequested,
+  loanerAssignment,
   createdAt,
 });
 
@@ -88,13 +105,24 @@ export async function GET(request: NextRequest) {
     ...new Set(reservations.map((reservation) => reservation.vehicle_id)),
   ];
 
-  const [customersResult, vehiclesResult] = await Promise.all([
+  const [customersResult, vehiclesResult, assignmentsResult] = await Promise.all([
     customerIds.length
       ? supabaseServer.from("customers").select("*").in("id", customerIds)
       : Promise.resolve({ data: [] as CustomerRow[], error: null }),
     vehicleIds.length
       ? supabaseServer.from("vehicles").select("*").in("id", vehicleIds)
       : Promise.resolve({ data: [] as VehicleRow[], error: null }),
+    reservations.length
+      ? supabaseServer
+          .from("loaner_assignments")
+          .select("*")
+          .in("reservation_id", reservations.map((item) => item.id))
+          .in("status", ["scheduled", "checked_out"])
+          .order("created_at", { ascending: false })
+      : Promise.resolve({
+          data: [] as Database["public"]["Tables"]["loaner_assignments"]["Row"][],
+          error: null,
+        }),
   ]);
 
   if (customersResult.error) {
@@ -111,16 +139,57 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  if (assignmentsResult.error) {
+    return NextResponse.json(
+      { ok: false, message: assignmentsResult.error.message },
+      { status: 500 },
+    );
+  }
+
+  const assignmentRows = assignmentsResult.data ?? [];
+  const loanerVehicleIds = [
+    ...new Set(assignmentRows.map((item) => item.loaner_vehicle_id)),
+  ];
+  const loanerVehiclesResult = loanerVehicleIds.length
+    ? await supabaseServer
+        .from("loaner_vehicles")
+        .select("*")
+        .in("id", loanerVehicleIds)
+    : { data: [] as LoanerVehicleRow[], error: null };
+
+  if (loanerVehiclesResult.error) {
+    return NextResponse.json(
+      { ok: false, message: loanerVehiclesResult.error.message },
+      { status: 500 },
+    );
+  }
+
   const customersById = new Map(
     (customersResult.data ?? []).map((customer) => [customer.id, customer]),
   );
   const vehiclesById = new Map(
     (vehiclesResult.data ?? []).map((vehicle) => [vehicle.id, vehicle]),
   );
+  const loanerVehiclesById = new Map(
+    (loanerVehiclesResult.data ?? []).map((vehicle) => [vehicle.id, vehicle]),
+  );
+  const assignmentsByReservationId = new Map<
+    string,
+    (typeof assignmentRows)[number]
+  >();
+  for (const assignment of assignmentRows) {
+    if (!assignmentsByReservationId.has(assignment.reservation_id)) {
+      assignmentsByReservationId.set(assignment.reservation_id, assignment);
+    }
+  }
 
   const items = reservations.map((reservation: ReservationRow) => {
     const customer = customersById.get(reservation.customer_id);
     const vehicle = vehiclesById.get(reservation.vehicle_id);
+    const loanerAssignment = assignmentsByReservationId.get(reservation.id);
+    const loanerVehicle = loanerAssignment
+      ? loanerVehiclesById.get(loanerAssignment.loaner_vehicle_id)
+      : null;
 
     return {
       id: reservation.id,
@@ -132,6 +201,22 @@ export async function GET(request: NextRequest) {
       vehicleModel: vehicle?.model_name ?? "未登録",
       licensePlate: vehicle?.plate_number ?? "",
       loanerCarRequested: reservation.loaner_car_requested ?? null,
+      loanerAssignment:
+        loanerAssignment && loanerVehicle
+          ? {
+              id: loanerAssignment.id,
+              status: loanerAssignment.status as "scheduled" | "checked_out",
+              scheduledStartAt: loanerAssignment.scheduled_start_at,
+              scheduledEndAt: loanerAssignment.scheduled_end_at,
+              vehicle: {
+                id: loanerVehicle.id,
+                vehicleName: loanerVehicle.vehicle_name,
+                displayName: loanerVehicle.display_name,
+                plateNumber: loanerVehicle.plate_number,
+                category: loanerVehicle.category,
+              },
+            }
+          : null,
       createdAt: reservation.created_at,
     };
   });

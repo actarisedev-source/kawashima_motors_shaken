@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   getLoanerAssignmentError,
   hasLoanerAssignmentOverlap,
+  isLoanerAssignmentOverlapError,
   validateLoanerAssignmentChangeInput,
   validateLoanerAssignmentInput,
   validateLoanerReleaseInput,
@@ -16,6 +17,13 @@ const reservationId = "33333333-3333-4333-8333-333333333333";
 const migration = readFileSync(
   new URL(
     "../supabase/migrations/202607310002_create_loaner_assignments.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const assignmentApi = readFileSync(
+  new URL(
+    "../src/app/api/admin/loaner-assignments/route.ts",
     import.meta.url,
   ),
   "utf8",
@@ -143,4 +151,17 @@ test("不正な期間と不正な返却日時を拒否する", () => {
     ok: false,
     message: "返却日時が正しくありません。",
   });
+});
+
+test("割当APIは認証・代車希望・サーバー側Snapshot・競合メッセージを保証する", () => {
+  assert.match(assignmentApi, /getAdminAuthFromRequest/);
+  assert.match(assignmentApi, /loaner_car_requested/);
+  assert.match(assignmentApi, /reservation\.loaner_car_requested !== true/);
+  assert.match(assignmentApi, /auth\.user\.email\?\.trim\(\) \|\| auth\.user\.id/);
+  assert.doesNotMatch(assignmentApi, /snapshotCustomerName/);
+  assert.equal(isLoanerAssignmentOverlapError({ code: "23P01" }), true);
+  assert.match(
+    assignmentApi,
+    /この代車はほかの予約で使用されました。別の代車を選択してください。/,
+  );
 });

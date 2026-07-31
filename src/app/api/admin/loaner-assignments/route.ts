@@ -3,9 +3,11 @@ import type { NextRequest } from "next/server";
 import { getAdminAuthFromRequest } from "@/lib/auth/admin-session";
 import {
   getLoanerAssignmentError,
+  isLoanerAssignmentOverlapError,
   isLoanerAssignmentStatus,
   validateLoanerAssignmentInput,
 } from "@/lib/loaners/loaner-assignment";
+import { createLoanerDatePeriod } from "@/lib/loaners/loaner-period";
 import {
   getAssignmentRpcRow,
   toLoanerAssignment,
@@ -70,12 +72,123 @@ export async function POST(request: NextRequest) {
     string,
     unknown
   >;
-  const validated = validateLoanerAssignmentInput(body);
+  const datePeriod =
+    typeof body.startDate === "string" || typeof body.endDate === "string"
+      ? createLoanerDatePeriod(
+          typeof body.startDate === "string" ? body.startDate : "",
+          typeof body.endDate === "string" ? body.endDate : "",
+        )
+      : null;
+
+  if (datePeriod && !datePeriod.ok) {
+    return NextResponse.json(
+      { ok: false, message: datePeriod.message },
+      { status: 400 },
+    );
+  }
+
+  const validated = validateLoanerAssignmentInput({
+    ...body,
+    scheduledStartAt: datePeriod?.ok
+      ? datePeriod.value.scheduledStartAt
+      : body.scheduledStartAt,
+    scheduledEndAt: datePeriod?.ok
+      ? datePeriod.value.scheduledEndAt
+      : body.scheduledEndAt,
+  });
 
   if (!validated.ok) {
     return NextResponse.json(
       { ok: false, message: validated.message },
       { status: 400 },
+    );
+  }
+
+  const { data: reservation, error: reservationError } = await supabaseServer
+    .from("reservations")
+    .select("id,customer_id,loaner_car_requested")
+    .eq("id", validated.value.reservationId)
+    .maybeSingle();
+
+  if (reservationError) {
+    console.error("Failed to verify loaner reservation", reservationError);
+    return NextResponse.json(
+      { ok: false, message: "予約情報の確認に失敗しました。" },
+      { status: 500 },
+    );
+  }
+  if (!reservation) {
+    return NextResponse.json(
+      { ok: false, message: "予約が見つかりません。" },
+      { status: 404 },
+    );
+  }
+  if (reservation.loaner_car_requested !== true) {
+    return NextResponse.json(
+      { ok: false, message: "代車希望のない予約には割り当てできません。" },
+      { status: 409 },
+    );
+  }
+
+  const [customerResult, vehicleResult, activeAssignmentResult] =
+    await Promise.all([
+      supabaseServer
+        .from("customers")
+        .select("id")
+        .eq("id", reservation.customer_id)
+        .maybeSingle(),
+      supabaseServer
+        .from("loaner_vehicles")
+        .select("id,is_active")
+        .eq("id", validated.value.loanerVehicleId)
+        .maybeSingle(),
+      supabaseServer
+        .from("loaner_assignments")
+        .select("id")
+        .eq("reservation_id", reservation.id)
+        .in("status", ["scheduled", "checked_out"])
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+  if (
+    customerResult.error ||
+    vehicleResult.error ||
+    activeAssignmentResult.error
+  ) {
+    console.error(
+      "Failed to verify loaner assignment references",
+      customerResult.error ??
+        vehicleResult.error ??
+        activeAssignmentResult.error,
+    );
+    return NextResponse.json(
+      { ok: false, message: "代車割当の確認に失敗しました。" },
+      { status: 500 },
+    );
+  }
+  if (!customerResult.data) {
+    return NextResponse.json(
+      { ok: false, message: "顧客情報が見つかりません。" },
+      { status: 404 },
+    );
+  }
+  if (!vehicleResult.data) {
+    return NextResponse.json(
+      { ok: false, message: "代車が見つかりません。" },
+      { status: 404 },
+    );
+  }
+  if (!vehicleResult.data.is_active) {
+    return NextResponse.json(
+      { ok: false, message: "指定した代車は使用停止中です。" },
+      { status: 409 },
+    );
+  }
+  if (activeAssignmentResult.data) {
+    return NextResponse.json(
+      { ok: false, message: "この予約にはすでに代車が割り当てられています。" },
+      { status: 409 },
     );
   }
 
@@ -90,6 +203,16 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     console.error("Failed to assign loaner", error);
+    if (isLoanerAssignmentOverlapError(error)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message:
+            "この代車はほかの予約で使用されました。別の代車を選択してください。",
+        },
+        { status: 409 },
+      );
+    }
     const response = getLoanerAssignmentError(error);
     return NextResponse.json(
       { ok: false, message: response.message },
