@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { isValidNormalizedPhone, normalizePhone } from "@/lib/customers/phone";
+import { adminLoanerRequestOptions } from "@/lib/reservations/admin-loaner-request";
 import {
   getJstDateKey,
   reservationTimeSlots,
@@ -749,21 +750,19 @@ export function AdminNewReservationModal({
 
           <fieldset className="grid gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
             <legend className="px-1 text-sm font-bold text-slate-800">
-              代車希望
+              代車
             </legend>
-            <div className="flex flex-wrap gap-x-6 gap-y-2">
-              {[
-                { value: "true", label: "希望する" },
-                { value: "false", label: "希望しない" },
-              ].map((option) => (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {adminLoanerRequestOptions.map((option) => (
                 <label
                   key={option.value}
-                  className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700"
+                  className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50/50"
                 >
                   <input
                     type="radio"
                     name="loanerCarRequested"
                     value={option.value}
+                    defaultChecked={option.value === "false"}
                     onChange={() =>
                       setFieldErrors((current) => ({
                         ...current,

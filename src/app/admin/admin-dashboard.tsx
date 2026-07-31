@@ -10,6 +10,7 @@ import {
   getUpcomingJstMonthRanges,
   summarizeReservationsByJstMonth,
 } from "@/lib/reservations/monthly-counts";
+import { getAdminLoanerRequestLabel } from "@/lib/reservations/admin-loaner-request";
 import { AdminHeader } from "./admin-header";
 import {
   AdminNewReservationModal,
@@ -673,21 +674,22 @@ export function AdminDashboard() {
                     <p className="mt-2 text-2xl font-bold text-slate-950">
                       {selectedReservation.customerName} 様
                     </p>
-                    <div className="mt-3 flex items-center gap-3 text-sm">
-                      <span className="font-semibold text-slate-500">
-                        代車希望
-                      </span>
-                      {selectedReservation.loanerCarRequested ? (
-                        <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
-                          有り
+                    <div className="mt-3 text-sm">
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-slate-500">
+                          代車
                         </span>
-                      ) : (
                         <span className="font-bold text-slate-950">
-                          {selectedReservation.loanerCarRequested === null
-                            ? "—"
-                            : "無し"}
+                          {getAdminLoanerRequestLabel(
+                            selectedReservation.loanerCarRequested,
+                          )}
                         </span>
-                      )}
+                      </div>
+                      {selectedReservation.loanerCarRequested === true ? (
+                        <p className="mt-2 w-fit rounded-md bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
+                          代車はまだ割り当てられていません
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                   <div className="w-40 shrink-0 text-sm">
