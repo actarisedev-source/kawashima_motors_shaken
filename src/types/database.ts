@@ -1,3 +1,4 @@
+import type { LoanerAssignmentStatus } from "@/lib/loaners/loaner-assignment";
 import type { LoanerCategory } from "@/lib/loaners/loaner-vehicle";
 
 export type Json =
@@ -121,6 +122,46 @@ export type Database = {
         };
         Update: Partial<
           Database["public"]["Tables"]["loaner_vehicles"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      loaner_assignments: {
+        Row: {
+          id: string;
+          loaner_vehicle_id: string;
+          reservation_id: string;
+          customer_id: string | null;
+          scheduled_start_at: string;
+          scheduled_end_at: string;
+          actual_returned_at: string | null;
+          status: LoanerAssignmentStatus;
+          memo: string | null;
+          snapshot_customer_name: string;
+          snapshot_phone: string;
+          snapshot_reserved_at: string;
+          snapshot_staff_name: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          loaner_vehicle_id: string;
+          reservation_id: string;
+          customer_id?: string | null;
+          scheduled_start_at: string;
+          scheduled_end_at: string;
+          actual_returned_at?: string | null;
+          status?: LoanerAssignmentStatus;
+          memo?: string | null;
+          snapshot_customer_name: string;
+          snapshot_phone: string;
+          snapshot_reserved_at: string;
+          snapshot_staff_name: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["loaner_assignments"]["Insert"]
         >;
         Relationships: [];
       };
@@ -363,6 +404,28 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      assign_loaner: {
+        Args: {
+          p_loaner_vehicle_id: string;
+          p_reservation_id: string;
+          p_scheduled_start_at: string;
+          p_scheduled_end_at: string;
+          p_snapshot_staff_name: string;
+          p_memo?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["loaner_assignments"]["Row"][];
+      };
+      change_loaner: {
+        Args: {
+          p_assignment_id: string;
+          p_loaner_vehicle_id: string;
+          p_scheduled_start_at: string;
+          p_scheduled_end_at: string;
+          p_snapshot_staff_name: string;
+          p_memo?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["loaner_assignments"]["Row"][];
+      };
       claim_due_line_scheduled_messages: {
         Args: { p_limit?: number };
         Returns: Database["public"]["Tables"]["line_scheduled_messages"]["Row"][];
@@ -395,6 +458,13 @@ export type Database = {
           line_linked: boolean;
           line_link_warning: string | null;
         }>;
+      };
+      release_loaner: {
+        Args: {
+          p_assignment_id: string;
+          p_actual_returned_at?: string;
+        };
+        Returns: Database["public"]["Tables"]["loaner_assignments"]["Row"][];
       };
     };
   };
