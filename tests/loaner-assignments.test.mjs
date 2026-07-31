@@ -102,7 +102,7 @@ test("代車変更入力を検証し、旧割当をcancelledで残して新規�
   assert.match(migration, /v_current\.snapshot_customer_name/);
 });
 
-test("解除日時を検証し、release RPCがreturnedへ更新する", () => {
+test("解除日時を検証し、release RPCが現在状態に応じた終了状態へ更新する", () => {
   const result = validateLoanerReleaseInput("2026-08-03T17:30:00+09:00");
 
   assert.deepEqual(result, {
@@ -112,7 +112,16 @@ test("解除日時を検証し、release RPCがreturnedへ更新する", () => {
   assert.match(migration, /create function public\.release_loaner\(/);
   assert.match(
     migration,
-    /set status = 'returned',\s+actual_returned_at = p_actual_returned_at/,
+    /when v_assignment\.status = 'scheduled' then 'cancelled'/,
+  );
+  assert.match(
+    migration,
+    /when v_assignment\.status = 'checked_out' then p_actual_returned_at/,
+  );
+  assert.match(migration, /else 'returned'/);
+  assert.match(
+    migration,
+    /scheduled=貸出予定\s+checked_out=貸出中\s+returned=返却済み\s+cancelled=貸出前キャンセル/,
   );
   assert.doesNotMatch(migration, /delete from public\.loaner_assignments/);
 });

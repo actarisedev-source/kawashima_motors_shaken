@@ -37,6 +37,13 @@ create table public.loaner_assignments (
     where (status in ('scheduled', 'checked_out'))
 );
 
+comment on column public.loaner_assignments.status is
+'状態:
+scheduled=貸出予定
+checked_out=貸出中
+returned=返却済み
+cancelled=貸出前キャンセル';
+
 create index loaner_assignments_reservation_created_idx
   on public.loaner_assignments (reservation_id, created_at desc);
 
@@ -322,8 +329,14 @@ begin
   end if;
 
   update public.loaner_assignments
-  set status = 'returned',
-      actual_returned_at = p_actual_returned_at
+  set status = case
+        when v_assignment.status = 'scheduled' then 'cancelled'
+        else 'returned'
+      end,
+      actual_returned_at = case
+        when v_assignment.status = 'checked_out' then p_actual_returned_at
+        else null
+      end
   where id = v_assignment.id
   returning * into v_assignment;
 
