@@ -65,6 +65,28 @@ function UsersIcon(props: IconProps) {
   );
 }
 
+function CarIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="m5 11 1.7-4.1A3 3 0 0 1 9.5 5h5a3 3 0 0 1 2.8 1.9L19 11" />
+      <path d="M4 11h16a2 2 0 0 1 2 2v4.5a1.5 1.5 0 0 1-1.5 1.5h-17A1.5 1.5 0 0 1 2 17.5V13a2 2 0 0 1 2-2Z" />
+      <path d="M5 19v2" />
+      <path d="M19 19v2" />
+      <circle cx="6.5" cy="15" r="1" fill="currentColor" stroke="none" />
+      <circle cx="17.5" cy="15" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function CalendarOffIcon(props: IconProps) {
   return (
     <svg
@@ -188,6 +210,12 @@ const navItems = [
     match: (path: string) => path.startsWith("/admin/customers"),
   },
   {
+    href: "/admin/loaners",
+    label: "代車管理",
+    Icon: CarIcon,
+    match: (path: string) => path.startsWith("/admin/loaners"),
+  },
+  {
     href: "/admin/settings/holidays",
     label: "定休日管理",
     Icon: CalendarOffIcon,
@@ -267,7 +295,7 @@ export function AdminHeader({
                 <p className="mt-1 text-sm text-slate-500">{description}</p>
               ) : null}
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
               {navItems.map((item) => (
                 <Link
                   key={item.href}

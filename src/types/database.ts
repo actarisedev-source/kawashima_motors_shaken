@@ -1,4 +1,12 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+import type { LoanerCategory } from "@/lib/loaners/loaner-vehicle";
+
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
 
 export type Database = {
   public: {
@@ -84,6 +92,36 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["vehicles"]["Insert"]>;
+        Relationships: [];
+      };
+      loaner_vehicles: {
+        Row: {
+          id: string;
+          vehicle_name: string;
+          display_name: string;
+          plate_number: string;
+          category: LoanerCategory;
+          is_active: boolean;
+          sort_order: number;
+          memo: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          vehicle_name: string;
+          display_name: string;
+          plate_number: string;
+          category: LoanerCategory;
+          is_active?: boolean;
+          sort_order?: number;
+          memo?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["loaner_vehicles"]["Insert"]
+        >;
         Relationships: [];
       };
       reservations: {

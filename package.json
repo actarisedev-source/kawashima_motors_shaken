@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types tests/*.test.mjs",
     "test:monthly-counts": "node --test --experimental-strip-types tests/monthly-reservation-counts.test.mjs"
   },
   "dependencies": {
