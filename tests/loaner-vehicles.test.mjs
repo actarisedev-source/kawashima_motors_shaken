@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   filterAndSortLoanerVehicles,
@@ -8,6 +9,11 @@ import {
   normalizeLoanerPlateKey,
   validateLoanerVehicleInput,
 } from "../src/lib/loaners/loaner-vehicle.ts";
+
+const loanerVehicleModal = readFileSync(
+  new URL("../src/app/admin/loaners/loaner-vehicle-modal.tsx", import.meta.url),
+  "utf8",
+);
 
 const createVehicle = (overrides = {}) => ({
   id: "vehicle-1",
@@ -152,4 +158,12 @@ test("検索・分類・状態絞り込みと表示順を適用する", () => {
     }).map((item) => item.id),
     ["1"],
   );
+});
+
+test("代車追加・編集フォームはIME変換中のEnterを横取りしない", () => {
+  assert.match(loanerVehicleModal, /onCompositionStartCapture/);
+  assert.match(loanerVehicleModal, /onCompositionEndCapture/);
+  assert.match(loanerVehicleModal, /event\.nativeEvent\.isComposing/);
+  assert.match(loanerVehicleModal, /event\.nativeEvent\.keyCode === 229/);
+  assert.match(loanerVehicleModal, /!isImeComposing/);
 });

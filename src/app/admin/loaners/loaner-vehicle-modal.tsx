@@ -38,6 +38,7 @@ export function LoanerVehicleModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const submitButtonRef = useRef<HTMLButtonElement>(null);
+  const isComposingRef = useRef(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -105,8 +106,23 @@ export function LoanerVehicleModal({
         <form
           className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6"
           onSubmit={handleSubmit}
+          onCompositionStartCapture={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEndCapture={() => {
+            isComposingRef.current = false;
+          }}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && event.target instanceof HTMLInputElement) {
+            const isImeComposing =
+              isComposingRef.current ||
+              event.nativeEvent.isComposing ||
+              event.nativeEvent.keyCode === 229;
+
+            if (
+              event.key === "Enter" &&
+              event.target instanceof HTMLInputElement &&
+              !isImeComposing
+            ) {
               event.preventDefault();
               submitButtonRef.current?.focus();
             }
