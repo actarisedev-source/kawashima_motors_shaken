@@ -8,7 +8,11 @@ export const metadata: Metadata = {
   title: "予約管理 | Kawashima Motors Shaken",
 };
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reservation?: string | string[] }>;
+}) {
   const cookieStore = await cookies();
   const auth = await getAdminAuthFromCookies(cookieStore);
 
@@ -16,5 +20,9 @@ export default async function AdminPage() {
     redirect("/admin/login");
   }
 
-  return <AdminDashboard />;
+  const params = await searchParams;
+  const initialReservationId =
+    typeof params.reservation === "string" ? params.reservation : null;
+
+  return <AdminDashboard initialReservationId={initialReservationId} />;
 }

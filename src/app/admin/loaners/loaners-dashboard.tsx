@@ -9,6 +9,7 @@ import {
 } from "@/lib/loaners/loaner-vehicle";
 import { AdminHeader } from "../admin-header";
 import { LoanerCategoryBadge } from "./loaner-category-badge";
+import { LoanerAdminTabs } from "./loaner-admin-tabs";
 import { LoanerVehicleModal } from "./loaner-vehicle-modal";
 
 type Summary = { total: number; active: number; inactive: number };
@@ -177,6 +178,7 @@ export function LoanersDashboard() {
         onRefresh={() => loadLoaners()}
       />
       <main className="mx-auto grid max-w-7xl gap-5 px-5 py-6 sm:px-6 lg:px-8">
+        <LoanerAdminTabs active="vehicles" />
         {loadState.status === "error" ? (
           <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
             {loadState.message}

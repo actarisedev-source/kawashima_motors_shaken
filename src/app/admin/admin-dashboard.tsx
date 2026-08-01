@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getJstDateKey,
   getJstTimeKey,
@@ -10,7 +10,10 @@ import {
   getUpcomingJstMonthRanges,
   summarizeReservationsByJstMonth,
 } from "@/lib/reservations/monthly-counts";
-import { getAdminLoanerRequestLabel } from "@/lib/reservations/admin-loaner-request";
+import {
+  canAssignLoanerToReservation,
+  getAdminLoanerRequestLabel,
+} from "@/lib/reservations/admin-loaner-request";
 import {
   formatLoanerDate,
   getLoanerReturnDateKey,
@@ -113,7 +116,11 @@ function EmptyTableCellMark() {
   );
 }
 
-export function AdminDashboard() {
+export function AdminDashboard({
+  initialReservationId = null,
+}: {
+  initialReservationId?: string | null;
+}) {
   const [items, setItems] = useState<ReservationItem[]>([]);
   const [availability, setAvailability] = useState<
     Record<string, DayAvailability>
@@ -149,6 +156,7 @@ export function AdminDashboard() {
   const [loanerAssignmentNotice, setLoanerAssignmentNotice] = useState("");
   const [isAssigningLoaner, setIsAssigningLoaner] = useState(false);
   const [printedAt, setPrintedAt] = useState(() => new Date());
+  const initialReservationHandledRef = useRef(false);
   const month = formatMonth(monthDate);
   const selectedCustomerId = selectedReservation?.customerId ?? null;
 
@@ -173,6 +181,19 @@ export function AdminDashboard() {
     }
 
     setItems(result.items);
+    if (!initialReservationHandledRef.current && initialReservationId) {
+      initialReservationHandledRef.current = true;
+      const target = result.items.find((item) => item.id === initialReservationId);
+      if (target) {
+        const targetDate = getJstDateKey(target.reservedAt);
+        const [year, monthNumber] = targetDate.split("-").map(Number);
+        setSelectedDate(targetDate);
+        setMonthDate(new Date(year, monthNumber - 1, 1));
+        setSelectedReservation(target);
+        setLoadState({ status: "ready", message: "" });
+        return;
+      }
+    }
     setSelectedReservation((current) =>
       current
         ? (result.items?.find((item) => item.id === current.id) ?? null)
@@ -492,6 +513,13 @@ export function AdminDashboard() {
   const selectedReservationDateIsPast = selectedReservation
     ? getJstDateKey(selectedReservation.reservedAt) < getJstDateKey(new Date())
     : false;
+  const selectedReservationCanAssignLoaner = selectedReservation
+    ? canAssignLoanerToReservation({
+        requested: selectedReservation.loanerCarRequested,
+        status: selectedReservation.status,
+        reservedAt: selectedReservation.reservedAt,
+      })
+    : false;
   const selectedReservationStatusOptions = selectedReservation
     ? selectedReservationDateIsPast
       ? Array.from(new Set([selectedReservation.status, "完了"] as const))
@@ -788,7 +816,7 @@ export function AdminDashboard() {
                           onUpdated={handleLoanerWorkflowUpdated}
                         />
                       </div>
-                      {selectedReservation.loanerCarRequested === true &&
+                      {selectedReservationCanAssignLoaner &&
                       !selectedReservation.loanerAssignment ? (
                         <p className="mt-2 w-fit rounded-md bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
                           代車はまだ割り当てられていません
@@ -873,7 +901,7 @@ export function AdminDashboard() {
                       />
                     </div>
                   </section>
-                ) : selectedReservation.loanerCarRequested === true ? (
+                ) : selectedReservationCanAssignLoaner ? (
                   <section className="border-b border-slate-200 px-4 py-4 sm:px-5">
                     {!isLoanerAssignmentOpen ? (
                       <button
