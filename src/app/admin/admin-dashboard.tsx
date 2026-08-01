@@ -924,7 +924,17 @@ export function AdminDashboard() {
                             onClick={() => void assignSelectedLoaner()}
                             className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                           >
-                            {isAssigningLoaner ? "割り当て中..." : "代車を割り当てる"}
+                            {isAssigningLoaner ? (
+                              <span className="inline-flex items-center gap-2">
+                                <span
+                                  className="h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-white"
+                                  aria-hidden="true"
+                                />
+                                割り当て中...
+                              </span>
+                            ) : (
+                              "代車を割り当てる"
+                            )}
                           </button>
                         </div>
                       </div>

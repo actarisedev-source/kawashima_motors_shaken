@@ -25,6 +25,12 @@ const dashboard = readSource("src/app/admin/admin-dashboard.tsx");
 const actions = readSource(
   "src/app/admin/loaners/loaner-assignment-actions.tsx",
 );
+const availabilityModal = readSource(
+  "src/app/admin/loaners/loaner-availability-modal.tsx",
+);
+const categoryBadge = readSource(
+  "src/app/admin/loaners/loaner-category-badge.tsx",
+);
 
 test("Phase 2-4 Migrationは6 RPCを同じ予約単位ロックで保護する", () => {
   const functions = [
@@ -143,4 +149,23 @@ test("予約詳細は状態別の代車操作と確認UIを提供する", () => 
   assert.match(actions, /貸出開始日時/);
   assert.match(actions, /actualReturnedAt/);
   assert.doesNotMatch(actions, /updatedAt/);
+});
+
+test("代車検索モーダルは固定上部とスクロール一覧を分離しPCで2列表示する", () => {
+  assert.match(availabilityModal, />\s*代車検索\s*</);
+  assert.match(availabilityModal, /h-\[90dvh\]/);
+  assert.match(availabilityModal, /w-\[90vw\]/);
+  assert.match(availabilityModal, /max-w-\[1600px\]/);
+  assert.match(availabilityModal, /shrink-0 border-b/);
+  assert.match(availabilityModal, /min-h-0 flex-1 overflow-y-auto/);
+  assert.match(availabilityModal, /lg:grid-cols-2/);
+});
+
+test("代車検索モーダルは共通分類色と処理中表示を使用する", () => {
+  assert.match(categoryBadge, /export function LoanerCategoryDot/);
+  assert.match(availabilityModal, /<LoanerCategoryBadge/);
+  assert.match(availabilityModal, /<LoanerCategoryDot/);
+  assert.match(availabilityModal, /検索中\.\.\./);
+  assert.match(actions, /変更中\.\.\./);
+  assert.match(actions, /処理中\.\.\./);
 });

@@ -11,7 +11,10 @@ import {
   loanerCategoryLabels,
   type LoanerCategory,
 } from "@/lib/loaners/loaner-vehicle";
-import { LoanerCategoryBadge } from "./loaner-category-badge";
+import {
+  LoanerCategoryBadge,
+  LoanerCategoryDot,
+} from "./loaner-category-badge";
 
 type AvailabilityResponse = {
   ok: boolean;
@@ -113,12 +116,12 @@ export function LoanerAvailabilityModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="loaner-search-title"
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
+        className="flex h-[90dvh] max-h-[90dvh] w-[90vw] max-w-[1600px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
       >
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-5">
           <div>
             <h2 id="loaner-search-title" className="text-lg font-bold text-slate-950">
-              空いている代車を検索
+              代車検索
             </h2>
             <p className="mt-1 text-sm font-medium text-slate-500">
               利用期間 {formatLoanerDate(startDate)} ～ {formatLoanerDate(endDate)}
@@ -165,21 +168,38 @@ export function LoanerAvailabilityModal({
               </select>
             </label>
           </div>
-          <label className="mt-3 flex min-h-9 cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
-            <input
-              type="checkbox"
-              checked={availableOnly}
-              onChange={(event) => setAvailableOnly(event.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-            />
-            空いている代車のみ表示
-          </label>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+            <label className="flex min-h-9 cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={availableOnly}
+                onChange={(event) => setAvailableOnly(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              空いている代車のみ表示
+            </label>
+            <div
+              className="flex flex-wrap items-center gap-x-4 gap-y-2"
+              aria-label="代車分類の凡例"
+            >
+              {loanerCategories.map((value) => (
+                <LoanerCategoryBadge key={value} category={value} />
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5"
+          aria-busy={isLoading}
+        >
           {isLoading ? (
-            <p className="py-12 text-center text-sm font-semibold text-slate-500">
-              空き状況を確認しています。
+            <p className="flex items-center justify-center gap-2 py-12 text-center text-sm font-semibold text-slate-500">
+              <span
+                className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600"
+                aria-hidden="true"
+              />
+              検索中...
             </p>
           ) : error ? (
             <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
@@ -195,28 +215,38 @@ export function LoanerAvailabilityModal({
               </p>
             </div>
           ) : (
-            <div className="grid gap-3">
+            <div className="grid items-stretch gap-3 lg:grid-cols-2">
               {items.map((item) => {
                 const conflict = item.conflictingAssignment;
                 const isCurrent = item.id === currentLoanerVehicleId;
+                const vehicleNameMatchesDisplayName =
+                  item.vehicleName.normalize("NFKC").trim() ===
+                  item.displayName.normalize("NFKC").trim();
                 return (
                   <article
                     key={item.id}
                     className={[
-                      "rounded-md border p-4",
+                      "h-full rounded-md border p-3.5",
                       item.available || isCurrent
                         ? "border-slate-200 bg-white"
                         : "border-slate-200 bg-slate-50 opacity-70",
                     ].join(" ")}
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex h-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
-                        <LoanerCategoryBadge category={item.category} />
-                        <p className="mt-2 text-base font-bold text-slate-950">
-                          {item.displayName}
-                        </p>
+                        <div className="flex items-center gap-2.5">
+                          <LoanerCategoryDot
+                            category={item.category}
+                            className="h-3 w-3"
+                          />
+                          <p className="truncate text-base font-bold text-slate-950">
+                            {item.displayName}
+                          </p>
+                        </div>
                         <p className="mt-1 text-sm font-medium text-slate-600">
-                          {item.vehicleName} / {item.plateNumber}
+                          {vehicleNameMatchesDisplayName
+                            ? item.plateNumber
+                            : `${item.vehicleName} / ${item.plateNumber}`}
                         </p>
                         {isCurrent ? (
                           <p className="mt-2 w-fit rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
@@ -247,7 +277,7 @@ export function LoanerAvailabilityModal({
                         type="button"
                         disabled={!item.available || isCurrent}
                         onClick={() => onSelect(item)}
-                        className="h-10 shrink-0 rounded-md bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+                        className="h-10 w-full shrink-0 rounded-md bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 sm:w-auto"
                       >
                         {isCurrent ? "選択中" : item.available ? "選択" : "選択不可"}
                       </button>

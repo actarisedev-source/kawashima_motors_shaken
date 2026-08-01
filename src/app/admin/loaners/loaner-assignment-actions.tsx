@@ -359,7 +359,17 @@ export function LoanerAssignmentActions({
               onClick={() => void savePeriod()}
               className="h-11 rounded-md bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
             >
-              {isSaving ? "変更中..." : "変更する"}
+              {isSaving ? (
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    className="h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-white"
+                    aria-hidden="true"
+                  />
+                  変更中...
+                </span>
+              ) : (
+                "変更する"
+              )}
             </button>
           </div>
         </ModalFrame>
@@ -424,15 +434,23 @@ export function LoanerAssignmentActions({
               onClick={() => void confirmAction()}
               className="h-11 rounded-md bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
             >
-              {isSaving
-                ? "処理中..."
-                : confirmation.type === "checkout"
-                  ? "貸出開始"
-                  : confirmation.type === "release"
-                    ? "割り当てを解除"
-                    : confirmation.type === "return"
-                      ? "返却済みにする"
-                      : "変更する"}
+              {isSaving ? (
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    className="h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-white"
+                    aria-hidden="true"
+                  />
+                  処理中...
+                </span>
+              ) : confirmation.type === "checkout" ? (
+                "貸出開始"
+              ) : confirmation.type === "release" ? (
+                "割り当てを解除"
+              ) : confirmation.type === "return" ? (
+                "返却済みにする"
+              ) : (
+                "変更する"
+              )}
             </button>
           </div>
         </ModalFrame>

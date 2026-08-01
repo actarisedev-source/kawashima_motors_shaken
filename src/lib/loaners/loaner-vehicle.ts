@@ -33,7 +33,7 @@ export type LoanerVehicleFilter = {
 
 export const loanerCategoryLabels: Record<LoanerCategory, string> = {
   rental: "レンタカー",
-  owned: "川島モータース保有",
+  owned: "自社保有",
   sales: "販売車",
 };
 

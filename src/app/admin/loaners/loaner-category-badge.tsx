@@ -9,6 +9,21 @@ const categoryStyles: Record<LoanerCategory, string> = {
   sales: "bg-blue-500",
 };
 
+export function LoanerCategoryDot({
+  category,
+  className = "h-2.5 w-2.5",
+}: {
+  category: LoanerCategory;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`${className} shrink-0 rounded-full ${categoryStyles[category]}`}
+      aria-hidden="true"
+    />
+  );
+}
+
 export function LoanerCategoryBadge({
   category,
 }: {
@@ -16,10 +31,7 @@ export function LoanerCategoryBadge({
 }) {
   return (
     <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-slate-700">
-      <span
-        className={`h-2.5 w-2.5 shrink-0 rounded-full ${categoryStyles[category]}`}
-        aria-hidden="true"
-      />
+      <LoanerCategoryDot category={category} />
       {loanerCategoryLabels[category]}
     </span>
   );
