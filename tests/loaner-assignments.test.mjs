@@ -5,6 +5,7 @@ import {
   getLoanerAssignmentError,
   hasLoanerAssignmentOverlap,
   isLoanerAssignmentOverlapError,
+  isLoanerAssignmentReservationConflictError,
   validateLoanerAssignmentChangeInput,
   validateLoanerAssignmentInput,
   validateLoanerReleaseInput,
@@ -17,6 +18,13 @@ const reservationId = "33333333-3333-4333-8333-333333333333";
 const migration = readFileSync(
   new URL(
     "../supabase/migrations/202607310002_create_loaner_assignments.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const activeReservationMigration = readFileSync(
+  new URL(
+    "../supabase/migrations/202608010001_add_active_loaner_assignment_reservation_unique_index.sql",
     import.meta.url,
   ),
   "utf8",
@@ -89,6 +97,46 @@ test("同一代車の有効な期間重複を検出し、境界が接するだ�
   assert.match(migration, /tstzrange\(scheduled_start_at, scheduled_end_at, '\[\)'\)/);
 });
 
+test("同一予約への異なる代車の有効な同時割当をDB制約で拒否する", () => {
+  assert.match(
+    activeReservationMigration,
+    /create unique index loaner_assignments_active_reservation_unique_idx/,
+  );
+  assert.match(
+    activeReservationMigration,
+    /on public\.loaner_assignments \(reservation_id\)/,
+  );
+  assert.match(
+    activeReservationMigration,
+    /where reservation_id is not null\s+and status in \('scheduled', 'checked_out'\)/,
+  );
+  assert.doesNotMatch(
+    activeReservationMigration,
+    /status in \([^)]*(?:'cancelled'|'returned')/,
+  );
+
+  const conflict = {
+    code: "23505",
+    message:
+      'duplicate key value violates unique constraint "loaner_assignments_active_reservation_unique_idx"',
+    details:
+      "Key (reservation_id)=(33333333-3333-4333-8333-333333333333) already exists.",
+  };
+  assert.equal(isLoanerAssignmentReservationConflictError(conflict), true);
+  assert.deepEqual(getLoanerAssignmentError(conflict), {
+    status: 409,
+    message:
+      "この予約にはすでに代車が割り当てられています。画面を更新してご確認ください。",
+  });
+  assert.equal(
+    isLoanerAssignmentReservationConflictError({
+      code: "23505",
+      message: "another_unique_constraint",
+    }),
+    false,
+  );
+});
+
 test("代車変更入力を検証し、旧割当をcancelledで残して新規割当を作る", () => {
   const result = validateLoanerAssignmentChangeInput({
     loanerVehicleId: vehicleB,
@@ -108,6 +156,14 @@ test("代車変更入力を検証し、旧割当をcancelledで残して新規�
     /update public\.loaner_assignments\s+set status = 'cancelled'/,
   );
   assert.match(migration, /v_current\.snapshot_customer_name/);
+  assert.ok(
+    migration.indexOf("set status = 'cancelled'") <
+      migration.indexOf(
+        "insert into public.loaner_assignments (",
+        migration.indexOf("create function public.change_loaner("),
+      ),
+    "change_loanerは旧割当をcancelledにしてから新割当を作成する",
+  );
 });
 
 test("解除日時を検証し、release RPCが現在状態に応じた終了状態へ更新する", () => {
@@ -132,6 +188,10 @@ test("解除日時を検証し、release RPCが現在状態に応じた終了状
     /scheduled=貸出予定\s+checked_out=貸出中\s+returned=返却済み\s+cancelled=貸出前キャンセル/,
   );
   assert.doesNotMatch(migration, /delete from public\.loaner_assignments/);
+  assert.match(
+    activeReservationMigration,
+    /status in \('scheduled', 'checked_out'\)/,
+  );
 });
 
 test("不正な期間と不正な返却日時を拒否する", () => {
@@ -163,5 +223,9 @@ test("割当APIは認証・代車希望・サーバー側Snapshot・競合メッ
   assert.match(
     assignmentApi,
     /この代車はほかの予約で使用されました。別の代車を選択してください。/,
+  );
+  assert.match(
+    assignmentApi,
+    /この予約にはすでに代車が割り当てられています。画面を更新してご確認ください。/,
   );
 });

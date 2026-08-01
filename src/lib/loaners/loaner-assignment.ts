@@ -176,12 +176,35 @@ export const hasLoanerAssignmentOverlap = (
   });
 };
 
+const activeReservationUniqueIndexName =
+  "loaner_assignments_active_reservation_unique_idx";
+
+export const isLoanerAssignmentReservationConflictError = (error: {
+  code?: string;
+  message?: string;
+  details?: string;
+}) =>
+  error.code === "23505" &&
+  [error.message, error.details].some(
+    (value) =>
+      value?.includes(activeReservationUniqueIndexName) ||
+      value?.includes("(reservation_id)"),
+  );
+
 export const getLoanerAssignmentError = (error: {
   code?: string;
   message?: string;
+  details?: string;
 }) => {
   const message = error.message ?? "";
 
+  if (isLoanerAssignmentReservationConflictError(error)) {
+    return {
+      status: 409,
+      message:
+        "この予約にはすでに代車が割り当てられています。画面を更新してご確認ください。",
+    };
+  }
   if (message.includes("loaner_assignment_overlap") || error.code === "23P01") {
     return { status: 409, message: "指定した期間は代車が重複しています。" };
   }

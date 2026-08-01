@@ -187,7 +187,11 @@ export async function POST(request: NextRequest) {
   }
   if (activeAssignmentResult.data) {
     return NextResponse.json(
-      { ok: false, message: "この予約にはすでに代車が割り当てられています。" },
+      {
+        ok: false,
+        message:
+          "この予約にはすでに代車が割り当てられています。画面を更新してご確認ください。",
+      },
       { status: 409 },
     );
   }
