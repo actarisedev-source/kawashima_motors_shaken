@@ -219,9 +219,6 @@ export function LoanerAvailabilityModal({
               {items.map((item) => {
                 const conflict = item.conflictingAssignment;
                 const isCurrent = item.id === currentLoanerVehicleId;
-                const vehicleNameMatchesDisplayName =
-                  item.vehicleName.normalize("NFKC").trim() ===
-                  item.displayName.normalize("NFKC").trim();
                 return (
                   <article
                     key={item.id}
@@ -244,9 +241,7 @@ export function LoanerAvailabilityModal({
                           </p>
                         </div>
                         <p className="mt-1 text-sm font-medium text-slate-600">
-                          {vehicleNameMatchesDisplayName
-                            ? item.plateNumber
-                            : `${item.vehicleName} / ${item.plateNumber}`}
+                          {item.plateNumber}
                         </p>
                         {isCurrent ? (
                           <p className="mt-2 w-fit rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
