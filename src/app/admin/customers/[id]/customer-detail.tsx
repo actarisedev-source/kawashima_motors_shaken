@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getAgeFromBirthDate } from "@/lib/customers/birth-date";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
+import { isImeCompositionActive } from "@/lib/forms/ime";
 import { getJstDateKey } from "@/lib/reservations/slots";
 import {
   AdminNewReservationModal,
@@ -173,6 +174,7 @@ export function CustomerDetail({
   const [expandedLineMessageLogId, setExpandedLineMessageLogId] = useState<
     string | null
   >(null);
+  const customerKanaComposingRef = useRef(false);
 
   const loadCustomer = useCallback(async () => {
     setLoadState({ status: "loading", message: "読み込み中です。" });
@@ -889,8 +891,27 @@ export function CustomerDetail({
                         <input
                           name="nameKana"
                           defaultValue={customer.nameKana}
+                          onCompositionStart={() => {
+                            customerKanaComposingRef.current = true;
+                          }}
+                          onCompositionEnd={(event) => {
+                            customerKanaComposingRef.current = false;
+                            setCustomerKanaError(
+                              isValidHiragana(event.currentTarget.value)
+                                ? ""
+                                : kanaErrorMessage,
+                            );
+                          }}
                           onChange={(event) => {
                             const nextValue = event.target.value;
+                            if (
+                              isImeCompositionActive(
+                                customerKanaComposingRef.current,
+                                event.nativeEvent,
+                              )
+                            ) {
+                              return;
+                            }
                             setCustomerKanaError(
                               isValidHiragana(nextValue) ? "" : kanaErrorMessage,
                             );

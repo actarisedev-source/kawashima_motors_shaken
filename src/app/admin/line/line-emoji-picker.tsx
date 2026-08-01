@@ -8,6 +8,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { isImeCompositionActive } from "@/lib/forms/ime";
 
 const recentEmojiStorageKey = "kawashima-line-recent-emojis";
 const recentEmojiUpdatedEvent = "kawashima-line-recent-emojis-updated";
@@ -372,6 +373,7 @@ export function LineEmojiPicker({
   const scrollPositionsRef = useRef<Record<string, number>>({});
   const selectionRef = useRef({ start: value.length, end: value.length });
   const hasTextareaSelectionRef = useRef(false);
+  const isTextareaComposingRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [insertMenuOpen, setInsertMenuOpen] = useState(false);
   const [activeCategory, setActiveCategory] =
@@ -609,6 +611,14 @@ export function LineEmojiPicker({
   }
 
   function handleTextareaKeyUp(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (
+      isImeCompositionActive(
+        isTextareaComposingRef.current,
+        event.nativeEvent,
+      )
+    ) {
+      return;
+    }
     selectionRef.current = {
       start: event.currentTarget.selectionStart,
       end: event.currentTarget.selectionEnd,
@@ -816,8 +826,27 @@ export function LineEmojiPicker({
         disabled={disabled}
         rows={rows}
         maxLength={maxLength}
+        onCompositionStart={() => {
+          isTextareaComposingRef.current = true;
+        }}
+        onCompositionEnd={(event) => {
+          isTextareaComposingRef.current = false;
+          hasTextareaSelectionRef.current = true;
+          selectionRef.current = {
+            start: event.currentTarget.selectionStart,
+            end: event.currentTarget.selectionEnd,
+          };
+        }}
         onChange={(event) => {
           onValueChange(event.target.value);
+          if (
+            isImeCompositionActive(
+              isTextareaComposingRef.current,
+              event.nativeEvent,
+            )
+          ) {
+            return;
+          }
           hasTextareaSelectionRef.current = true;
           selectionRef.current = {
             start: event.target.selectionStart,

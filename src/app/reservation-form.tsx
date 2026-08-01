@@ -10,6 +10,7 @@ import {
 } from "react";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { normalizePhone } from "@/lib/customers/phone";
+import { isImeCompositionActive } from "@/lib/forms/ime";
 import {
   getJstDateKey,
   reservationTimeSlots,
@@ -254,6 +255,8 @@ export function ReservationForm({
   const customerNameInputRef = useRef<HTMLInputElement | null>(null);
   const customerKanaInputRef = useRef<HTMLInputElement | null>(null);
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
+  const customerKanaComposingRef = useRef(false);
+  const phoneComposingRef = useRef(false);
   const birthDateInputRef = useRef<HTMLInputElement | null>(null);
   const loanerCarRequestedRef = useRef<HTMLFieldSetElement | null>(null);
   const loanerCarRequestedInputRef = useRef<HTMLInputElement | null>(null);
@@ -1037,9 +1040,28 @@ export function ReservationForm({
             ref={customerKanaInputRef}
             name="customerKana"
             value={customerKana}
+            onCompositionStart={() => {
+              customerKanaComposingRef.current = true;
+            }}
+            onCompositionEnd={(event) => {
+              customerKanaComposingRef.current = false;
+              const confirmedValue = event.currentTarget.value;
+              setCustomerKana(confirmedValue);
+              setCustomerKanaError(
+                isValidHiragana(confirmedValue) ? "" : kanaErrorMessage,
+              );
+            }}
             onChange={(event) => {
               const nextValue = event.target.value;
               setCustomerKana(nextValue);
+              if (
+                isImeCompositionActive(
+                  customerKanaComposingRef.current,
+                  event.nativeEvent,
+                )
+              ) {
+                return;
+              }
               setCustomerKanaError(
                 isValidHiragana(nextValue) ? "" : kanaErrorMessage,
               );
@@ -1074,8 +1096,24 @@ export function ReservationForm({
             value={phone}
             aria-invalid={fieldErrors.phone ? "true" : "false"}
             aria-describedby="phone-error"
+            onCompositionStart={() => {
+              phoneComposingRef.current = true;
+            }}
+            onCompositionEnd={(event) => {
+              phoneComposingRef.current = false;
+              setPhone(normalizePhone(event.currentTarget.value));
+              setFieldErrors((current) => ({ ...current, phone: "" }));
+            }}
             onChange={(event) => {
-              setPhone(normalizePhone(event.target.value));
+              const nextValue = event.target.value;
+              setPhone(
+                isImeCompositionActive(
+                  phoneComposingRef.current,
+                  event.nativeEvent,
+                )
+                  ? nextValue
+                  : normalizePhone(nextValue),
+              );
               setFieldErrors((current) => ({ ...current, phone: "" }));
             }}
             className={

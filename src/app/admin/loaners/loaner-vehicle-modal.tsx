@@ -7,6 +7,7 @@ import {
   type LoanerCategory,
   type LoanerVehicle,
 } from "@/lib/loaners/loaner-vehicle";
+import { isImeCompositionActive } from "@/lib/forms/ime";
 
 type LoanerVehicleModalProps = {
   item: LoanerVehicle | null;
@@ -113,10 +114,10 @@ export function LoanerVehicleModal({
             isComposingRef.current = false;
           }}
           onKeyDown={(event) => {
-            const isImeComposing =
-              isComposingRef.current ||
-              event.nativeEvent.isComposing ||
-              event.nativeEvent.keyCode === 229;
+            const isImeComposing = isImeCompositionActive(
+              isComposingRef.current,
+              event.nativeEvent,
+            );
 
             if (
               event.key === "Enter" &&

@@ -163,7 +163,7 @@ test("検索・分類・状態絞り込みと表示順を適用する", () => {
 test("代車追加・編集フォームはIME変換中のEnterを横取りしない", () => {
   assert.match(loanerVehicleModal, /onCompositionStartCapture/);
   assert.match(loanerVehicleModal, /onCompositionEndCapture/);
-  assert.match(loanerVehicleModal, /event\.nativeEvent\.isComposing/);
-  assert.match(loanerVehicleModal, /event\.nativeEvent\.keyCode === 229/);
+  assert.match(loanerVehicleModal, /isImeCompositionActive/);
+  assert.match(loanerVehicleModal, /event\.nativeEvent/);
   assert.match(loanerVehicleModal, /!isImeComposing/);
 });
