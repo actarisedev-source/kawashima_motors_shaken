@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getLoanerAssignmentError } from "@/lib/loaners/loaner-assignment";
 import { isReservationConfirmationToken } from "@/lib/reservations/confirmation-token";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
@@ -148,22 +149,33 @@ export async function PATCH(
     });
   }
 
-  const { data: updatedReservation, error: updateError } = await supabaseServer
-    .from("reservations")
-    .update({ status: "キャンセル" })
-    .eq("id", reservation.id)
-    .select("id,status")
-    .single();
+  const { data: updatedReservations, error: updateError } =
+    await supabaseServer.rpc("cancel_reservation_with_loaner", {
+      p_reservation_id: reservation.id,
+      p_expected_status: reservation.status,
+    });
 
   if (updateError) {
+    const response = getLoanerAssignmentError(updateError);
     return NextResponse.json(
-      { ok: false, message: updateError.message },
+      { ok: false, message: response.message },
+      { status: response.status },
+    );
+  }
+
+  const updatedReservation = updatedReservations?.[0];
+  if (!updatedReservation) {
+    return NextResponse.json(
+      { ok: false, message: "予約のキャンセルに失敗しました。" },
       { status: 500 },
     );
   }
 
   return NextResponse.json({
     ok: true,
-    reservation: updatedReservation,
+    reservation: {
+      id: updatedReservation.id,
+      status: updatedReservation.status,
+    },
   });
 }

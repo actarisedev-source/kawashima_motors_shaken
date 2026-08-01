@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getAdminAuthFromRequest } from "@/lib/auth/admin-session";
+import { getLoanerAssignmentError } from "@/lib/loaners/loaner-assignment";
 import {
   createReservation,
   type ReservationCreateRequest,
@@ -292,7 +293,7 @@ export async function PATCH(request: NextRequest) {
   const { data: existingReservation, error: reservationLookupError } =
     await supabaseServer
       .from("reservations")
-      .select("id,reserved_at")
+      .select("id,reserved_at,status")
       .eq("id", body.reservationId)
       .maybeSingle();
 
@@ -318,6 +319,37 @@ export async function PATCH(request: NextRequest) {
       { ok: false, message: "過去の予約は変更できません。" },
       { status: 409 },
     );
+  }
+
+  if (body.status === "キャンセル") {
+    const { data, error } = await supabaseServer.rpc(
+      "cancel_reservation_with_loaner",
+      {
+        p_reservation_id: body.reservationId,
+        p_expected_status: existingReservation.status,
+      },
+    );
+
+    if (error) {
+      const response = getLoanerAssignmentError(error);
+      return NextResponse.json(
+        { ok: false, message: response.message },
+        { status: response.status },
+      );
+    }
+
+    const reservation = data?.[0];
+    if (!reservation) {
+      return NextResponse.json(
+        { ok: false, message: "予約のキャンセルに失敗しました。" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      reservation: { id: reservation.id, status: reservation.status },
+    });
   }
 
   const { data, error } = await supabaseServer

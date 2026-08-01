@@ -38,6 +38,10 @@ import {
   type SelectedLoaner,
 } from "./loaners/loaner-assignment-picker";
 import { LoanerCategoryBadge } from "./loaners/loaner-category-badge";
+import {
+  LoanerAssignmentActions,
+  LoanerRequestControl,
+} from "./loaners/loaner-assignment-actions";
 
 const reservationStatuses = ["受付中", "確定", "完了", "キャンセル"] as const;
 
@@ -245,7 +249,7 @@ export function AdminDashboard() {
     const isPastReservation =
       getJstDateKey(selectedReservation.reservedAt) < getJstDateKey(new Date());
 
-    if (isPastReservation && status === "完了") {
+    if (status === "キャンセル" || (isPastReservation && status === "完了")) {
       setPendingStatusChange({
         reservationId: selectedReservation.id,
         status,
@@ -367,6 +371,12 @@ export function AdminDashboard() {
     } finally {
       setIsAssigningLoaner(false);
     }
+  }
+
+  async function handleLoanerWorkflowUpdated(message: string) {
+    await loadReservations();
+    setLoanerAssignmentError("");
+    setLoanerAssignmentNotice(message);
   }
 
   useEffect(() => {
@@ -762,7 +772,7 @@ export function AdminDashboard() {
                       {selectedReservation.customerName} 様
                     </p>
                     <div className="mt-3 text-sm">
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-3">
                         <span className="font-semibold text-slate-500">
                           代車
                         </span>
@@ -771,6 +781,12 @@ export function AdminDashboard() {
                             selectedReservation.loanerCarRequested,
                           )}
                         </span>
+                        <LoanerRequestControl
+                          reservationId={selectedReservation.id}
+                          requested={selectedReservation.loanerCarRequested}
+                          assignment={selectedReservation.loanerAssignment}
+                          onUpdated={handleLoanerWorkflowUpdated}
+                        />
                       </div>
                       {selectedReservation.loanerCarRequested === true &&
                       !selectedReservation.loanerAssignment ? (
@@ -851,6 +867,10 @@ export function AdminDashboard() {
                           </dd>
                         </div>
                       </dl>
+                      <LoanerAssignmentActions
+                        assignment={selectedReservation.loanerAssignment}
+                        onUpdated={handleLoanerWorkflowUpdated}
+                      />
                     </div>
                   </section>
                 ) : selectedReservation.loanerCarRequested === true ? (
@@ -967,10 +987,14 @@ export function AdminDashboard() {
         >
           <div className="w-full max-w-md rounded-md bg-white p-6 shadow-xl">
             <h2 id="status-confirm-title" className="text-lg font-bold">
-              ステータス変更確認
+              {pendingStatusChange.status === "キャンセル"
+                ? "予約キャンセル確認"
+                : "ステータス変更確認"}
             </h2>
             <p className="mt-4 text-sm font-medium text-slate-700">
-              この予約を完了に変更しますか？
+              {pendingStatusChange.status === "キャンセル"
+                ? "この予約をキャンセルしますか？"
+                : "この予約を完了に変更しますか？"}
             </p>
             <div className="mt-6 grid grid-cols-2 gap-3">
               <button
@@ -992,7 +1016,9 @@ export function AdminDashboard() {
                 }}
                 className="h-11 rounded-md bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700"
               >
-                変更する
+                {pendingStatusChange.status === "キャンセル"
+                  ? "予約をキャンセル"
+                  : "変更する"}
               </button>
             </div>
           </div>

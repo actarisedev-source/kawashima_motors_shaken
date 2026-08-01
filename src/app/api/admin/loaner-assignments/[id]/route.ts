@@ -31,6 +31,34 @@ export async function PATCH(
     unknown
   >;
 
+  if (body.action === "checkout") {
+    const { data, error } = await supabaseServer.rpc("checkout_loaner", {
+      p_assignment_id: id,
+    });
+
+    if (error) {
+      console.error("Failed to check out loaner assignment", error);
+      const response = getLoanerAssignmentError(error);
+      return NextResponse.json(
+        { ok: false, message: response.message },
+        { status: response.status },
+      );
+    }
+
+    const assignment = getAssignmentRpcRow(data);
+    if (!assignment) {
+      return NextResponse.json(
+        { ok: false, message: "代車の貸出開始に失敗しました。" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      item: toLoanerAssignment(assignment),
+    });
+  }
+
   if (body.action === "change") {
     const validated = validateLoanerAssignmentChangeInput(body);
     if (!validated.ok) {

@@ -23,17 +23,19 @@ type AvailabilityResponse = {
 export function LoanerAvailabilityModal({
   startDate,
   endDate,
+  currentLoanerVehicleId,
   onClose,
   onSelect,
 }: {
   startDate: string;
   endDate: string;
+  currentLoanerVehicleId?: string;
   onClose: () => void;
   onSelect: (item: LoanerAvailabilityItem) => void;
 }) {
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState<LoanerCategory | "all">("all");
-  const [availableOnly, setAvailableOnly] = useState(true);
+  const [availableOnly, setAvailableOnly] = useState(!currentLoanerVehicleId);
   const [items, setItems] = useState<LoanerAvailabilityItem[]>([]);
   const [availableCount, setAvailableCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -196,12 +198,13 @@ export function LoanerAvailabilityModal({
             <div className="grid gap-3">
               {items.map((item) => {
                 const conflict = item.conflictingAssignment;
+                const isCurrent = item.id === currentLoanerVehicleId;
                 return (
                   <article
                     key={item.id}
                     className={[
                       "rounded-md border p-4",
-                      item.available
+                      item.available || isCurrent
                         ? "border-slate-200 bg-white"
                         : "border-slate-200 bg-slate-50 opacity-70",
                     ].join(" ")}
@@ -215,7 +218,12 @@ export function LoanerAvailabilityModal({
                         <p className="mt-1 text-sm font-medium text-slate-600">
                           {item.vehicleName} / {item.plateNumber}
                         </p>
-                        {!item.available ? (
+                        {isCurrent ? (
+                          <p className="mt-2 w-fit rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
+                            現在選択中
+                          </p>
+                        ) : null}
+                        {!item.available && !isCurrent ? (
                           <div className="mt-2 text-sm font-semibold text-slate-600">
                             <p>{item.unavailableReason}</p>
                             {conflict ? (
@@ -237,11 +245,11 @@ export function LoanerAvailabilityModal({
                       </div>
                       <button
                         type="button"
-                        disabled={!item.available}
+                        disabled={!item.available || isCurrent}
                         onClick={() => onSelect(item)}
                         className="h-10 shrink-0 rounded-md bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
                       >
-                        {item.available ? "選択" : "選択不可"}
+                        {isCurrent ? "選択中" : item.available ? "選択" : "選択不可"}
                       </button>
                     </div>
                   </article>

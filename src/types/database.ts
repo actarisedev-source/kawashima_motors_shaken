@@ -426,6 +426,19 @@ export type Database = {
         };
         Returns: Database["public"]["Tables"]["loaner_assignments"]["Row"][];
       };
+      checkout_loaner: {
+        Args: {
+          p_assignment_id: string;
+        };
+        Returns: Database["public"]["Tables"]["loaner_assignments"]["Row"][];
+      };
+      cancel_reservation_with_loaner: {
+        Args: {
+          p_reservation_id: string;
+          p_expected_status?: Database["public"]["Enums"]["reservation_status"] | null;
+        };
+        Returns: Database["public"]["Tables"]["reservations"]["Row"][];
+      };
       claim_due_line_scheduled_messages: {
         Args: { p_limit?: number };
         Returns: Database["public"]["Tables"]["line_scheduled_messages"]["Row"][];
@@ -465,6 +478,13 @@ export type Database = {
           p_actual_returned_at?: string;
         };
         Returns: Database["public"]["Tables"]["loaner_assignments"]["Row"][];
+      };
+      set_reservation_loaner_request: {
+        Args: {
+          p_reservation_id: string;
+          p_requested: boolean;
+        };
+        Returns: Database["public"]["Tables"]["reservations"]["Row"][];
       };
     };
   };
