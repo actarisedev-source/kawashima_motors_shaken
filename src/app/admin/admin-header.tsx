@@ -294,7 +294,7 @@ export function AdminHeader({
   return (
     <>
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-2.5 px-5 pb-4 pt-3.5 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2.5 px-5 pb-4 pt-3.5 sm:px-6 lg:px-8">
           <p className="text-sm font-semibold text-blue-700">
             Kawashima Motors
           </p>
