@@ -270,7 +270,7 @@ const navButtonClassName = (active: boolean) =>
   [
     "relative flex h-[52px] min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-3 text-[15px] font-semibold transition lg:h-12 lg:rounded-b-none lg:rounded-t-lg lg:border-b-0 lg:px-1.5 lg:text-sm xl:px-3 xl:text-[15px]",
     active
-      ? "z-10 border-slate-200 bg-white text-blue-700 shadow-[0_5px_16px_rgba(15,23,42,0.14)] lg:h-14"
+      ? "z-10 border-slate-200 bg-white text-blue-700 shadow-[0_-3px_14px_rgba(15,23,42,0.12)] lg:h-14 lg:after:absolute lg:after:inset-x-0 lg:after:-bottom-[3px] lg:after:h-1 lg:after:bg-white lg:after:content-['']"
       : "border-slate-200 bg-slate-100 text-slate-700 shadow-[0_1px_4px_rgba(15,23,42,0.06)] hover:border-slate-300 hover:bg-white hover:text-blue-700",
   ].join(" ");
 
@@ -300,7 +300,7 @@ export function AdminHeader({
 
   return (
     <>
-      <header className="border-b border-slate-200 bg-white shadow-sm">
+      <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-5 pt-1 sm:px-6 lg:px-8">
           <div className="flex min-h-8 items-center justify-between gap-4">
             <p className="text-base font-bold text-blue-700">
