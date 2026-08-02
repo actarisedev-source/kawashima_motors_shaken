@@ -268,9 +268,9 @@ const navItems = [
 
 const navButtonClassName = (active: boolean) =>
   [
-    "relative flex h-[52px] min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-3 text-[15px] font-semibold transition lg:px-1.5 lg:text-sm xl:px-3 xl:text-[15px]",
+    "relative flex h-[52px] min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-3 text-[15px] font-semibold transition lg:h-12 lg:rounded-b-none lg:rounded-t-lg lg:border-b-0 lg:px-1.5 lg:text-sm xl:px-3 xl:text-[15px]",
     active
-      ? "z-10 border-blue-200 bg-white text-blue-700 shadow-[0_4px_12px_rgba(37,99,235,0.12)] before:absolute before:inset-x-2 before:top-0 before:h-1 before:rounded-t-full before:bg-blue-600 lg:-translate-y-0.5"
+      ? "z-10 border-slate-200 bg-white text-blue-700 shadow-[0_5px_16px_rgba(15,23,42,0.14)] lg:h-14"
       : "border-slate-200 bg-slate-100 text-slate-700 shadow-[0_1px_4px_rgba(15,23,42,0.06)] hover:border-slate-300 hover:bg-white hover:text-blue-700",
   ].join(" ");
 
@@ -301,8 +301,8 @@ export function AdminHeader({
   return (
     <>
       <header className="border-b border-slate-200 bg-white shadow-sm">
-        <div className="mx-auto max-w-7xl px-5 pt-1.5 sm:px-6 lg:px-8">
-          <div className="flex min-h-9 items-center justify-between gap-4 pb-1">
+        <div className="mx-auto max-w-7xl px-5 pt-1 sm:px-6 lg:px-8">
+          <div className="flex min-h-8 items-center justify-between gap-4">
             <p className="text-base font-bold text-blue-700">
               Kawashima Motors
             </p>
@@ -317,7 +317,7 @@ export function AdminHeader({
           </div>
           <nav
             aria-label="管理画面メニュー"
-            className="grid w-full grid-cols-2 gap-2 pb-2 sm:grid-cols-4 lg:grid-cols-[1fr_1fr_1fr_1.15fr_1.15fr_1.05fr_.75fr_1.05fr] lg:gap-1.5"
+            className="grid w-full grid-cols-2 items-end gap-2 pb-2 sm:grid-cols-4 lg:grid-cols-[1fr_1fr_1fr_1.15fr_1.15fr_1.05fr_.75fr_1.05fr] lg:gap-1.5 lg:pb-0"
           >
             {navItems.map((item) => (
               <Link
@@ -334,7 +334,7 @@ export function AdminHeader({
             <button
               type="button"
               onClick={() => setIsConfirmingLogout(true)}
-              className="relative flex h-[52px] min-w-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 bg-slate-100 px-3 text-[15px] font-semibold text-slate-700 shadow-[0_1px_4px_rgba(15,23,42,0.06)] transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 lg:px-1.5 lg:text-sm xl:px-3 xl:text-[15px]"
+              className="relative flex h-[52px] min-w-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 bg-slate-100 px-3 text-[15px] font-semibold text-slate-700 shadow-[0_1px_4px_rgba(15,23,42,0.06)] transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 lg:h-12 lg:rounded-b-none lg:rounded-t-lg lg:border-b-0 lg:px-1.5 lg:text-sm xl:px-3 xl:text-[15px]"
             >
               <LogoutIcon className="h-[27px] w-[27px] shrink-0" />
               ログアウト
