@@ -7,8 +7,8 @@ import {
   getLoanerReturnDateKey,
 } from "@/lib/loaners/loaner-period";
 import type { LoanerAvailabilityItem } from "@/lib/loaners/loaner-availability";
-import { AdminInlineDatePicker } from "../shared/admin-inline-date-picker";
 import { LoanerAvailabilityModal } from "./loaner-availability-modal";
+import { LoanerDateRangePicker } from "./loaner-date-range-picker";
 
 export type ActiveLoanerAssignment = {
   id: string;
@@ -325,54 +325,19 @@ export function LoanerAssignmentActions({
       ) : null}
 
       {isPeriodOpen ? (
-        <ModalFrame title="貸出期間を変更" onClose={() => setIsPeriodOpen(false)}>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <AdminInlineDatePicker
-              label="貸出開始日"
-              minDate={null}
-              selectedDate={startDate}
-              showCalendarIcon
-              onSelectDate={setStartDate}
-            />
-            <AdminInlineDatePicker
-              dropdownClassName="right-0 w-[min(86vw,600px)]"
-              label="返却予定日"
-              minDate={startDate || null}
-              selectedDate={endDate}
-              showCalendarIcon
-              onSelectDate={setEndDate}
-            />
-          </div>
-          {error ? <p className="mt-4 text-sm font-semibold text-red-600">{error}</p> : null}
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => setIsPeriodOpen(false)}
-              className="h-11 rounded-md border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              戻る
-            </button>
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => void savePeriod()}
-              className="h-11 rounded-md bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-            >
-              {isSaving ? (
-                <span className="inline-flex items-center gap-2">
-                  <span
-                    className="h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-white"
-                    aria-hidden="true"
-                  />
-                  変更中...
-                </span>
-              ) : (
-                "変更する"
-              )}
-            </button>
-          </div>
-        </ModalFrame>
+        <LoanerDateRangePicker
+          startDate={startDate}
+          endDate={endDate}
+          error={error}
+          isSaving={isSaving}
+          onChange={(nextStartDate, nextEndDate) => {
+            setStartDate(nextStartDate);
+            setEndDate(nextEndDate);
+            setError("");
+          }}
+          onClose={() => setIsPeriodOpen(false)}
+          onConfirm={() => void savePeriod()}
+        />
       ) : null}
 
       {confirmation ? (

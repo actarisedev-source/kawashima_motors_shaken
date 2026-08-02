@@ -25,6 +25,9 @@ const dashboard = readSource("src/app/admin/admin-dashboard.tsx");
 const actions = readSource(
   "src/app/admin/loaners/loaner-assignment-actions.tsx",
 );
+const dateRangePicker = readSource(
+  "src/app/admin/loaners/loaner-date-range-picker.tsx",
+);
 const availabilityModal = readSource(
   "src/app/admin/loaners/loaner-availability-modal.tsx",
 );
@@ -166,6 +169,6 @@ test("代車検索モーダルは共通分類色と処理中表示を使用す�
   assert.match(availabilityModal, /<LoanerCategoryBadge/);
   assert.match(availabilityModal, /<LoanerCategoryDot/);
   assert.match(availabilityModal, /検索中\.\.\./);
-  assert.match(actions, /変更中\.\.\./);
+  assert.match(dateRangePicker, /変更中\.\.\./);
   assert.match(actions, /処理中\.\.\./);
 });
