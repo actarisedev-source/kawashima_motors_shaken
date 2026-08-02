@@ -56,7 +56,7 @@ const buildReservationItem = ({
   loanerCarRequested: boolean | null;
   loanerAssignment?: {
     id: string;
-    status: "scheduled" | "checked_out";
+    status: "checked_out";
     scheduledStartAt: string;
     scheduledEndAt: string;
     vehicle: {
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
           .from("loaner_assignments")
           .select("*")
           .in("reservation_id", reservations.map((item) => item.id))
-          .in("status", ["scheduled", "checked_out"])
+          .eq("status", "checked_out")
           .order("created_at", { ascending: false })
       : Promise.resolve({
           data: [] as Database["public"]["Tables"]["loaner_assignments"]["Row"][],
@@ -206,7 +206,7 @@ export async function GET(request: NextRequest) {
         loanerAssignment && loanerVehicle
           ? {
               id: loanerAssignment.id,
-              status: loanerAssignment.status as "scheduled" | "checked_out",
+              status: loanerAssignment.status as "checked_out",
               scheduledStartAt: loanerAssignment.scheduled_start_at,
               scheduledEndAt: loanerAssignment.scheduled_end_at,
               vehicle: {

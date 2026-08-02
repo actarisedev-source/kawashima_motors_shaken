@@ -889,9 +889,7 @@ export function AdminDashboard({
                         <div>
                           <dt className="font-semibold text-slate-500">状態</dt>
                           <dd className="mt-1 font-bold text-slate-800">
-                            {selectedReservation.loanerAssignment.status === "checked_out"
-                              ? "貸出中"
-                              : "予約済み"}
+                            貸出中
                           </dd>
                         </div>
                       </dl>

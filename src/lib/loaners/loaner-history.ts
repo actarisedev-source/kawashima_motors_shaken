@@ -7,10 +7,9 @@ export const loanerAssignmentStatusLabels: Record<
   LoanerAssignmentStatus,
   string
 > = {
-  scheduled: "貸出予定",
   checked_out: "貸出中",
   returned: "返却済み",
-  cancelled: "取消",
+  cancelled: "キャンセル",
 };
 
 const supportedLoanerCategories: LoanerCategory[] = [

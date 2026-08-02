@@ -26,14 +26,14 @@ const period = {
 
 test("重複割当と使用停止車両を選択不可にする", () => {
   const available = vehicle({ id: "available", sortOrder: 2 });
-  const scheduled = vehicle({ id: "scheduled", sortOrder: 1 });
+  const checkedOut = vehicle({ id: "checked-out", sortOrder: 1 });
   const stopped = vehicle({ id: "stopped", isActive: false, sortOrder: 3 });
   const result = buildLoanerAvailability(
-    [available, scheduled, stopped],
+    [available, checkedOut, stopped],
     [
       {
-        loanerVehicleId: "scheduled",
-        status: "scheduled",
+        loanerVehicleId: "checked-out",
+        status: "checked_out",
         scheduledStartAt: "2026-08-06T15:00:00.000Z",
         scheduledEndAt: "2026-08-09T15:00:00.000Z",
       },
@@ -43,8 +43,8 @@ test("重複割当と使用停止車両を選択不可にする", () => {
 
   assert.equal(result.find((item) => item.id === "available")?.available, true);
   assert.equal(
-    result.find((item) => item.id === "scheduled")?.unavailableReason,
-    "指定期間に予約済み",
+    result.find((item) => item.id === "checked-out")?.unavailableReason,
+    "指定期間に貸出中",
   );
   assert.equal(
     result.find((item) => item.id === "stopped")?.unavailableReason,
@@ -59,7 +59,7 @@ test("半開区間の境界が接する割当は重複しない", () => {
     [
       {
         loanerVehicleId: item.id,
-        status: "scheduled",
+        status: "checked_out",
         scheduledStartAt: period.scheduledEndAt,
         scheduledEndAt: "2026-08-10T15:00:00.000Z",
       },
@@ -128,6 +128,6 @@ test("利用可能台数は検索条件内の空車だけを数える", () => {
   assert.deepEqual(availableOwned.map((item) => item.id), [available.id]);
   assert.equal(
     items.find((item) => item.id === unavailable.id)?.unavailableReason,
-    "現在貸出中",
+    "指定期間に貸出中",
   );
 });

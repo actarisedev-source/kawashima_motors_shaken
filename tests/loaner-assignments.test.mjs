@@ -24,7 +24,7 @@ const migration = readFileSync(
 );
 const activeReservationMigration = readFileSync(
   new URL(
-    "../supabase/migrations/202608010001_add_active_loaner_assignment_reservation_unique_index.sql",
+    "../supabase/migrations/202608020001_simplify_loaner_assignment_statuses.sql",
     import.meta.url,
   ),
   "utf8",
@@ -56,7 +56,7 @@ test("正常な代車割当入力をRPC用の値へ正規化する", () => {
       memo: "禁煙車を希望",
     },
   });
-  assert.match(migration, /create function public\.assign_loaner\(/);
+  assert.match(activeReservationMigration, /create or replace function public\.assign_loaner\(/);
   assert.match(migration, /snapshot_customer_name/);
   assert.match(migration, /snapshot_reserved_at/);
 });
@@ -66,7 +66,7 @@ test("同一代車の有効な期間重複を検出し、境界が接するだ�
     {
       scheduledStartAt: "2026-08-01T00:00:00.000Z",
       scheduledEndAt: "2026-08-01T09:00:00.000Z",
-      status: "scheduled",
+      status: "checked_out",
     },
     {
       scheduledStartAt: "2026-08-02T00:00:00.000Z",
@@ -108,13 +108,8 @@ test("同一予約への異なる代車の有効な同時割当をDB制約で拒
   );
   assert.match(
     activeReservationMigration,
-    /where reservation_id is not null\s+and status in \('scheduled', 'checked_out'\)/,
+    /where reservation_id is not null\s+and status = 'checked_out'/,
   );
-  assert.doesNotMatch(
-    activeReservationMigration,
-    /status in \([^)]*(?:'cancelled'|'returned')/,
-  );
-
   const conflict = {
     code: "23505",
     message:
@@ -137,6 +132,21 @@ test("同一予約への異なる代車の有効な同時割当をDB制約で拒
   );
 });
 
+test("Migrationは既存scheduledをchecked_outへ移行して3状態だけを許可する", () => {
+  assert.match(
+    activeReservationMigration,
+    /update public\.loaner_assignments\s+set status = 'checked_out'\s+where status = 'scheduled'/,
+  );
+  assert.match(
+    activeReservationMigration,
+    /check \(status in \('checked_out', 'returned', 'cancelled'\)\)/,
+  );
+  assert.match(
+    activeReservationMigration,
+    /where \(status = 'checked_out'\)/,
+  );
+});
+
 test("代車変更入力を検証し、旧割当をcancelledで残して新規割当を作る", () => {
   const result = validateLoanerAssignmentChangeInput({
     loanerVehicleId: vehicleB,
@@ -150,47 +160,46 @@ test("代車変更入力を検証し、旧割当をcancelledで残して新規�
     assert.equal(result.value.loanerVehicleId, vehicleB);
     assert.equal(result.value.memo, "変更後");
   }
-  assert.match(migration, /create function public\.change_loaner\(/);
+  assert.match(activeReservationMigration, /create or replace function public\.change_loaner\(/);
   assert.match(
-    migration,
+    activeReservationMigration,
     /update public\.loaner_assignments\s+set status = 'cancelled'/,
   );
   assert.match(migration, /v_current\.snapshot_customer_name/);
   assert.ok(
-    migration.indexOf("set status = 'cancelled'") <
-      migration.indexOf(
+    activeReservationMigration.indexOf("set status = 'cancelled'") <
+      activeReservationMigration.indexOf(
         "insert into public.loaner_assignments (",
-        migration.indexOf("create function public.change_loaner("),
+        activeReservationMigration.indexOf("create or replace function public.change_loaner("),
       ),
     "change_loanerは旧割当をcancelledにしてから新割当を作成する",
   );
 });
 
-test("解除日時を検証し、release RPCが現在状態に応じた終了状態へ更新する", () => {
+test("返却日時を検証し、release RPCが貸出中を返却済みへ更新する", () => {
   const result = validateLoanerReleaseInput("2026-08-03T17:30:00+09:00");
 
   assert.deepEqual(result, {
     ok: true,
     value: "2026-08-03T08:30:00.000Z",
   });
-  assert.match(migration, /create function public\.release_loaner\(/);
-  assert.match(
-    migration,
-    /when v_assignment\.status = 'scheduled' then 'cancelled'/,
-  );
-  assert.match(
-    migration,
-    /when v_assignment\.status = 'checked_out' then p_actual_returned_at/,
-  );
-  assert.match(migration, /else 'returned'/);
-  assert.match(
-    migration,
-    /scheduled=貸出予定\s+checked_out=貸出中\s+returned=返却済み\s+cancelled=貸出前キャンセル/,
-  );
-  assert.doesNotMatch(migration, /delete from public\.loaner_assignments/);
+  assert.match(activeReservationMigration, /create or replace function public\.release_loaner\(/);
   assert.match(
     activeReservationMigration,
-    /status in \('scheduled', 'checked_out'\)/,
+    /v_assignment\.status <> 'checked_out'/,
+  );
+  assert.match(
+    activeReservationMigration,
+    /set status = 'returned',\s+actual_returned_at = p_actual_returned_at/,
+  );
+  assert.match(
+    activeReservationMigration,
+    /checked_out=貸出中\s+returned=返却済み\s+cancelled=キャンセル/,
+  );
+  assert.doesNotMatch(activeReservationMigration, /delete from public\.loaner_assignments/);
+  assert.match(
+    activeReservationMigration,
+    /status = 'checked_out'/,
   );
 });
 

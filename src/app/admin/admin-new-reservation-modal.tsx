@@ -28,7 +28,7 @@ export type AdminReservationItem = {
   loanerCarRequested: boolean | null;
   loanerAssignment: {
     id: string;
-    status: "scheduled" | "checked_out";
+    status: "checked_out";
     scheduledStartAt: string;
     scheduledEndAt: string;
     vehicle: Pick<
@@ -90,7 +90,7 @@ type CreateAssignmentResponse = {
   message?: string;
   item?: {
     id: string;
-    status: "scheduled" | "checked_out";
+    status: "checked_out";
     scheduledStartAt: string;
     scheduledEndAt: string;
   };

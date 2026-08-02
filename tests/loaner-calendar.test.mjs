@@ -196,7 +196,7 @@ test("40台を表示順のまま処理できる", () => {
 test("APIは管理認証と1週間に重なる有効割当だけを取得する", () => {
   assert.match(api, /getAdminAuthFromRequest/);
   assert.match(api, /status: 401/);
-  assert.match(api, /\.in\("status", \["scheduled", "checked_out"\]\)/);
+  assert.match(api, /\.eq\("status", "checked_out"\)/);
   assert.match(api, /\.lt\("scheduled_start_at", filters\.exclusiveEndAt\)/);
   assert.match(api, /\.gt\("scheduled_end_at", filters\.startAt\)/);
   assert.doesNotMatch(api, /"returned", "cancelled"/);
@@ -229,10 +229,9 @@ test("PCは7日グリッド・固定日付行・固定代車列を使用する",
   assert.doesNotMatch(dashboard, /text-blue-700">今日<\/span>/);
 });
 
-test("PCバーは予約済み・貸出中を文字と色で区別する", () => {
-  assert.match(dashboard, /scheduled: "予約済み"/);
+test("PCバーは貸出中を文字と色で表示する", () => {
+  assert.doesNotMatch(dashboard, /予約済み/);
   assert.match(dashboard, /checked_out: "貸出中"/);
-  assert.match(dashboard, /scheduled: "border-blue-500 bg-blue-600 text-white"/);
   assert.match(dashboard, /checked_out: "border-amber-500 bg-amber-500/);
   assert.match(dashboard, /segment\.continuesBefore/);
   assert.match(dashboard, /segment\.continuesAfter/);

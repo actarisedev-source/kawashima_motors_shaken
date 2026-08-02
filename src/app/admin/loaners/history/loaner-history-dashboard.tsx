@@ -25,7 +25,6 @@ import {
 } from "../loaner-category-badge";
 
 const statusStyles: Record<LoanerAssignmentStatus, string> = {
-  scheduled: "bg-blue-50 text-blue-700 ring-blue-200",
   checked_out: "bg-amber-50 text-amber-800 ring-amber-200",
   returned: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   cancelled: "bg-slate-100 text-slate-600 ring-slate-200",

@@ -12,7 +12,7 @@ import { LoanerDateRangePicker } from "./loaner-date-range-picker";
 
 export type ActiveLoanerAssignment = {
   id: string;
-  status: "scheduled" | "checked_out";
+  status: "checked_out";
   scheduledStartAt: string;
   scheduledEndAt: string;
   vehicle: {
@@ -25,8 +25,6 @@ export type ActiveLoanerAssignment = {
 };
 
 type Confirmation =
-  | { type: "checkout" }
-  | { type: "release" }
   | { type: "return" }
   | { type: "change"; vehicle: LoanerAvailabilityItem };
 
@@ -46,17 +44,6 @@ const formatJstDateTimeInput = (date: Date) => {
 
 const toIsoFromJstInput = (value: string) =>
   new Date(`${value}:00+09:00`).toISOString();
-
-const formatJstDateTime = (value: string) =>
-  new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).format(new Date(value));
 
 function ModalFrame({
   title,
@@ -187,24 +174,6 @@ export function LoanerAssignmentActions({
   async function confirmAction() {
     if (!confirmation) return;
 
-    if (confirmation.type === "checkout") {
-      const succeeded = await patchAssignment(
-        { action: "checkout" },
-        "代車の貸出を開始しました。",
-      );
-      if (succeeded) setConfirmation(null);
-      return;
-    }
-
-    if (confirmation.type === "release") {
-      const succeeded = await patchAssignment(
-        { action: "release" },
-        "代車の割り当てを解除しました。",
-      );
-      if (succeeded) setConfirmation(null);
-      return;
-    }
-
     if (confirmation.type === "return") {
       if (
         !actualReturnedAt ||
@@ -244,65 +213,31 @@ export function LoanerAssignmentActions({
   return (
     <>
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        {assignment.status === "scheduled" ? (
-          <>
-            <button
-              type="button"
-              onClick={openVehicleSearch}
-              className="h-10 rounded-md border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
-            >
-              代車を変更
-            </button>
-            <button
-              type="button"
-              onClick={openPeriodEditor}
-              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              貸出期間を変更
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setError("");
-                setConfirmation({ type: "checkout" });
-              }}
-              className="h-10 rounded-md bg-blue-600 px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-            >
-              貸出開始
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setError("");
-                setConfirmation({ type: "release" });
-              }}
-              className="h-10 rounded-md border border-red-200 bg-white px-3 text-sm font-semibold text-red-700 transition hover:bg-red-50"
-            >
-              割り当てを解除
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={openPeriodEditor}
-              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              貸出期間を変更
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActualReturnedAt(formatJstDateTimeInput(new Date()));
-                setError("");
-                setConfirmation({ type: "return" });
-              }}
-              className="h-10 rounded-md bg-blue-600 px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-            >
-              返却
-            </button>
-          </>
-        )}
+        <button
+          type="button"
+          onClick={openVehicleSearch}
+          className="h-10 rounded-md border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+        >
+          代車を変更
+        </button>
+        <button
+          type="button"
+          onClick={openPeriodEditor}
+          className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+        >
+          貸出期間を変更
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setActualReturnedAt(formatJstDateTimeInput(new Date()));
+            setError("");
+            setConfirmation({ type: "return" });
+          }}
+          className="h-10 rounded-md bg-blue-600 px-3 text-sm font-semibold text-white transition hover:bg-blue-700 sm:col-span-2"
+        >
+          返却
+        </button>
       </div>
 
       {error && !confirmation && !isPeriodOpen ? (
@@ -343,13 +278,9 @@ export function LoanerAssignmentActions({
       {confirmation ? (
         <ModalFrame
           title={
-            confirmation.type === "checkout"
-              ? "代車の貸出を開始しますか？"
-              : confirmation.type === "release"
-                ? "代車の割り当てを解除しますか？"
-                : confirmation.type === "return"
-                  ? "代車を返却済みにしますか？"
-                  : "代車を変更しますか？"
+            confirmation.type === "return"
+              ? "代車を返却済みにしますか？"
+              : "代車を変更しますか？"
           }
           onClose={() => setConfirmation(null)}
         >
@@ -362,24 +293,15 @@ export function LoanerAssignmentActions({
             ) : (
               <>
                 <p className="font-bold text-slate-950">{assignment.vehicle.displayName}</p>
-                {confirmation.type === "checkout" ? (
-                  <p className="mt-2">
-                    貸出開始日時：
-                    {formatJstDateTime(assignment.scheduledStartAt)}
-                  </p>
-                ) : confirmation.type === "release" ? (
-                  <p className="mt-2">お客様の代車希望は「あり」のまま残ります。</p>
-                ) : (
-                  <label className="mt-3 grid gap-1.5 font-semibold text-slate-700">
-                    返却日時
-                    <input
-                      type="datetime-local"
-                      value={actualReturnedAt}
-                      onChange={(event) => setActualReturnedAt(event.target.value)}
-                      className="h-11 rounded-md border border-slate-300 bg-white px-3 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-                    />
-                  </label>
-                )}
+                <label className="mt-3 grid gap-1.5 font-semibold text-slate-700">
+                  返却日時
+                  <input
+                    type="datetime-local"
+                    value={actualReturnedAt}
+                    onChange={(event) => setActualReturnedAt(event.target.value)}
+                    className="h-11 rounded-md border border-slate-300 bg-white px-3 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
               </>
             )}
           </div>
@@ -407,10 +329,6 @@ export function LoanerAssignmentActions({
                   />
                   処理中...
                 </span>
-              ) : confirmation.type === "checkout" ? (
-                "貸出開始"
-              ) : confirmation.type === "release" ? (
-                "割り当てを解除"
               ) : confirmation.type === "return" ? (
                 "返却済みにする"
               ) : (
@@ -499,7 +417,6 @@ export function LoanerRequestControl({
                 type="radio"
                 name="reservationLoanerRequest"
                 checked={!nextRequested}
-                disabled={assignment?.status === "checked_out"}
                 onChange={() => setNextRequested(false)}
                 className="h-4 w-4"
               />
@@ -516,14 +433,9 @@ export function LoanerRequestControl({
               代車希望あり
             </label>
           </div>
-          {!nextRequested && assignment?.status === "scheduled" ? (
+          {!nextRequested && assignment ? (
             <p className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">
               {assignment.vehicle.displayName}の割り当ても解除されます。
-            </p>
-          ) : null}
-          {assignment?.status === "checked_out" ? (
-            <p className="mt-4 text-sm font-semibold text-amber-800">
-              貸出中の代車は、返却処理を完了してから代車不要へ変更してください。
             </p>
           ) : null}
           {error ? <p className="mt-4 text-sm font-semibold text-red-600">{error}</p> : null}
@@ -538,7 +450,7 @@ export function LoanerRequestControl({
             </button>
             <button
               type="button"
-              disabled={isSaving || (assignment?.status === "checked_out" && !nextRequested)}
+              disabled={isSaving}
               onClick={() => void save()}
               className="h-11 rounded-md bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >

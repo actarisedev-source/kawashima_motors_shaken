@@ -23,7 +23,7 @@ test("空車検索APIは管理認証と半開区間の重複条件を使用す�
   assert.match(availabilityApi, /getAdminAuthFromRequest/);
   assert.match(availabilityApi, /params\.get\("start_date"\)/);
   assert.match(availabilityApi, /params\.get\("end_date"\)/);
-  assert.match(availabilityApi, /\.in\("status", \["scheduled", "checked_out"\]\)/);
+  assert.match(availabilityApi, /\.eq\("status", "checked_out"\)/);
   assert.match(availabilityApi, /\.lt\("scheduled_start_at"/);
   assert.match(availabilityApi, /\.gt\("scheduled_end_at"/);
   assert.doesNotMatch(availabilityApi, /snapshot_customer_name/);
@@ -51,7 +51,7 @@ test("新規予約は予約ID取得後にだけ割当APIを呼び、割当失敗
 test("予約取得レスポンスは有効な代車割当だけを後方互換で追加する", () => {
   assert.match(
     reservationsApi,
-    /\.in\("status", \["scheduled", "checked_out"\]\)/,
+    /\.eq\("status", "checked_out"\)/,
   );
   assert.match(reservationsApi, /loanerAssignment = null/);
   assert.match(reservationsApi, /loanerAssignment:/);

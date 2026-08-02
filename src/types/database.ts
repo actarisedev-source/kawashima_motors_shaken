@@ -426,12 +426,6 @@ export type Database = {
         };
         Returns: Database["public"]["Tables"]["loaner_assignments"]["Row"][];
       };
-      checkout_loaner: {
-        Args: {
-          p_assignment_id: string;
-        };
-        Returns: Database["public"]["Tables"]["loaner_assignments"]["Row"][];
-      };
       cancel_reservation_with_loaner: {
         Args: {
           p_reservation_id: string;

@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       .select(
         "loaner_vehicle_id,scheduled_start_at,scheduled_end_at,status",
       )
-      .in("status", ["scheduled", "checked_out"])
+      .eq("status", "checked_out")
       .lt("scheduled_start_at", period.value.scheduledEndAt)
       .gt("scheduled_end_at", period.value.scheduledStartAt),
   ]);
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
       loanerVehicleId: assignment.loaner_vehicle_id,
       scheduledStartAt: assignment.scheduled_start_at,
       scheduledEndAt: assignment.scheduled_end_at,
-      status: assignment.status as "scheduled" | "checked_out",
+      status: assignment.status as "checked_out",
     })),
     period.value,
   );

@@ -20,12 +20,11 @@ const dashboard = readSource(
 );
 const reservationDashboard = readSource("src/app/admin/admin-dashboard.tsx");
 
-test("貸出履歴は4状態を業務用の日本語へ変換する", () => {
+test("貸出履歴は3状態を業務用の日本語へ変換する", () => {
   assert.deepEqual(loanerAssignmentStatusLabels, {
-    scheduled: "貸出予定",
     checked_out: "貸出中",
     returned: "返却済み",
-    cancelled: "取消",
+    cancelled: "キャンセル",
   });
 });
 

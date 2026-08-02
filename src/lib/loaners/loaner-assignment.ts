@@ -1,5 +1,4 @@
 export const loanerAssignmentStatuses = [
-  "scheduled",
   "checked_out",
   "returned",
   "cancelled",
@@ -224,38 +223,11 @@ export const getLoanerAssignmentError = (error: {
   if (message.includes("loaner_assignment_not_changeable")) {
     return { status: 409, message: "この代車割当は変更できません。" };
   }
-  if (message.includes("loaner_checked_out_vehicle_change_not_allowed")) {
-    return {
-      status: 409,
-      message:
-        "貸出中の代車は変更できません。返却処理を完了してから操作してください。",
-    };
-  }
-  if (message.includes("loaner_assignment_not_checkoutable")) {
-    return {
-      status: 409,
-      message: "この代車割当は貸出開始できません。画面を更新してください。",
-    };
-  }
   if (message.includes("loaner_assignment_not_releasable")) {
     return {
       status: 409,
       message:
         "この代車割当はすでに解除または返却されています。画面を更新してください。",
-    };
-  }
-  if (message.includes("loaner_checked_out_requires_return")) {
-    return {
-      status: 409,
-      message:
-        "貸出中の代車は、返却処理を完了してから代車不要へ変更してください。",
-    };
-  }
-  if (message.includes("loaner_checked_out_blocks_reservation_cancel")) {
-    return {
-      status: 409,
-      message:
-        "貸出中の代車があります。返却処理を完了してから予約をキャンセルしてください。",
     };
   }
   if (message.includes("loaner_reservation_cancelled")) {

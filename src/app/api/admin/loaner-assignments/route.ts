@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
         .from("loaner_assignments")
         .select("id")
         .eq("reservation_id", reservation.id)
-        .in("status", ["scheduled", "checked_out"])
+        .eq("status", "checked_out")
         .limit(1)
         .maybeSingle(),
     ]);

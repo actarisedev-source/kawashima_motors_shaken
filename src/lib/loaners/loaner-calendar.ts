@@ -38,7 +38,6 @@ const getCalendarReturnDateKey = (scheduledEndAt: string) => {
 };
 
 export const loanerCalendarAssignmentStatuses = [
-  "scheduled",
   "checked_out",
 ] as const;
 

@@ -9,7 +9,7 @@ const normalizeLoanerText = (value: unknown) =>
     : "";
 
 export type LoanerAvailabilityConflict = {
-  status: "scheduled" | "checked_out";
+  status: "checked_out";
   scheduledStartAt: string;
   scheduledEndAt: string;
 };
@@ -40,20 +40,15 @@ export const buildLoanerAvailability = (
         const assignmentEnd = new Date(assignment.scheduledEndAt).getTime();
         return assignmentStart < end && assignmentEnd > start;
       })
-      .sort((left, right) => {
-        if (left.status !== right.status) {
-          return left.status === "checked_out" ? -1 : 1;
-        }
-        return left.scheduledStartAt.localeCompare(right.scheduledStartAt);
-      });
+      .sort((left, right) =>
+        left.scheduledStartAt.localeCompare(right.scheduledStartAt),
+      );
     const conflict = conflicts[0] ?? null;
     const unavailableReason = !vehicle.isActive
       ? "使用停止中"
-      : conflict?.status === "checked_out"
-        ? "現在貸出中"
-        : conflict
-          ? "指定期間に予約済み"
-          : null;
+      : conflict
+        ? "指定期間に貸出中"
+        : null;
 
     return {
       ...vehicle,

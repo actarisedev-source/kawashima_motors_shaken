@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
   let assignmentQuery = supabaseServer
     .from("loaner_assignments")
     .select("*")
-    .in("status", ["scheduled", "checked_out"])
+    .eq("status", "checked_out")
     .lt("scheduled_start_at", filters.exclusiveEndAt)
     .gt("scheduled_end_at", filters.startAt);
 

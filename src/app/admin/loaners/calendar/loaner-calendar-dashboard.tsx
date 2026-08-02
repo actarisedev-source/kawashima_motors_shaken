@@ -32,7 +32,6 @@ import {
 } from "../loaner-category-badge";
 
 const calendarStatusLabels: Record<LoanerCalendarAssignmentStatus, string> = {
-  scheduled: "予約済み",
   checked_out: "貸出中",
 };
 
@@ -40,7 +39,6 @@ const calendarStatusStyles: Record<
   LoanerCalendarAssignmentStatus,
   string
 > = {
-  scheduled: "border-blue-500 bg-blue-600 text-white",
   checked_out: "border-amber-500 bg-amber-500 text-slate-950",
 };
 
@@ -90,10 +88,6 @@ function StatusLegend() {
       className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-semibold text-slate-600"
       aria-label="代車割当状態の凡例"
     >
-      <span className="inline-flex items-center gap-2">
-        <span className="h-2.5 w-7 rounded-sm bg-blue-600" aria-hidden="true" />
-        予約済み
-      </span>
       <span className="inline-flex items-center gap-2">
         <span className="h-2.5 w-7 rounded-sm bg-amber-500" aria-hidden="true" />
         貸出中
@@ -185,7 +179,7 @@ function AssignmentDetailModal({
         <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
           <div>
             <h2 id="loaner-calendar-detail-title" className="text-lg font-bold">
-              代車予定詳細
+              代車貸出詳細
             </h2>
             <p className="mt-1 text-xs text-slate-500">
               貸出時に保存した情報を表示しています。
@@ -203,11 +197,7 @@ function AssignmentDetailModal({
         <div className="grid gap-5 p-5">
           <div className="flex flex-wrap items-center gap-3">
             <span
-              className={`inline-flex min-h-7 items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                assignment.status === "checked_out"
-                  ? "bg-amber-50 text-amber-800 ring-1 ring-amber-200"
-                  : "bg-blue-50 text-blue-700 ring-1 ring-blue-200"
-              }`}
+              className="inline-flex min-h-7 items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200"
             >
               {calendarStatusLabels[assignment.status as LoanerCalendarAssignmentStatus]}
             </span>
@@ -490,11 +480,7 @@ function MobileCalendar({
               <button
                 type="button"
                 onClick={() => onSelectAssignment(assignment)}
-                className={`mt-4 w-full cursor-pointer rounded-md border p-3 text-left shadow-sm ${
-                  status === "checked_out"
-                    ? "border-amber-200 bg-amber-50 text-amber-950"
-                    : "border-blue-200 bg-blue-50 text-blue-950"
-                }`}
+                className="mt-4 w-full cursor-pointer rounded-md border border-amber-200 bg-amber-50 p-3 text-left text-amber-950 shadow-sm"
               >
                 <span className="block text-sm font-bold">
                   {calendarStatusLabels[status]}
@@ -625,7 +611,7 @@ export function LoanerCalendarDashboard() {
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <AdminHeader
         title="代車管理"
-        description="代車の貸出予定と空き状況を週間で確認できます。"
+        description="代車の貸出状況と空き状況を週間で確認できます。"
         onRefresh={() => loadCalendar()}
       />
       <main className="mx-auto grid max-w-[1600px] gap-5 px-4 py-6 sm:px-6 lg:px-8">
@@ -746,7 +732,6 @@ export function LoanerCalendarDashboard() {
                 className="mt-1.5 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
               >
                 <option value="all">すべて</option>
-                <option value="scheduled">予約済み</option>
                 <option value="checked_out">貸出中</option>
               </select>
             </label>

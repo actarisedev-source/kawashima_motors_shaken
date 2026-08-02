@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { getLoanerAssignmentError } from "../src/lib/loaners/loaner-assignment.ts";
 
 const readSource = (path) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
 const migration = readSource(
-  "supabase/migrations/202608010002_add_loaner_assignment_workflow_guards.sql",
+  "supabase/migrations/202608020001_simplify_loaner_assignment_statuses.sql",
 );
 const assignmentApi = readSource(
   "src/app/api/admin/loaner-assignments/[id]/route.ts",
@@ -35,11 +34,10 @@ const categoryBadge = readSource(
   "src/app/admin/loaners/loaner-category-badge.tsx",
 );
 
-test("Phase 2-4 Migrationは6 RPCを同じ予約単位ロックで保護する", () => {
+test("簡素化Migrationは5 RPCを同じ予約単位ロックで保護する", () => {
   const functions = [
     "assign_loaner",
     "change_loaner",
-    "checkout_loaner",
     "release_loaner",
     "set_reservation_loaner_request",
     "cancel_reservation_with_loaner",
@@ -61,23 +59,20 @@ test("Phase 2-4 Migrationは6 RPCを同じ予約単位ロックで保護する",
   );
   assert.match(migration, /security definer/g);
   assert.doesNotMatch(migration, /delete from public\.loaner_assignments/);
+  assert.match(migration, /drop function if exists public\.checkout_loaner\(uuid\)/);
 });
 
-test("貸出開始はscheduledだけを同じ行のchecked_outへ更新する", () => {
-  const checkout = migration.slice(
-    migration.indexOf("create or replace function public.checkout_loaner("),
-    migration.indexOf("create or replace function public.release_loaner("),
+test("割当は初めからchecked_outで作成する", () => {
+  const assign = migration.slice(
+    migration.indexOf("create or replace function public.assign_loaner("),
+    migration.indexOf("create or replace function public.change_loaner("),
   );
 
-  assert.match(checkout, /v_assignment\.status <> 'scheduled'/);
-  assert.match(checkout, /v_reservation_status = 'キャンセル'/);
-  assert.match(checkout, /set status = 'checked_out'/);
-  assert.doesNotMatch(checkout, /insert into public\.loaner_assignments/);
-  assert.doesNotMatch(checkout, /actual_returned_at\s*=/);
-  assert.match(checkout, /actual_checked_out_at is intentionally not stored/);
+  assert.match(assign, /'checked_out'/);
+  assert.doesNotMatch(assign, /'scheduled'/);
 });
 
-test("解除と返却はscheduled・checked_outを業務状態どおりに更新する", () => {
+test("返却はchecked_outだけをreturnedへ更新する", () => {
   const release = migration.slice(
     migration.indexOf("create or replace function public.release_loaner("),
     migration.indexOf(
@@ -85,38 +80,21 @@ test("解除と返却はscheduled・checked_outを業務状態どおりに更新
     ),
   );
 
-  assert.match(release, /when v_assignment\.status = 'scheduled' then 'cancelled'/);
-  assert.match(release, /else 'returned'/);
-  assert.match(
-    release,
-    /when v_assignment\.status = 'checked_out' then p_actual_returned_at/,
-  );
+  assert.match(release, /v_assignment\.status <> 'checked_out'/);
+  assert.match(release, /set status = 'returned'/);
+  assert.doesNotMatch(release, /status = 'cancelled'/);
 });
 
-test("貸出中は車両変更・代車不要・予約キャンセルを拒否する", () => {
-  assert.match(
-    migration,
-    /loaner_checked_out_vehicle_change_not_allowed/,
-  );
-  assert.match(migration, /loaner_checked_out_requires_return/);
-  assert.match(migration, /loaner_checked_out_blocks_reservation_cancel/);
-
-  assert.deepEqual(
-    getLoanerAssignmentError({
-      message: "loaner_checked_out_requires_return",
-    }),
-    {
-      status: 409,
-      message:
-        "貸出中の代車は、返却処理を完了してから代車不要へ変更してください。",
-    },
-  );
+test("貸出中の車両変更・代車不要・予約キャンセルは履歴をcancelledで残す", () => {
+  assert.doesNotMatch(migration, /loaner_checked_out_vehicle_change_not_allowed/);
+  assert.doesNotMatch(migration, /loaner_checked_out_requires_return/);
+  assert.doesNotMatch(migration, /loaner_checked_out_blocks_reservation_cancel/);
+  assert.match(migration, /set status = 'cancelled'/);
 });
 
-test("割当APIはcheckout・change・releaseを既存認証下で処理する", () => {
+test("割当APIはchange・releaseを既存認証下で処理する", () => {
   assert.match(assignmentApi, /getAdminAuthFromRequest/);
-  assert.match(assignmentApi, /body\.action === "checkout"/);
-  assert.match(assignmentApi, /rpc\("checkout_loaner"/);
+  assert.doesNotMatch(assignmentApi, /checkout/);
   assert.match(assignmentApi, /body\.action === "change"/);
   assert.match(assignmentApi, /rpc\("change_loaner"/);
   assert.match(assignmentApi, /body\.action === "release"/);
@@ -140,16 +118,13 @@ test("代車希望変更と公開・管理キャンセルは専用RPCを使用�
   );
 });
 
-test("予約詳細は状態別の代車操作と確認UIを提供する", () => {
+test("予約詳細は貸出中の代車操作と確認UIを提供する", () => {
   assert.match(dashboard, /<LoanerAssignmentActions/);
   assert.match(dashboard, /<LoanerRequestControl/);
   assert.match(actions, /代車を変更/);
   assert.match(actions, /貸出期間を変更/);
-  assert.match(actions, /割り当てを解除/);
-  assert.match(actions, /貸出開始/);
+  assert.doesNotMatch(actions, /貸出開始/);
   assert.match(actions, /返却済みにする/);
-  assert.match(actions, /assignment\.status === "scheduled"/);
-  assert.match(actions, /貸出開始日時/);
   assert.match(actions, /actualReturnedAt/);
   assert.doesNotMatch(actions, /updatedAt/);
 });
