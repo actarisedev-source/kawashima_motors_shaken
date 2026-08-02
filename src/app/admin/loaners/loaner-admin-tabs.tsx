@@ -1,6 +1,10 @@
 import Link from "next/link";
 
-export function LoanerAdminTabs({ active }: { active: "vehicles" | "history" }) {
+export function LoanerAdminTabs({
+  active,
+}: {
+  active: "vehicles" | "history" | "calendar";
+}) {
   return (
     <nav
       aria-label="代車管理メニュー"
@@ -27,6 +31,17 @@ export function LoanerAdminTabs({ active }: { active: "vehicles" | "history" }) 
         }`}
       >
         貸出履歴
+      </Link>
+      <Link
+        href="/admin/loaners/calendar"
+        aria-current={active === "calendar" ? "page" : undefined}
+        className={`rounded px-4 py-2 text-sm font-semibold transition ${
+          active === "calendar"
+            ? "bg-blue-600 text-white"
+            : "text-slate-600 hover:bg-slate-50 hover:text-blue-700"
+        }`}
+      >
+        カレンダー
       </Link>
     </nav>
   );
