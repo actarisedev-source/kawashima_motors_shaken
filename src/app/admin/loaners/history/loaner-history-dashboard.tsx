@@ -19,7 +19,10 @@ import {
 } from "@/lib/loaners/loaner-period";
 import { AdminHeader } from "../../admin-header";
 import { LoanerAdminTabs } from "../loaner-admin-tabs";
-import { LoanerCategoryBadge } from "../loaner-category-badge";
+import {
+  LoanerCategoryBadge,
+  LoanerCategoryDot,
+} from "../loaner-category-badge";
 
 const statusStyles: Record<LoanerAssignmentStatus, string> = {
   scheduled: "bg-blue-50 text-blue-700 ring-blue-200",
@@ -340,6 +343,14 @@ export function LoanerHistoryDashboard() {
         <LoanerAdminTabs active="history" />
 
         <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+          <div
+            className="mb-3 flex flex-wrap items-center justify-end gap-x-4 gap-y-2"
+            aria-label="代車分類の凡例"
+          >
+            {loanerCategories.map((value) => (
+              <LoanerCategoryBadge key={value} category={value} />
+            ))}
+          </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_160px_160px_150px_150px_auto] lg:items-end">
             <label className="text-sm font-semibold text-slate-700">
               キーワード検索
@@ -436,16 +447,15 @@ export function LoanerHistoryDashboard() {
           {items.length ? (
             <>
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[1000px] table-fixed border-collapse text-left text-sm">
+                <table className="w-full min-w-[960px] table-fixed border-collapse text-left text-sm">
                   <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                     <tr>
                       <th className="w-[105px] px-3 py-3">状態</th>
-                      <th className="w-[180px] px-3 py-3">代車</th>
-                      <th className="w-[175px] px-3 py-3">お客様</th>
-                      <th className="w-[185px] px-3 py-3">貸出期間</th>
-                      <th className="w-[130px] px-3 py-3">実返却</th>
-                      <th className="w-[145px] px-3 py-3">予約日時</th>
-                      <th className="w-[120px] px-3 py-3">担当者</th>
+                      <th className="w-[205px] px-3 py-3">代車</th>
+                      <th className="w-[195px] px-3 py-3">お客様</th>
+                      <th className="w-[205px] px-3 py-3">貸出期間</th>
+                      <th className="w-[145px] px-3 py-3">実返却</th>
+                      <th className="w-[175px] px-3 py-3">予約日時</th>
                       <th className="w-[80px] px-3 py-3 text-center">詳細</th>
                     </tr>
                   </thead>
@@ -454,8 +464,10 @@ export function LoanerHistoryDashboard() {
                       <tr key={item.id} className="align-top hover:bg-slate-50/70">
                         <td className="px-3 py-4"><StatusBadge status={item.status} /></td>
                         <td className="px-3 py-4">
-                          <LoanerCategoryBadge category={item.vehicle.category} />
-                          <p className="mt-1 font-bold text-slate-900">{item.vehicle.displayName}</p>
+                          <p className="flex items-center gap-2 font-bold text-slate-900">
+                            <LoanerCategoryDot category={item.vehicle.category} />
+                            <span className="break-words">{item.vehicle.displayName}</span>
+                          </p>
                           <p className="mt-0.5 break-words text-xs text-slate-500">{item.vehicle.plateNumber}</p>
                         </td>
                         <td className="px-3 py-4">
@@ -468,7 +480,6 @@ export function LoanerHistoryDashboard() {
                         </td>
                         <td className="px-3 py-4 text-xs font-medium text-slate-700">{formatDateTime(item.actualReturnedAt)}</td>
                         <td className="px-3 py-4 text-xs font-medium text-slate-700">{formatDateTime(item.snapshotReservedAt)}</td>
-                        <td className="break-words px-3 py-4 text-xs font-medium text-slate-700">{item.snapshotStaffName || "—"}</td>
                         <td className="px-3 py-4 text-center">
                           <button
                             type="button"
@@ -490,10 +501,12 @@ export function LoanerHistoryDashboard() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <StatusBadge status={item.status} />
-                        <p className="mt-2 font-bold text-slate-950">{item.vehicle.displayName}</p>
+                        <p className="mt-2 flex items-center gap-2 font-bold text-slate-950">
+                          <LoanerCategoryDot category={item.vehicle.category} />
+                          <span className="break-words">{item.vehicle.displayName}</span>
+                        </p>
                         <p className="mt-1 text-xs text-slate-500">{item.vehicle.plateNumber}</p>
                       </div>
-                      <LoanerCategoryBadge category={item.vehicle.category} />
                     </div>
                     <dl className="mt-4 grid gap-3 text-sm">
                       <div><dt className="text-xs font-semibold text-slate-500">お客様</dt><dd className="mt-1 font-semibold">{item.snapshotCustomerName || "—"}</dd></div>
