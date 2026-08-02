@@ -19,16 +19,6 @@ type AdminHeaderProps = {
 
 type IconProps = SVGProps<SVGSVGElement>;
 
-const defaultDescriptions: Record<string, string> = {
-  "予約管理": "予約の受付状況と予約内容を管理します。",
-  "顧客管理": "顧客情報と登録車両を管理します。",
-  "代車管理": "代車の登録、編集、使用停止を管理します。",
-  "定休日管理": "店舗の定休日と臨時休業日を管理します。",
-  "予約枠管理": "予約可能な時間帯と受付枠を管理します。",
-  "LINE配信": "お客様へのLINE配信を作成・管理します。",
-  設定: "管理画面の各種設定を管理します。",
-};
-
 function CalendarIcon(props: IconProps) {
   return (
     <svg
@@ -206,6 +196,26 @@ function GearIcon(props: IconProps) {
   );
 }
 
+function RefreshIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M20 7v5h-5" />
+      <path d="M4 17v-5h5" />
+      <path d="M6.1 9a7 7 0 0 1 11.5-2.6L20 9" />
+      <path d="m4 15 2.4 2.6A7 7 0 0 0 17.9 15" />
+    </svg>
+  );
+}
+
 const navItems = [
   {
     href: "/admin",
@@ -241,14 +251,14 @@ const navItems = [
     href: "/admin/line",
     label: "LINE配信",
     Icon: MessageIcon,
-    iconClassName: "h-[25px] w-[31px]",
+    iconClassName: "h-7 w-[35px]",
     match: (path: string) => path.startsWith("/admin/line"),
   },
   {
     href: "/admin/settings",
     label: "設定",
     Icon: GearIcon,
-    iconClassName: "h-5 w-5",
+    iconClassName: "h-[23px] w-[23px]",
     match: (path: string) =>
       path === "/admin/settings" ||
       path.startsWith("/admin/settings/account") ||
@@ -258,20 +268,17 @@ const navItems = [
 
 const navButtonClassName = (active: boolean) =>
   [
-    "flex h-12 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-md border px-3 text-sm font-semibold shadow-sm transition xl:px-4",
+    "relative flex h-12 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-md border px-3 text-[15px] font-semibold transition lg:flex-1 lg:rounded-b-none lg:rounded-t-lg lg:border-b-0 lg:px-2 xl:px-3",
     active
-      ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-      : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50",
+      ? "z-10 border-blue-200 bg-white text-blue-700 shadow-[0_-2px_8px_rgba(15,23,42,0.08)] before:absolute before:inset-x-2 before:top-0 before:h-1 before:rounded-t-full before:bg-blue-600 lg:-mb-px lg:border-slate-300"
+      : "border-slate-300 bg-slate-100 text-slate-700 shadow-inner hover:bg-slate-50 hover:text-blue-700",
   ].join(" ");
 
 export function AdminHeader({
-  title,
-  description,
   onRefresh,
   children,
 }: AdminHeaderProps) {
   const pathname = usePathname();
-  const resolvedDescription = description ?? defaultDescriptions[title];
   const [isConfirmingLogout, setIsConfirmingLogout] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const confirmLogoutButtonRef = useRef<HTMLButtonElement>(null);
@@ -293,14 +300,24 @@ export function AdminHeader({
 
   return (
     <>
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-2.5 px-5 pb-4 pt-3.5 sm:px-6 lg:px-8">
-          <p className="text-sm font-semibold text-blue-700">
-            Kawashima Motors
-          </p>
+      <header className="border-b border-slate-300 bg-slate-50">
+        <div className="mx-auto max-w-7xl px-5 pt-2.5 sm:px-6 lg:px-8">
+          <div className="flex min-h-10 items-center justify-between gap-4 pb-2">
+            <p className="text-base font-bold text-blue-700">
+              Kawashima Motors
+            </p>
+            <button
+              type="button"
+              onClick={() => void onRefresh()}
+              className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-md px-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+            >
+              <RefreshIcon className="h-5 w-5" />
+              最新に更新
+            </button>
+          </div>
           <nav
             aria-label="管理画面メニュー"
-            className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 lg:flex lg:flex-nowrap lg:gap-2 lg:overflow-x-auto"
+            className="grid w-full grid-cols-2 gap-2 pb-3 sm:grid-cols-4 lg:flex lg:flex-nowrap lg:items-end lg:gap-1 lg:overflow-x-auto lg:pb-0"
           >
             {navItems.map((item) => (
               <Link
@@ -309,7 +326,7 @@ export function AdminHeader({
                 className={navButtonClassName(item.match(pathname))}
               >
                 <item.Icon
-                  className={`${item.iconClassName ?? "h-6 w-6"} shrink-0`}
+                  className={`${item.iconClassName ?? "h-[27px] w-[27px]"} shrink-0`}
                 />
                 <span>{item.label}</span>
               </Link>
@@ -317,39 +334,22 @@ export function AdminHeader({
             <button
               type="button"
               onClick={() => setIsConfirmingLogout(true)}
-              className="flex h-12 min-w-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-red-600 hover:bg-red-600 hover:text-white xl:px-4"
+              className="relative flex h-12 min-w-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-300 bg-slate-100 px-3 text-[15px] font-semibold text-slate-700 shadow-inner transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 lg:flex-1 lg:rounded-b-none lg:rounded-t-lg lg:border-b-0 lg:px-2 xl:px-3"
             >
-              <LogoutIcon className="h-6 w-6 shrink-0" />
+              <LogoutIcon className="h-[27px] w-[27px] shrink-0" />
               ログアウト
             </button>
           </nav>
         </div>
       </header>
 
-      <section className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-7xl px-5 py-5 sm:px-6 lg:px-8">
-          <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold tracking-normal sm:text-3xl">
-                {title}
-              </h1>
-              <button
-                type="button"
-                onClick={() => void onRefresh()}
-                className="h-9 w-fit shrink-0 rounded-md bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:px-4 sm:text-sm"
-              >
-                最新に更新
-              </button>
-            </div>
-            {resolvedDescription ? (
-              <p className="mt-1 text-sm text-slate-500">
-                {resolvedDescription}
-              </p>
-            ) : null}
+      {children ? (
+        <section className="border-b border-slate-200 bg-white">
+          <div className="mx-auto max-w-7xl px-5 py-3 sm:px-6 lg:px-8">
+            {children}
           </div>
-          {children ? <div className="mt-4">{children}</div> : null}
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       {isConfirmingLogout ? (
         <div
