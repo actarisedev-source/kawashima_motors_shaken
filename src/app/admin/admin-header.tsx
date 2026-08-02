@@ -258,7 +258,7 @@ const navItems = [
 
 const navButtonClassName = (active: boolean) =>
   [
-    "flex h-11 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[13px] font-semibold shadow-sm transition xl:gap-2 xl:px-3.5 xl:text-sm",
+    "flex h-12 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-md border px-3 text-sm font-semibold shadow-sm transition xl:px-4",
     active
       ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
       : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50",
@@ -294,13 +294,13 @@ export function AdminHeader({
   return (
     <>
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-4 px-5 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-5 lg:px-8">
-          <p className="shrink-0 text-sm font-semibold text-blue-700">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-2.5 px-5 pb-4 pt-3.5 sm:px-6 lg:px-8">
+          <p className="text-sm font-semibold text-blue-700">
             Kawashima Motors
           </p>
           <nav
             aria-label="管理画面メニュー"
-            className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 lg:flex lg:w-auto lg:min-w-0 lg:flex-nowrap lg:justify-end lg:gap-1.5 lg:overflow-x-auto xl:gap-2"
+            className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 lg:flex lg:flex-nowrap lg:gap-2 lg:overflow-x-auto"
           >
             {navItems.map((item) => (
               <Link
@@ -311,21 +311,13 @@ export function AdminHeader({
                 <item.Icon
                   className={`${item.iconClassName ?? "h-6 w-6"} shrink-0`}
                 />
-                <span
-                  className={
-                    item.href === "/admin/settings"
-                      ? "lg:hidden xl:inline"
-                      : undefined
-                  }
-                >
-                  {item.label}
-                </span>
+                <span>{item.label}</span>
               </Link>
             ))}
             <button
               type="button"
               onClick={() => setIsConfirmingLogout(true)}
-              className="flex h-11 min-w-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2.5 text-[13px] font-semibold text-slate-700 shadow-sm transition hover:border-red-600 hover:bg-red-600 hover:text-white xl:gap-2 xl:px-3.5 xl:text-sm"
+              className="flex h-12 min-w-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-red-600 hover:bg-red-600 hover:text-white xl:px-4"
             >
               <LogoutIcon className="h-6 w-6 shrink-0" />
               ログアウト
@@ -336,24 +328,24 @@ export function AdminHeader({
 
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-5 py-5 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold tracking-normal sm:text-3xl">
                 {title}
               </h1>
-              {resolvedDescription ? (
-                <p className="mt-1 text-sm text-slate-500">
-                  {resolvedDescription}
-                </p>
-              ) : null}
+              <button
+                type="button"
+                onClick={() => void onRefresh()}
+                className="h-9 w-fit shrink-0 rounded-md bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:px-4 sm:text-sm"
+              >
+                最新に更新
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => void onRefresh()}
-              className="h-10 w-fit shrink-0 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-            >
-              最新に更新
-            </button>
+            {resolvedDescription ? (
+              <p className="mt-1 text-sm text-slate-500">
+                {resolvedDescription}
+              </p>
+            ) : null}
           </div>
           {children ? <div className="mt-4">{children}</div> : null}
         </div>
