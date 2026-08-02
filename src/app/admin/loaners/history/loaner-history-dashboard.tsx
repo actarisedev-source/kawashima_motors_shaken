@@ -151,7 +151,6 @@ function DetailModal({
     ["返却予定", formatLoanerDate(getLoanerReturnDateKey(item.scheduledEndAt))],
     ["実返却日時", formatDateTime(item.actualReturnedAt)],
     ["予約日時（保存時）", formatDateTime(item.snapshotReservedAt)],
-    ["担当者（保存時）", item.snapshotStaffName || "—"],
     ["登録日時", formatDateTime(item.createdAt)],
     ["更新日時", formatDateTime(item.updatedAt)],
   ];
@@ -342,15 +341,15 @@ export function LoanerHistoryDashboard() {
       <main className="mx-auto grid max-w-7xl gap-5 px-5 py-6 sm:px-6 lg:px-8">
         <LoanerAdminTabs active="history" />
 
+        <div
+          className="-mb-2 flex flex-wrap items-center justify-start gap-x-4 gap-y-2 px-1 sm:justify-end"
+          aria-label="代車分類の凡例"
+        >
+          {loanerCategories.map((value) => (
+            <LoanerCategoryBadge key={value} category={value} />
+          ))}
+        </div>
         <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-          <div
-            className="mb-3 flex flex-wrap items-center justify-end gap-x-4 gap-y-2"
-            aria-label="代車分類の凡例"
-          >
-            {loanerCategories.map((value) => (
-              <LoanerCategoryBadge key={value} category={value} />
-            ))}
-          </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_160px_160px_150px_150px_auto] lg:items-end">
             <label className="text-sm font-semibold text-slate-700">
               キーワード検索

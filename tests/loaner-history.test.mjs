@@ -135,22 +135,24 @@ test("一覧はPCテーブル・スマホカード・詳細モーダルを備え
 
 test("一覧は分類凡例を表示し、車名の先頭だけに分類色を付ける", () => {
   assert.match(dashboard, /aria-label="代車分類の凡例"/);
+  assert.match(
+    dashboard,
+    /aria-label="代車分類の凡例"[\s\S]*<\/div>\s*<section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">/,
+  );
   assert.match(dashboard, /<LoanerCategoryBadge key=\{value\} category=\{value\} \/>/);
   assert.match(dashboard, /<LoanerCategoryDot category=\{item\.vehicle\.category\} \/>/);
   assert.doesNotMatch(dashboard, /<th[^>]*>分類<\/th>/);
 });
 
-test("担当者は一覧列から除外し、詳細の保存情報には残す", () => {
+test("担当者は一覧と詳細の表示から除外する", () => {
   assert.doesNotMatch(dashboard, /<th[^>]*>担当者<\/th>/);
-  assert.match(dashboard, /担当者（保存時）/);
-  assert.match(dashboard, /item\.snapshotStaffName \|\| "—"/);
+  assert.doesNotMatch(dashboard, /担当者（保存時）/);
 });
 
 test("詳細はSnapshot・期間・返却・メモ・作成更新日時を表示する", () => {
   for (const label of [
     "お客様（保存時）",
     "予約日時（保存時）",
-    "担当者（保存時）",
     "貸出開始予定",
     "返却予定",
     "実返却日時",
