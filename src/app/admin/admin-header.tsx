@@ -19,6 +19,16 @@ type AdminHeaderProps = {
 
 type IconProps = SVGProps<SVGSVGElement>;
 
+const defaultDescriptions: Record<string, string> = {
+  "予約管理": "予約の受付状況と予約内容を管理します。",
+  "顧客管理": "顧客情報と登録車両を管理します。",
+  "代車管理": "代車の登録、編集、使用停止を管理します。",
+  "定休日管理": "店舗の定休日と臨時休業日を管理します。",
+  "予約枠管理": "予約可能な時間帯と受付枠を管理します。",
+  "LINE配信": "お客様へのLINE配信を作成・管理します。",
+  設定: "管理画面の各種設定を管理します。",
+};
+
 function CalendarIcon(props: IconProps) {
   return (
     <svg
@@ -234,11 +244,21 @@ const navItems = [
     iconClassName: "h-[25px] w-[31px]",
     match: (path: string) => path.startsWith("/admin/line"),
   },
+  {
+    href: "/admin/settings",
+    label: "設定",
+    Icon: GearIcon,
+    iconClassName: "h-5 w-5",
+    match: (path: string) =>
+      path === "/admin/settings" ||
+      path.startsWith("/admin/settings/account") ||
+      path.startsWith("/admin/settings/password"),
+  },
 ];
 
 const navButtonClassName = (active: boolean) =>
   [
-    "flex h-12 items-center justify-center gap-2 rounded-md border px-3.5 text-sm font-semibold shadow-sm transition",
+    "flex h-11 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[13px] font-semibold shadow-sm transition xl:gap-2 xl:px-3.5 xl:text-sm",
     active
       ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
       : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50",
@@ -251,6 +271,7 @@ export function AdminHeader({
   children,
 }: AdminHeaderProps) {
   const pathname = usePathname();
+  const resolvedDescription = description ?? defaultDescriptions[title];
   const [isConfirmingLogout, setIsConfirmingLogout] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const confirmLogoutButtonRef = useRef<HTMLButtonElement>(null);
@@ -273,68 +294,70 @@ export function AdminHeader({
   return (
     <>
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6 sm:px-6 lg:px-8">
-          <div className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_auto] lg:items-start">
-            <div>
-              <p className="text-sm font-semibold text-blue-700">
-                Kawashima Motors
-              </p>
-              <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
-                <h1 className="text-2xl font-bold tracking-normal sm:text-3xl">
-                  {title}
-                </h1>
-                <button
-                  type="button"
-                  onClick={() => void onRefresh()}
-                  className="h-9 w-fit rounded-md bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
-                >
-                  最新に更新
-                </button>
-              </div>
-              {description ? (
-                <p className="mt-1 text-sm text-slate-500">{description}</p>
-              ) : null}
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={navButtonClassName(item.match(pathname))}
-                >
-                  <item.Icon
-                    className={`${item.iconClassName ?? "h-6 w-6"} shrink-0`}
-                  />
-                  {item.label}
-                </Link>
-              ))}
-              <button
-                type="button"
-                onClick={() => setIsConfirmingLogout(true)}
-                className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-red-600 hover:bg-red-600 hover:text-white"
-              >
-                <LogoutIcon className="h-6 w-6 shrink-0" />
-                ログアウト
-              </button>
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-4 px-5 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-5 lg:px-8">
+          <p className="shrink-0 text-sm font-semibold text-blue-700">
+            Kawashima Motors
+          </p>
+          <nav
+            aria-label="管理画面メニュー"
+            className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 lg:flex lg:w-auto lg:min-w-0 lg:flex-nowrap lg:justify-end lg:gap-1.5 lg:overflow-x-auto xl:gap-2"
+          >
+            {navItems.map((item) => (
               <Link
-                href="/admin/settings"
-                aria-label="設定"
-                title="設定"
-                className={`grid h-12 w-12 place-items-center rounded-md border shadow-sm transition ${
-                  pathname.startsWith("/admin/settings/password") ||
-                  pathname.startsWith("/admin/settings/account") ||
-                  pathname === "/admin/settings"
-                    ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-                    : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
-                }`}
+                key={item.href}
+                href={item.href}
+                className={navButtonClassName(item.match(pathname))}
               >
-                <GearIcon className="h-5 w-5" />
+                <item.Icon
+                  className={`${item.iconClassName ?? "h-6 w-6"} shrink-0`}
+                />
+                <span
+                  className={
+                    item.href === "/admin/settings"
+                      ? "lg:hidden xl:inline"
+                      : undefined
+                  }
+                >
+                  {item.label}
+                </span>
               </Link>
-            </div>
-          </div>
-          {children}
+            ))}
+            <button
+              type="button"
+              onClick={() => setIsConfirmingLogout(true)}
+              className="flex h-11 min-w-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2.5 text-[13px] font-semibold text-slate-700 shadow-sm transition hover:border-red-600 hover:bg-red-600 hover:text-white xl:gap-2 xl:px-3.5 xl:text-sm"
+            >
+              <LogoutIcon className="h-6 w-6 shrink-0" />
+              ログアウト
+            </button>
+          </nav>
         </div>
       </header>
+
+      <section className="border-b border-slate-200 bg-white">
+        <div className="mx-auto max-w-7xl px-5 py-5 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold tracking-normal sm:text-3xl">
+                {title}
+              </h1>
+              {resolvedDescription ? (
+                <p className="mt-1 text-sm text-slate-500">
+                  {resolvedDescription}
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => void onRefresh()}
+              className="h-10 w-fit shrink-0 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+            >
+              最新に更新
+            </button>
+          </div>
+          {children ? <div className="mt-4">{children}</div> : null}
+        </div>
+      </section>
 
       {isConfirmingLogout ? (
         <div
