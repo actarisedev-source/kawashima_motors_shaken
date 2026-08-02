@@ -373,10 +373,9 @@ function DesktopCalendar({
                 >
                   {day.monthDay}({day.weekday})
                 </p>
-                {isToday || isHoliday ? (
+                {isHoliday ? (
                   <span className="flex items-center justify-center gap-2 text-[11px] font-semibold">
-                    {isToday ? <span className="text-blue-700">今日</span> : null}
-                    {isHoliday ? <span className="text-red-600">休業</span> : null}
+                    <span className="text-red-600">休業</span>
                   </span>
                 ) : null}
               </div>
@@ -773,7 +772,7 @@ export function LoanerCalendarDashboard() {
               minDate={null}
               onSelectDate={setSelectedDate}
               showCalendarIcon
-              className="gap-1.5 font-semibold text-slate-700"
+              className="gap-1.5 font-semibold text-slate-700 [&>button]:h-10 [&>span:last-child]:hidden"
               dropdownClassName="right-0 w-[min(88vw,600px)]"
             />
             <button

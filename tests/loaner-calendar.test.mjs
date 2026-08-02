@@ -224,6 +224,9 @@ test("PCは7日グリッド・固定日付行・固定代車列を使用する",
   assert.match(dashboard, /sticky top-0 z-30/);
   assert.match(dashboard, /sticky left-0 z-10/);
   assert.match(dashboard, /dateKey === today \? "bg-blue-50\/60"/);
+  assert.match(dashboard, /\[&>button\]:h-10/);
+  assert.match(dashboard, /\[&>span:last-child\]:hidden/);
+  assert.doesNotMatch(dashboard, /text-blue-700">今日<\/span>/);
 });
 
 test("PCバーは予約済み・貸出中を文字と色で区別する", () => {
