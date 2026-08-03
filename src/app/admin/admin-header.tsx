@@ -270,7 +270,7 @@ const navButtonClassName = (active: boolean) =>
   [
     "relative flex h-[52px] min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-3 text-[15px] font-semibold transition lg:h-12 lg:rounded-b-none lg:rounded-t-lg lg:border-b-0 lg:px-1.5 lg:text-sm xl:px-3 xl:text-[15px]",
     active
-      ? "z-10 border-slate-200 bg-slate-50 text-blue-700 shadow-[0_-3px_14px_rgba(15,23,42,0.12)] lg:h-14 lg:after:absolute lg:after:inset-x-0 lg:after:-bottom-[3px] lg:after:h-1 lg:after:bg-slate-50 lg:after:content-['']"
+      ? "z-10 border-slate-200 bg-slate-50 text-blue-700 shadow-[0_-4px_10px_-6px_rgba(15,23,42,0.18)] lg:h-14 lg:after:absolute lg:after:inset-x-0 lg:after:-bottom-[3px] lg:after:h-1 lg:after:bg-slate-50 lg:after:content-['']"
       : "border-slate-200 bg-slate-100 text-slate-700 shadow-[0_1px_4px_rgba(15,23,42,0.06)] hover:border-slate-300 hover:bg-white hover:text-blue-700",
   ].join(" ");
 
