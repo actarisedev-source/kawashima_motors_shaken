@@ -208,10 +208,8 @@ function RefreshIcon(props: IconProps) {
       aria-hidden="true"
       {...props}
     >
-      <path d="M20 7v5h-5" />
-      <path d="M4 17v-5h5" />
-      <path d="M6.1 9a7 7 0 0 1 11.5-2.6L20 9" />
-      <path d="m4 15 2.4 2.6A7 7 0 0 0 17.9 15" />
+      <path d="M21 12a9 9 0 1 1-2.64-6.36L21 8" />
+      <path d="M21 3v5h-5" />
     </svg>
   );
 }
@@ -302,16 +300,16 @@ export function AdminHeader({
     <>
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-5 pt-1 sm:px-6 lg:px-8">
-          <div className="flex min-h-8 items-center justify-between gap-4">
+          <div className="flex min-h-8 items-center justify-start gap-3 pb-2">
             <p className="text-base font-bold text-blue-700">
               Kawashima Motors
             </p>
             <button
               type="button"
               onClick={() => void onRefresh()}
-              className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-2 rounded-md px-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+              className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-blue-600 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
             >
-              <RefreshIcon className="h-5 w-5" />
+              <RefreshIcon className="h-4 w-4" />
               最新に更新
             </button>
           </div>
