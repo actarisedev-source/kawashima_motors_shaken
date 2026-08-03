@@ -103,8 +103,7 @@ function CalendarOffIcon(props: IconProps) {
       <path d="M16.5 2.2v4" />
       <rect x="2.5" y="4.5" width="19" height="17" rx="2.2" />
       <path d="M2.5 9.8h19" />
-      <path d="m9 13.2 6 6" />
-      <path d="m15 13.2-6 6" />
+      <circle cx="12" cy="16.2" r="3.2" />
     </svg>
   );
 }
@@ -299,7 +298,7 @@ export function AdminHeader({
   return (
     <>
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-7xl px-5 pt-1 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-5 pt-3 sm:px-6 lg:px-8">
           <div className="flex min-h-8 items-center justify-start gap-3 pb-2">
             <p className="text-base font-bold text-blue-700">
               Kawashima Motors
