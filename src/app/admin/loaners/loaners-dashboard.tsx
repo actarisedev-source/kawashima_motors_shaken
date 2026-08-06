@@ -7,12 +7,17 @@ import {
   type LoanerCategory,
   type LoanerVehicle,
 } from "@/lib/loaners/loaner-vehicle";
+import type { LoanerHistoryResponse } from "@/lib/loaners/loaner-history";
+import {
+  emptyLoanerFleetSummary,
+  summarizeLoanerFleet,
+  type LoanerFleetSummary,
+} from "@/lib/loaners/loaner-summary";
 import { AdminHeader } from "../admin-header";
 import { LoanerCategoryBadge } from "./loaner-category-badge";
 import { LoanerAdminTabs } from "./loaner-admin-tabs";
 import { LoanerVehicleModal } from "./loaner-vehicle-modal";
 
-type Summary = { total: number; active: number; inactive: number };
 type LoadState =
   | { status: "loading"; message: "読み込み中です。" }
   | { status: "ready"; message: "" }
@@ -21,8 +26,6 @@ type PendingAction = {
   type: "activate" | "deactivate" | "delete";
   item: LoanerVehicle;
 };
-
-const emptySummary: Summary = { total: 0, active: 0, inactive: 0 };
 
 const actionCopy = (action: PendingAction) => {
   if (action.type === "delete") {
@@ -48,7 +51,9 @@ const actionCopy = (action: PendingAction) => {
 
 export function LoanersDashboard() {
   const [items, setItems] = useState<LoanerVehicle[]>([]);
-  const [summary, setSummary] = useState<Summary>(emptySummary);
+  const [summary, setSummary] = useState<LoanerFleetSummary>(
+    emptyLoanerFleetSummary,
+  );
   const [suggestedSortOrder, setSuggestedSortOrder] = useState(10);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<LoanerCategory | "all">("all");
@@ -72,28 +77,63 @@ export function LoanersDashboard() {
       if (status !== "all") params.set("status", status);
 
       try {
-        const response = await fetch(
-          `/api/admin/loaners${params.size ? `?${params}` : ""}`,
-          { cache: "no-store", signal },
-        );
+        const listUrl = `/api/admin/loaners${params.size ? `?${params}` : ""}`;
+        const [response, allVehiclesResponse, assignmentsResponse] =
+          await Promise.all([
+            fetch(listUrl, { cache: "no-store", signal }),
+            params.size
+              ? fetch("/api/admin/loaners", { cache: "no-store", signal })
+              : Promise.resolve(null),
+            fetch(
+              "/api/admin/loaner-assignments/history?status=checked_out&page_size=100",
+              { cache: "no-store", signal },
+            ),
+          ]);
         const result = (await response.json()) as {
           ok: boolean;
           items?: LoanerVehicle[];
-          summary?: Summary;
           suggestedNextSortOrder?: number;
           message?: string;
         };
+        const allVehiclesResult = allVehiclesResponse
+          ? ((await allVehiclesResponse.json()) as {
+              ok: boolean;
+              items?: LoanerVehicle[];
+              message?: string;
+            })
+          : result;
+        const assignmentsResult =
+          (await assignmentsResponse.json()) as LoanerHistoryResponse;
 
-        if (!response.ok || !result.ok || !result.items) {
+        if (
+          !response.ok ||
+          !result.ok ||
+          !result.items ||
+          (allVehiclesResponse && !allVehiclesResponse.ok) ||
+          !allVehiclesResult.ok ||
+          !allVehiclesResult.items ||
+          !assignmentsResponse.ok ||
+          !assignmentsResult.ok ||
+          !assignmentsResult.items
+        ) {
           setLoadState({
             status: "error",
-            message: result.message ?? "代車一覧の取得に失敗しました。",
+            message:
+              result.message ??
+              allVehiclesResult.message ??
+              assignmentsResult.message ??
+              "代車一覧の取得に失敗しました。",
           });
           return;
         }
 
         setItems(result.items);
-        setSummary(result.summary ?? emptySummary);
+        setSummary(
+          summarizeLoanerFleet(
+            allVehiclesResult.items,
+            assignmentsResult.items.map((item) => item.loanerVehicleId),
+          ),
+        );
         setSuggestedSortOrder(result.suggestedNextSortOrder ?? 10);
         setLoadState({ status: "ready", message: "" });
       } catch (error) {
@@ -193,15 +233,16 @@ export function LoanersDashboard() {
           </div>
         ) : null}
 
-        <section className="grid gap-3 sm:grid-cols-3">
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            ["総台数", summary.total],
-            ["使用可能", summary.active],
-            ["使用停止", summary.inactive],
-          ].map(([label, value]) => (
+            { label: "総台数", value: summary.total, color: "text-blue-600" },
+            { label: "貸出中", value: summary.loaned, color: "text-orange-600" },
+            { label: "空車", value: summary.available, color: "text-emerald-600" },
+            { label: "使用停止", value: summary.inactive, color: "text-slate-600" },
+          ].map(({ label, value, color }) => (
             <div key={label} className="rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm">
               <p className="text-sm font-semibold text-slate-500">{label}</p>
-              <p className="mt-1 text-2xl font-bold text-blue-600">
+              <p className={`mt-1 text-2xl font-bold ${color}`}>
                 {value}<span className="ml-1 text-sm text-slate-600">台</span>
               </p>
             </div>

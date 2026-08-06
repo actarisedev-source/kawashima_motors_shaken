@@ -1080,11 +1080,11 @@ export function AdminDashboard({
         <table className="w-full table-fixed border-collapse text-sm">
           <thead>
             <tr className="bg-slate-100 text-left">
-              <th className="w-[14%] border border-slate-400 px-3 py-2">時間</th>
-              <th className="w-[25%] border border-slate-400 px-3 py-2">お名前</th>
-              <th className="w-[22%] border border-slate-400 px-3 py-2">車種</th>
-              <th className="w-[22%] border border-slate-400 px-3 py-2">ナンバー</th>
-              <th className="w-[17%] border border-slate-400 px-3 py-2">代車希望</th>
+              <th className="w-[11%] border border-slate-400 px-3 py-2">時間</th>
+              <th className="w-[20%] border border-slate-400 px-3 py-2">お名前</th>
+              <th className="w-[18%] border border-slate-400 px-3 py-2">車種</th>
+              <th className="w-[18%] border border-slate-400 px-3 py-2">ナンバー</th>
+              <th className="w-[33%] border border-slate-400 px-3 py-2">代車情報</th>
             </tr>
           </thead>
           <tbody>
@@ -1103,11 +1103,39 @@ export function AdminDashboard({
                   {item.licensePlate || "未登録"}
                 </td>
                 <td className="border border-slate-400 px-3 py-3">
-                  {item.loanerCarRequested === null
-                    ? "—"
-                    : item.loanerCarRequested
-                      ? "有り"
-                      : "無し"}
+                  {item.loanerCarRequested === true ? (
+                    <div className="grid gap-1.5">
+                      <p className="font-semibold">代車希望あり</p>
+                      {item.loanerAssignment ? (
+                        <dl className="grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-1 text-xs leading-relaxed">
+                          <dt className="font-semibold text-slate-600">代車</dt>
+                          <dd>{item.loanerAssignment.vehicle.displayName}</dd>
+                          <dt className="font-semibold text-slate-600">ナンバー</dt>
+                          <dd>{item.loanerAssignment.vehicle.plateNumber}</dd>
+                          <dt className="font-semibold text-slate-600">貸出期間</dt>
+                          <dd>
+                            {formatLoanerDate(
+                              getJstDateKey(
+                                item.loanerAssignment.scheduledStartAt,
+                              ),
+                            )}
+                            <br />～<br />
+                            {formatLoanerDate(
+                              getLoanerReturnDateKey(
+                                item.loanerAssignment.scheduledEndAt,
+                              ),
+                            )}
+                          </dd>
+                        </dl>
+                      ) : (
+                        <p className="font-semibold">未割当</p>
+                      )}
+                    </div>
+                  ) : item.loanerCarRequested === false ? (
+                    <p className="font-semibold">代車希望なし</p>
+                  ) : (
+                    <p>代車希望 —</p>
+                  )}
                 </td>
               </tr>
             ))}
