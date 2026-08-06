@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { summarizeLoanerFleet } from "../src/lib/loaners/loaner-summary.ts";
+import {
+  filterLoanerFleetByStatus,
+  getLoanerFleetStatus,
+  summarizeLoanerFleet,
+} from "../src/lib/loaners/loaner-summary.ts";
 
 const loanersDashboard = readFileSync(
   new URL("../src/app/admin/loaners/loaners-dashboard.tsx", import.meta.url),
@@ -24,13 +28,61 @@ test("代車一覧は総台数・貸出中・空車・使用停止を集計す�
 
   assert.deepEqual(summary, {
     total: 3,
-    loaned: 2,
+    loaned: 1,
     available: 1,
     inactive: 1,
   });
+  assert.equal(
+    summary.total,
+    summary.loaned + summary.available + summary.inactive,
+  );
   assert.match(loanersDashboard, /status=checked_out&page_size=100/);
   assert.match(loanersDashboard, /label: "貸出中"/);
   assert.match(loanersDashboard, /label: "空車"/);
+});
+
+test("使用停止・貸出中・空車の優先判定を一覧絞り込みでも共通利用する", () => {
+  const vehicles = [
+    { id: "loaned", isActive: true },
+    { id: "available", isActive: true },
+    { id: "inactive", isActive: false },
+  ];
+  const checkedOutIds = new Set(["loaned", "inactive"]);
+
+  assert.equal(getLoanerFleetStatus(vehicles[0], checkedOutIds), "loaned");
+  assert.equal(getLoanerFleetStatus(vehicles[1], checkedOutIds), "available");
+  assert.equal(getLoanerFleetStatus(vehicles[2], checkedOutIds), "inactive");
+  assert.deepEqual(
+    filterLoanerFleetByStatus(vehicles, checkedOutIds, "loaned").map(
+      (vehicle) => vehicle.id,
+    ),
+    ["loaned"],
+  );
+  assert.deepEqual(
+    filterLoanerFleetByStatus(vehicles, checkedOutIds, "available").map(
+      (vehicle) => vehicle.id,
+    ),
+    ["available"],
+  );
+  assert.deepEqual(
+    filterLoanerFleetByStatus(vehicles, checkedOutIds, "inactive").map(
+      (vehicle) => vehicle.id,
+    ),
+    ["inactive"],
+  );
+});
+
+test("集計カードと状態プルダウンは同じstatus stateへ連動する", () => {
+  assert.match(loanersDashboard, /aria-pressed={status === filter}/);
+  assert.ok(loanersDashboard.includes("onClick={() => setStatus(filter)}"));
+  assert.match(loanersDashboard, /value={status}/);
+  assert.match(loanersDashboard, /setStatus\(event\.target\.value/);
+  assert.match(loanersDashboard, /<option value="loaned">貸出中<\/option>/);
+  assert.match(loanersDashboard, /<option value="available">空車<\/option>/);
+  assert.doesNotMatch(loanersDashboard, />使用可能<\/option>/);
+  assert.match(loanersDashboard, /setQuery\(""\)/);
+  assert.match(loanersDashboard, /setCategory\("all"\)/);
+  assert.match(loanersDashboard, /setStatus\("all"\)/);
 });
 
 test("印刷一覧は代車希望・車両・ナンバー・貸出期間と未割当を表示する", () => {

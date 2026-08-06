@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   loanerCategories,
   loanerCategoryLabels,
@@ -10,8 +10,11 @@ import {
 import type { LoanerHistoryResponse } from "@/lib/loaners/loaner-history";
 import {
   emptyLoanerFleetSummary,
+  filterLoanerFleetByStatus,
+  getLoanerFleetStatus,
   summarizeLoanerFleet,
   type LoanerFleetSummary,
+  type LoanerFleetStatus,
 } from "@/lib/loaners/loaner-summary";
 import { AdminHeader } from "../admin-header";
 import { LoanerCategoryBadge } from "./loaner-category-badge";
@@ -49,15 +52,28 @@ const actionCopy = (action: PendingAction) => {
   };
 };
 
+const loanerFleetStatusLabels: Record<LoanerFleetStatus, string> = {
+  loaned: "貸出中",
+  available: "空車",
+  inactive: "使用停止",
+};
+
+const loanerFleetStatusBadgeClasses: Record<LoanerFleetStatus, string> = {
+  loaned: "bg-orange-50 text-orange-700 ring-orange-200",
+  available: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  inactive: "bg-slate-200 text-slate-600 ring-slate-300",
+};
+
 export function LoanersDashboard() {
   const [items, setItems] = useState<LoanerVehicle[]>([]);
+  const [checkedOutVehicleIds, setCheckedOutVehicleIds] = useState<string[]>([]);
   const [summary, setSummary] = useState<LoanerFleetSummary>(
     emptyLoanerFleetSummary,
   );
   const [suggestedSortOrder, setSuggestedSortOrder] = useState(10);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<LoanerCategory | "all">("all");
-  const [status, setStatus] = useState<"active" | "inactive" | "all">("all");
+  const [status, setStatus] = useState<LoanerFleetStatus | "all">("all");
   const [loadState, setLoadState] = useState<LoadState>({
     status: "loading",
     message: "読み込み中です。",
@@ -67,6 +83,14 @@ export function LoanersDashboard() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [actionSubmitting, setActionSubmitting] = useState(false);
   const [notice, setNotice] = useState("");
+  const checkedOutIdSet = useMemo(
+    () => new Set(checkedOutVehicleIds),
+    [checkedOutVehicleIds],
+  );
+  const displayedItems = useMemo(
+    () => filterLoanerFleetByStatus(items, checkedOutIdSet, status),
+    [checkedOutIdSet, items, status],
+  );
 
   const loadLoaners = useCallback(
     async (signal?: AbortSignal) => {
@@ -74,7 +98,6 @@ export function LoanersDashboard() {
       const params = new URLSearchParams();
       if (query.trim()) params.set("q", query.trim());
       if (category !== "all") params.set("category", category);
-      if (status !== "all") params.set("status", status);
 
       try {
         const listUrl = `/api/admin/loaners${params.size ? `?${params}` : ""}`;
@@ -127,11 +150,15 @@ export function LoanersDashboard() {
           return;
         }
 
+        const checkedOutIds = assignmentsResult.items.map(
+          (item) => item.loanerVehicleId,
+        );
         setItems(result.items);
+        setCheckedOutVehicleIds(checkedOutIds);
         setSummary(
           summarizeLoanerFleet(
             allVehiclesResult.items,
-            assignmentsResult.items.map((item) => item.loanerVehicleId),
+            checkedOutIds,
           ),
         );
         setSuggestedSortOrder(result.suggestedNextSortOrder ?? 10);
@@ -141,18 +168,24 @@ export function LoanersDashboard() {
         setLoadState({ status: "error", message: "代車一覧の取得に失敗しました。" });
       }
     },
-    [category, query, status],
+    [category, query],
   );
 
   useEffect(() => {
     const controller = new AbortController();
     void loadLoaners(controller.signal);
     return () => controller.abort();
-  }, [category, loadLoaners, status]);
+  }, [category, loadLoaners]);
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void loadLoaners();
+  }
+
+  function clearFilters() {
+    setQuery("");
+    setCategory("all");
+    setStatus("all");
   }
 
   function openCreateModal() {
@@ -207,6 +240,17 @@ export function LoanersDashboard() {
     await loadLoaners();
   }
 
+  function renderFleetStatusBadge(item: LoanerVehicle) {
+    const fleetStatus = getLoanerFleetStatus(item, checkedOutIdSet);
+    return (
+      <span
+        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${loanerFleetStatusBadgeClasses[fleetStatus]}`}
+      >
+        {loanerFleetStatusLabels[fleetStatus]}
+      </span>
+    );
+  }
+
   const noRegisteredVehicles =
     summary.total === 0 && !query.trim() && category === "all" && status === "all";
 
@@ -235,23 +279,56 @@ export function LoanersDashboard() {
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: "総台数", value: summary.total, color: "text-blue-600" },
-            { label: "貸出中", value: summary.loaned, color: "text-orange-600" },
-            { label: "空車", value: summary.available, color: "text-emerald-600" },
-            { label: "使用停止", value: summary.inactive, color: "text-slate-600" },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            {
+              label: "総台数",
+              value: summary.total,
+              color: "text-blue-600",
+              filter: "all" as const,
+            },
+            {
+              label: "貸出中",
+              value: summary.loaned,
+              color: "text-orange-600",
+              filter: "loaned" as const,
+            },
+            {
+              label: "空車",
+              value: summary.available,
+              color: "text-emerald-600",
+              filter: "available" as const,
+            },
+            {
+              label: "使用停止",
+              value: summary.inactive,
+              color: "text-slate-600",
+              filter: "inactive" as const,
+            },
+          ].map(({ label, value, color, filter }) => (
+            <button
+              key={label}
+              type="button"
+              aria-pressed={status === filter}
+              onClick={() => setStatus(filter)}
+              className={`cursor-pointer rounded-md border px-4 py-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                status === filter
+                  ? "border-blue-400 bg-blue-50/60 shadow-md ring-1 ring-blue-100"
+                  : "border-slate-200 bg-white shadow-sm hover:border-blue-200 hover:bg-blue-50/30"
+              }`}
+            >
               <p className="text-sm font-semibold text-slate-500">{label}</p>
               <p className={`mt-1 text-2xl font-bold ${color}`}>
                 {value}<span className="ml-1 text-sm text-slate-600">台</span>
               </p>
-            </div>
+            </button>
           ))}
         </section>
 
         <section className="rounded-md border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-4 border-b border-slate-200 p-4 lg:flex-row lg:items-end lg:justify-between">
-            <form className="grid flex-1 gap-3 sm:grid-cols-[minmax(220px,1fr)_190px_160px_auto]" onSubmit={handleSearch}>
+            <form
+              className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_180px_160px_auto_auto]"
+              onSubmit={handleSearch}
+            >
               <label className="text-sm font-semibold text-slate-700">
                 キーワード検索
                 <input
@@ -270,14 +347,28 @@ export function LoanersDashboard() {
               </label>
               <label className="text-sm font-semibold text-slate-700">
                 状態
-                <select value={status} onChange={(event) => setStatus(event.target.value as "active" | "inactive" | "all")} className="mt-1.5 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm">
+                <select
+                  value={status}
+                  onChange={(event) =>
+                    setStatus(event.target.value as LoanerFleetStatus | "all")
+                  }
+                  className="mt-1.5 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+                >
                   <option value="all">すべて</option>
-                  <option value="active">使用可能</option>
+                  <option value="loaned">貸出中</option>
+                  <option value="available">空車</option>
                   <option value="inactive">使用停止</option>
                 </select>
               </label>
               <button type="submit" className="h-10 cursor-pointer self-end rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 hover:bg-blue-50">
                 検索
+              </button>
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="h-10 cursor-pointer self-end rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                条件をクリア
               </button>
             </form>
             <button type="button" onClick={openCreateModal} className="h-11 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-bold text-white shadow-sm hover:bg-blue-700">
@@ -287,7 +378,7 @@ export function LoanersDashboard() {
 
           {loadState.status === "loading" ? (
             <p className="px-5 py-12 text-center text-sm text-slate-500">代車一覧を読み込んでいます。</p>
-          ) : !items.length ? (
+          ) : !displayedItems.length ? (
             <p className="px-5 py-12 text-center text-sm text-slate-500">
               {noRegisteredVehicles ? "代車がまだ登録されていません。" : "条件に一致する代車がありません。"}
             </p>
@@ -301,13 +392,13 @@ export function LoanersDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {items.map((item) => (
+                    {displayedItems.map((item) => (
                       <tr key={item.id} className={item.isActive ? "" : "bg-slate-50/70"}>
                         <td className="px-4 py-4"><LoanerCategoryBadge category={item.category} /></td>
                         <td className="px-4 py-4 font-bold text-slate-950">{item.displayName}</td>
                         <td className="px-4 py-4 text-slate-700">{item.vehicleName}</td>
                         <td className="whitespace-nowrap px-4 py-4 text-slate-700">{item.plateNumber}</td>
-                        <td className="px-4 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${item.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{item.isActive ? "使用可能" : "使用停止"}</span></td>
+                        <td className="px-4 py-4">{renderFleetStatusBadge(item)}</td>
                         <td className="px-4 py-4 text-center font-semibold text-slate-600">{item.sortOrder}</td>
                         <td className="max-w-56 px-4 py-4"><p className="line-clamp-2 whitespace-pre-wrap text-slate-600">{item.memo || "—"}</p></td>
                         <td className="px-4 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => openEditModal(item)} className="cursor-pointer rounded-md border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50">編集</button><button type="button" onClick={() => setPendingAction({ type: item.isActive ? "deactivate" : "activate", item })} className="cursor-pointer rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">{item.isActive ? "使用停止" : "使用再開"}</button><button type="button" onClick={() => setPendingAction({ type: "delete", item })} className="cursor-pointer rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">削除</button></div></td>
@@ -317,9 +408,9 @@ export function LoanersDashboard() {
                 </table>
               </div>
               <div className="grid gap-3 p-4 md:hidden">
-                {items.map((item) => (
+                {displayedItems.map((item) => (
                   <article key={item.id} className="rounded-md border border-slate-200 p-4">
-                    <div className="flex items-start justify-between gap-3"><div><LoanerCategoryBadge category={item.category} /><h2 className="mt-2 font-bold">{item.displayName}</h2></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${item.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{item.isActive ? "使用可能" : "使用停止"}</span></div>
+                    <div className="flex items-start justify-between gap-3"><div><LoanerCategoryBadge category={item.category} /><h2 className="mt-2 font-bold">{item.displayName}</h2></div>{renderFleetStatusBadge(item)}</div>
                     <dl className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><dt className="font-semibold text-slate-500">車種</dt><dd className="mt-1 text-slate-800">{item.vehicleName}</dd></div><div><dt className="font-semibold text-slate-500">ナンバー</dt><dd className="mt-1 text-slate-800">{item.plateNumber}</dd></div><div><dt className="font-semibold text-slate-500">表示順</dt><dd className="mt-1 text-slate-800">{item.sortOrder}</dd></div><div className="col-span-2"><dt className="font-semibold text-slate-500">メモ</dt><dd className="mt-1 whitespace-pre-wrap text-slate-800">{item.memo || "—"}</dd></div></dl>
                     <div className="mt-4 grid grid-cols-3 gap-2"><button type="button" onClick={() => openEditModal(item)} className="h-9 rounded-md border border-blue-200 text-xs font-semibold text-blue-700">編集</button><button type="button" onClick={() => setPendingAction({ type: item.isActive ? "deactivate" : "activate", item })} className="h-9 rounded-md border border-slate-300 text-xs font-semibold text-slate-700">{item.isActive ? "使用停止" : "使用再開"}</button><button type="button" onClick={() => setPendingAction({ type: "delete", item })} className="h-9 rounded-md border border-red-200 text-xs font-semibold text-red-700">削除</button></div>
                   </article>
