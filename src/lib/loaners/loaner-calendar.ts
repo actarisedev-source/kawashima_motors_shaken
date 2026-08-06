@@ -8,7 +8,7 @@ const supportedLoanerCategories: LoanerCategory[] = [
   "sales",
 ];
 
-const getCalendarJstDateKey = (value: string | Date) =>
+export const getLoanerCalendarJstDateKey = (value: string | Date) =>
   new Intl.DateTimeFormat("sv-SE", {
     timeZone: "Asia/Tokyo",
     year: "numeric",
@@ -31,10 +31,29 @@ const getCalendarJstWeekday = (dateKey: string) => {
   return weekdayKeys.indexOf(weekday);
 };
 
+export const getLoanerCalendarDayDisplay = (dateKey: string) => {
+  const [, month, day] = dateKey.split("-").map(Number);
+  const weekdayIndex = getCalendarJstWeekday(dateKey);
+
+  return {
+    monthDay: `${month}/${day}`,
+    weekday: ["日", "月", "火", "水", "木", "金", "土"][weekdayIndex],
+    weekdayIndex,
+  };
+};
+
+export const formatLoanerCalendarDate = (dateKey: string) => {
+  const [year, month, day] = dateKey.split("-");
+  const weekdayIndex = getCalendarJstWeekday(dateKey);
+  const weekday = ["日", "月", "火", "水", "木", "金", "土"][weekdayIndex];
+
+  return `${year}/${month}/${day}(${weekday})`;
+};
+
 const getCalendarReturnDateKey = (scheduledEndAt: string) => {
   const exclusiveEnd = new Date(scheduledEndAt);
   if (Number.isNaN(exclusiveEnd.getTime())) return "";
-  return getCalendarJstDateKey(new Date(exclusiveEnd.getTime() - 1));
+  return getLoanerCalendarJstDateKey(new Date(exclusiveEnd.getTime() - 1));
 };
 
 export const loanerCalendarAssignmentStatuses = [
@@ -65,13 +84,13 @@ const dateKeyPattern = /^\d{4}-\d{2}-\d{2}$/;
 export const isLoanerCalendarDateKey = (value: string) => {
   if (!dateKeyPattern.test(value)) return false;
   const date = new Date(`${value}T00:00:00+09:00`);
-  return !Number.isNaN(date.getTime()) && getCalendarJstDateKey(date) === value;
+  return !Number.isNaN(date.getTime()) && getLoanerCalendarJstDateKey(date) === value;
 };
 
 export const addLoanerCalendarDays = (dateKey: string, amount: number) => {
   const date = new Date(`${dateKey}T00:00:00+09:00`);
   date.setUTCDate(date.getUTCDate() + amount);
-  return getCalendarJstDateKey(date);
+  return getLoanerCalendarJstDateKey(date);
 };
 
 export const getLoanerCalendarWeekStart = (dateKey: string) =>
@@ -106,7 +125,7 @@ export const createLoanerCalendarPeriod = (dateKey: string, days = 7) => {
 
 export const parseLoanerCalendarSearchParams = (
   searchParams: URLSearchParams,
-  today = getCalendarJstDateKey(new Date()),
+  today = getLoanerCalendarJstDateKey(new Date()),
 ) => {
   const date = searchParams.get("date")?.trim() || today;
   const days = Number(searchParams.get("days") ?? "7");
@@ -207,7 +226,7 @@ export const getLoanerCalendarAssignmentSegment = (
   const period = createLoanerCalendarPeriod(periodStart, days);
   if (!period.ok) return null;
 
-  const assignmentStart = getCalendarJstDateKey(assignment.scheduledStartAt);
+  const assignmentStart = getLoanerCalendarJstDateKey(assignment.scheduledStartAt);
   const assignmentReturnDate = getCalendarReturnDateKey(
     assignment.scheduledEndAt,
   );

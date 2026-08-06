@@ -4,7 +4,10 @@ import test from "node:test";
 import {
   createLoanerCalendarPeriod,
   filterLoanerCalendarVehicles,
+  formatLoanerCalendarDate,
   getLoanerCalendarAssignmentSegment,
+  getLoanerCalendarDayDisplay,
+  getLoanerCalendarJstDateKey,
   getLoanerCalendarWeekStart,
   isLoanerAssignmentOnDate,
   parseLoanerCalendarSearchParams,
@@ -20,6 +23,7 @@ const dashboard = readSource(
   "src/app/admin/loaners/calendar/loaner-calendar-dashboard.tsx",
 );
 const tabs = readSource("src/app/admin/loaners/loaner-admin-tabs.tsx");
+const page = readSource("src/app/admin/loaners/calendar/page.tsx");
 
 const vehicle = (overrides = {}) => ({
   id: crypto.randomUUID(),
@@ -44,6 +48,64 @@ const assignment = (overrides = {}) => ({
 test("週間表示は既存カレンダーと同じ日曜開始にする", () => {
   assert.equal(getLoanerCalendarWeekStart("2026-08-05"), "2026-08-02");
   assert.equal(getLoanerCalendarWeekStart("2026-08-02"), "2026-08-02");
+});
+
+test("JST日付はUTCとの境界・月末・年末年始でも一定になる", () => {
+  assert.equal(
+    getLoanerCalendarJstDateKey("2026-08-01T14:59:59.999Z"),
+    "2026-08-01",
+  );
+  assert.equal(
+    getLoanerCalendarJstDateKey("2026-08-01T15:00:00.000Z"),
+    "2026-08-02",
+  );
+  assert.equal(
+    getLoanerCalendarJstDateKey("2026-08-31T15:00:00.000Z"),
+    "2026-09-01",
+  );
+  assert.equal(
+    getLoanerCalendarJstDateKey("2026-12-31T15:00:00.000Z"),
+    "2027-01-01",
+  );
+});
+
+test("曜日と表示日付は実行環境のタイムゾーンに依存しない", () => {
+  const originalTimeZone = process.env.TZ;
+  const results = [];
+
+  try {
+    for (const timeZone of ["UTC", "Asia/Tokyo"]) {
+      process.env.TZ = timeZone;
+      results.push({
+        day: getLoanerCalendarDayDisplay("2026-08-02"),
+        date: formatLoanerCalendarDate("2026-08-02"),
+        weekStart: getLoanerCalendarWeekStart(
+          getLoanerCalendarJstDateKey("2026-08-06T14:59:59.000Z"),
+        ),
+      });
+    }
+  } finally {
+    if (originalTimeZone === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = originalTimeZone;
+    }
+  }
+
+  assert.deepEqual(results[0], results[1]);
+  assert.deepEqual(results[0], {
+    day: { monthDay: "8/2", weekday: "日", weekdayIndex: 0 },
+    date: "2026/08/02(日)",
+    weekStart: "2026-08-02",
+  });
+});
+
+test("サーバーで確定した基準日を初回描画へ渡す", () => {
+  assert.match(page, /getLoanerCalendarJstDateKey\(new Date\(\)\)/);
+  assert.match(page, /initialToday=\{initialToday\}/);
+  assert.match(dashboard, /initialToday: string/);
+  assert.match(dashboard, /const today = initialToday/);
+  assert.doesNotMatch(dashboard, /getJstDateKey\(new Date\(\)\)/);
 });
 
 test("7日間をJSTの半開区間で計算する", () => {
