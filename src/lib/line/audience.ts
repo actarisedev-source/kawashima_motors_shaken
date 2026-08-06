@@ -150,38 +150,3 @@ export async function getLineAudience(
       return true;
     });
 }
-
-const displayDate = (value: string | null | undefined) =>
-  value ? value.replaceAll("-", "/") : "未登録";
-
-export function renderLineMessage(
-  template: string,
-  member: LineAudienceMember,
-) {
-  const vehicle = [...member.vehicles].sort((a, b) =>
-    (a.shaken_expiry_date ?? "9999-12-31").localeCompare(
-      b.shaken_expiry_date ?? "9999-12-31",
-    ),
-  )[0];
-  const reservation = [...member.reservations].sort((a, b) =>
-    b.reserved_at.localeCompare(a.reserved_at),
-  )[0];
-  const values: Record<string, string> = {
-    name: member.customer.name,
-    phone: member.customer.phone ?? "未登録",
-    vehicle_name: vehicle?.model_name ?? "未登録",
-    plate_number: vehicle?.plate_number ?? "未登録",
-    shaken_expiry_date: displayDate(vehicle?.shaken_expiry_date),
-    reservation_date: reservation
-      ? new Intl.DateTimeFormat("ja-JP", {
-          dateStyle: "medium",
-          timeStyle: "short",
-          timeZone: "Asia/Tokyo",
-        }).format(new Date(reservation.reserved_at))
-      : "未登録",
-    age: member.age === null ? "未登録" : `${member.age}`,
-  };
-  return template.replace(/\{\{([a-z_]+)\}\}/g, (_, key: string) =>
-    key in values ? values[key] : `{{${key}}}`,
-  );
-}

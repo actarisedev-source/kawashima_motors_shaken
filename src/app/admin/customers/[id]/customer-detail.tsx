@@ -1,9 +1,16 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getAgeFromBirthDate } from "@/lib/customers/birth-date";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
+import { isImeCompositionActive } from "@/lib/forms/ime";
+import { getJstDateKey } from "@/lib/reservations/slots";
+import {
+  AdminNewReservationModal,
+  type AdminReservationCustomerContext,
+} from "../../admin-new-reservation-modal";
 import { AdminHeader } from "../../admin-header";
 
 type ReservationStatus = "受付中" | "確定" | "完了" | "キャンセル";
@@ -125,13 +132,16 @@ type CustomerDetailProps = {
   customerId: string;
   embedded?: boolean;
   onCustomerUpdated?: () => void;
+  onCustomerDeleted?: () => void;
 };
 
 export function CustomerDetail({
   customerId,
   embedded = false,
   onCustomerUpdated,
+  onCustomerDeleted,
 }: CustomerDetailProps) {
+  const router = useRouter();
   const [customer, setCustomer] = useState<CustomerDetailItem | null>(null);
   const [vehicleDrafts, setVehicleDrafts] = useState<VehicleDraft[]>([]);
   const [loadState, setLoadState] = useState<LoadState>({
@@ -160,9 +170,11 @@ export function CustomerDetail({
   const [customerKanaError, setCustomerKanaError] = useState("");
   const [showAllReservations, setShowAllReservations] = useState(false);
   const [showAllLineMessageLogs, setShowAllLineMessageLogs] = useState(false);
+  const [isNewReservationOpen, setIsNewReservationOpen] = useState(false);
   const [expandedLineMessageLogId, setExpandedLineMessageLogId] = useState<
     string | null
   >(null);
+  const customerKanaComposingRef = useRef(false);
 
   const loadCustomer = useCallback(async () => {
     setLoadState({ status: "loading", message: "読み込み中です。" });
@@ -771,7 +783,16 @@ export function CustomerDetail({
                   <button
                     type="button"
                     autoFocus
-                    onClick={() => window.location.replace("/admin/customers")}
+                    onClick={() => {
+                      setCustomerDeleteSucceeded(false);
+
+                      if (embedded && onCustomerDeleted) {
+                        onCustomerDeleted();
+                        return;
+                      }
+
+                      router.replace("/admin/customers");
+                    }}
                     className="mt-6 h-11 w-full rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
                   >
                     顧客一覧へ戻る
@@ -827,13 +848,22 @@ export function CustomerDetail({
                     </button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={startCustomerEdit}
-                    className="h-10 rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-                  >
-                    {embedded ? "編集" : "修正"}
-                  </button>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => setIsNewReservationOpen(true)}
+                      className="h-10 rounded-[5px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                    >
+                      ＋ 予約登録
+                    </button>
+                    <button
+                      type="button"
+                      onClick={startCustomerEdit}
+                      className="h-10 rounded-[5px] border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
+                    >
+                      {embedded ? "編集" : "修正"}
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -861,8 +891,27 @@ export function CustomerDetail({
                         <input
                           name="nameKana"
                           defaultValue={customer.nameKana}
+                          onCompositionStart={() => {
+                            customerKanaComposingRef.current = true;
+                          }}
+                          onCompositionEnd={(event) => {
+                            customerKanaComposingRef.current = false;
+                            setCustomerKanaError(
+                              isValidHiragana(event.currentTarget.value)
+                                ? ""
+                                : kanaErrorMessage,
+                            );
+                          }}
                           onChange={(event) => {
                             const nextValue = event.target.value;
+                            if (
+                              isImeCompositionActive(
+                                customerKanaComposingRef.current,
+                                event.nativeEvent,
+                              )
+                            ) {
+                              return;
+                            }
                             setCustomerKanaError(
                               isValidHiragana(nextValue) ? "" : kanaErrorMessage,
                             );
@@ -1488,6 +1537,37 @@ export function CustomerDetail({
           </div>
         ) : null}
       </main>
+      {customer && isNewReservationOpen ? (
+        <AdminNewReservationModal
+          initialDate={getJstDateKey(new Date())}
+          customerContext={
+            {
+              id: customer.id,
+              name: customer.name,
+              nameKana: customer.nameKana,
+              phone: customer.phone,
+              gender: customer.gender,
+              birthDate: customer.birthDate,
+              lineStatus: customer.lineStatus,
+              lineDisplayName: customer.lineDisplayName,
+              vehicles: customer.vehicles.map((vehicle) => ({
+                id: vehicle.id,
+                modelName: vehicle.modelName,
+                plateNumber: vehicle.plateNumber,
+                shakenExpiryDate: vehicle.shakenExpiryDate,
+              })),
+            } satisfies AdminReservationCustomerContext
+          }
+          completionMessage="予約を登録しました。"
+          onClose={() => setIsNewReservationOpen(false)}
+          onCreated={() => {
+            setIsNewReservationOpen(false);
+            setUpdateMessage("予約を登録しました。");
+            void loadCustomer();
+            onCustomerUpdated?.();
+          }}
+        />
+      ) : null}
     </>
   );
 

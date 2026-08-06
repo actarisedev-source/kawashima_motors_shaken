@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import {
-  adminSessionCookieName,
-  verifyAdminSessionValue,
-} from "@/lib/auth/admin-session";
+import { getAdminAuthFromCookies } from "@/lib/auth/admin-session";
 import { LineDistribution } from "./line-distribution";
 
 export const metadata: Metadata = {
@@ -13,11 +10,8 @@ export const metadata: Metadata = {
 
 export default async function AdminLinePage() {
   const cookieStore = await cookies();
-  if (
-    !verifyAdminSessionValue(
-      cookieStore.get(adminSessionCookieName)?.value,
-    )
-  ) {
+  const auth = await getAdminAuthFromCookies(cookieStore);
+  if (!auth.authenticated) {
     redirect("/admin/login");
   }
   return <LineDistribution />;

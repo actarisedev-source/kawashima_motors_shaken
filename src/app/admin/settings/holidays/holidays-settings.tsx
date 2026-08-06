@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { weekdayLabels } from "@/lib/holidays/holidays";
 import { getJstDateKey } from "@/lib/reservations/slots";
 import { AdminHeader } from "../../admin-header";
+import { AdminInlineDatePicker } from "../../shared/admin-inline-date-picker";
 
 type HolidayItem = {
   id: string;
@@ -371,7 +372,6 @@ export function HolidaysSettings() {
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <AdminHeader
         title="定休日管理"
-        description="カレンダーから定休日の設定・解除ができます。"
         onRefresh={loadHolidays}
       />
 
@@ -440,54 +440,36 @@ export function HolidaysSettings() {
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[180px_180px_auto] lg:items-start">
-              <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-                開始日
-                <input
-                  type="date"
-                  min={currentTodayKey}
-                  value={rangeStartDate}
-                  aria-invalid={rangeErrors.startDate ? "true" : "false"}
-                  onChange={(event) => {
-                    setRangeStartDate(event.target.value);
-                    setRangeErrors((current) => ({
-                      ...current,
-                      startDate: "",
-                    }));
-                  }}
-                  className={`h-10 rounded-md border bg-white px-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-100 ${
-                    rangeErrors.startDate
-                      ? "border-red-400 focus:border-red-500"
-                      : "border-slate-300 focus:border-blue-500"
-                  }`}
-                />
-                <span className="min-h-4 text-xs font-semibold leading-4 text-red-600">
-                  {rangeErrors.startDate}
-                </span>
-              </label>
-              <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
-                終了日
-                <input
-                  type="date"
-                  min={rangeStartDate || currentTodayKey}
-                  value={rangeEndDate}
-                  aria-invalid={rangeErrors.endDate ? "true" : "false"}
-                  onChange={(event) => {
-                    setRangeEndDate(event.target.value);
-                    setRangeErrors((current) => ({
-                      ...current,
-                      endDate: "",
-                    }));
-                  }}
-                  className={`h-10 rounded-md border bg-white px-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-100 ${
-                    rangeErrors.endDate
-                      ? "border-red-400 focus:border-red-500"
-                      : "border-slate-300 focus:border-blue-500"
-                  }`}
-                />
-                <span className="min-h-4 text-xs font-semibold leading-4 text-red-600">
-                  {rangeErrors.endDate}
-                </span>
-              </label>
+              <AdminInlineDatePicker
+                label="開始日"
+                selectedDate={rangeStartDate}
+                minDate={currentTodayKey}
+                error={rangeErrors.startDate}
+                dropdownClassName="left-0 w-[min(86vw,372px)]"
+                isDateHoliday={(dateKey) => Boolean(findHoliday(dateKey, items))}
+                onSelectDate={(dateKey) => {
+                  setRangeStartDate(dateKey);
+                  setRangeErrors((current) => ({
+                    ...current,
+                    startDate: "",
+                  }));
+                }}
+              />
+              <AdminInlineDatePicker
+                label="終了日"
+                selectedDate={rangeEndDate}
+                minDate={rangeStartDate || currentTodayKey}
+                error={rangeErrors.endDate}
+                dropdownClassName="right-0 w-[min(86vw,372px)]"
+                isDateHoliday={(dateKey) => Boolean(findHoliday(dateKey, items))}
+                onSelectDate={(dateKey) => {
+                  setRangeEndDate(dateKey);
+                  setRangeErrors((current) => ({
+                    ...current,
+                    endDate: "",
+                  }));
+                }}
+              />
               <button
                 type="button"
                 disabled={loadState.status === "loading"}
@@ -501,6 +483,12 @@ export function HolidaysSettings() {
         </section>
 
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 px-4 py-4 sm:px-5">
+            <h2 className="text-base font-semibold">個別日設定</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              カレンダーの日付をクリックして、休業日の設定・解除ができます。
+            </p>
+          </div>
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
             <button
               type="button"
@@ -544,31 +532,31 @@ export function HolidaysSettings() {
                   type="button"
                   disabled={isPast || !isCurrentMonth || loadState.status === "loading"}
                   onClick={() => openDateConfirmation(dateKey)}
-                  aria-label={`${formatDisplayDate(dateKey)}${holiday ? " 定休日" : " 営業日"}`}
+                  aria-label={`${formatDisplayDate(dateKey)}${holiday ? " 休業" : " 営業日"}`}
                   className={[
                     "relative min-h-20 border-b border-r border-slate-200 p-1.5 text-left transition sm:min-h-28 sm:p-2",
-                    isPast
-                      ? "bg-gray-100 text-gray-400"
-                      : holiday
-                        ? "bg-red-50 text-red-800"
+                    holiday
+                      ? "bg-gray-100"
+                      : isPast
+                        ? "bg-gray-100 text-gray-400"
                         : "bg-white",
                     isToday ? "z-[1] ring-2 ring-inset ring-blue-500" : "",
                     !isCurrentMonth ? "text-slate-300 opacity-50" : "",
                     isPast || !isCurrentMonth
                       ? "cursor-default"
                       : holiday
-                        ? "cursor-pointer hover:bg-red-100"
+                        ? "cursor-pointer hover:bg-gray-100"
                         : "cursor-pointer hover:bg-blue-50",
                   ].join(" ")}
                 >
-                  <span className="text-sm font-bold">{date.getDate()}</span>
+                  <span
+                    className={`text-sm font-bold ${holiday ? "text-red-500" : ""}`}
+                  >
+                    {date.getDate()}
+                  </span>
                   {holiday && isCurrentMonth ? (
-                    <span
-                      className={`mt-2 block text-[10px] font-bold sm:text-xs ${
-                        isPast ? "text-red-500" : ""
-                      }`}
-                    >
-                      定休日
+                    <span className="mt-2 block text-[10px] font-bold text-red-500 sm:text-xs">
+                      休業
                     </span>
                   ) : null}
                   {reservationCount > 0 && isCurrentMonth ? (

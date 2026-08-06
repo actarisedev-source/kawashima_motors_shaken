@@ -1,4 +1,13 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+import type { LoanerAssignmentStatus } from "@/lib/loaners/loaner-assignment";
+import type { LoanerCategory } from "@/lib/loaners/loaner-vehicle";
+
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
 
 export type Database = {
   public: {
@@ -86,6 +95,76 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["vehicles"]["Insert"]>;
         Relationships: [];
       };
+      loaner_vehicles: {
+        Row: {
+          id: string;
+          vehicle_name: string;
+          display_name: string;
+          plate_number: string;
+          category: LoanerCategory;
+          is_active: boolean;
+          sort_order: number;
+          memo: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          vehicle_name: string;
+          display_name: string;
+          plate_number: string;
+          category: LoanerCategory;
+          is_active?: boolean;
+          sort_order?: number;
+          memo?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["loaner_vehicles"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      loaner_assignments: {
+        Row: {
+          id: string;
+          loaner_vehicle_id: string;
+          reservation_id: string;
+          customer_id: string | null;
+          scheduled_start_at: string;
+          scheduled_end_at: string;
+          actual_returned_at: string | null;
+          status: LoanerAssignmentStatus;
+          memo: string | null;
+          snapshot_customer_name: string;
+          snapshot_phone: string;
+          snapshot_reserved_at: string;
+          snapshot_staff_name: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          loaner_vehicle_id: string;
+          reservation_id: string;
+          customer_id?: string | null;
+          scheduled_start_at: string;
+          scheduled_end_at: string;
+          actual_returned_at?: string | null;
+          status?: LoanerAssignmentStatus;
+          memo?: string | null;
+          snapshot_customer_name: string;
+          snapshot_phone: string;
+          snapshot_reserved_at: string;
+          snapshot_staff_name: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["loaner_assignments"]["Insert"]
+        >;
+        Relationships: [];
+      };
       reservations: {
         Row: {
           id: string;
@@ -94,6 +173,7 @@ export type Database = {
           reserved_at: string;
           confirmation_token: string;
           status: Database["public"]["Enums"]["reservation_status"];
+          loaner_car_requested: boolean | null;
           note: string | null;
           created_at: string;
           updated_at: string;
@@ -105,6 +185,7 @@ export type Database = {
           reserved_at: string;
           confirmation_token?: string;
           status?: Database["public"]["Enums"]["reservation_status"];
+          loaner_car_requested?: boolean | null;
           note?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -323,6 +404,35 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      assign_loaner: {
+        Args: {
+          p_loaner_vehicle_id: string;
+          p_reservation_id: string;
+          p_scheduled_start_at: string;
+          p_scheduled_end_at: string;
+          p_snapshot_staff_name: string;
+          p_memo?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["loaner_assignments"]["Row"][];
+      };
+      change_loaner: {
+        Args: {
+          p_assignment_id: string;
+          p_loaner_vehicle_id: string;
+          p_scheduled_start_at: string;
+          p_scheduled_end_at: string;
+          p_snapshot_staff_name: string;
+          p_memo?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["loaner_assignments"]["Row"][];
+      };
+      cancel_reservation_with_loaner: {
+        Args: {
+          p_reservation_id: string;
+          p_expected_status?: Database["public"]["Enums"]["reservation_status"] | null;
+        };
+        Returns: Database["public"]["Tables"]["reservations"]["Row"][];
+      };
       claim_due_line_scheduled_messages: {
         Args: { p_limit?: number };
         Returns: Database["public"]["Tables"]["line_scheduled_messages"]["Row"][];
@@ -343,6 +453,7 @@ export type Database = {
           p_line_user_id: string | null;
           p_line_display_name: string | null;
           p_line_picture_url: string | null;
+          p_loaner_car_requested: boolean;
           p_slot_type?: string;
         };
         Returns: Array<{
@@ -354,6 +465,20 @@ export type Database = {
           line_linked: boolean;
           line_link_warning: string | null;
         }>;
+      };
+      release_loaner: {
+        Args: {
+          p_assignment_id: string;
+          p_actual_returned_at?: string;
+        };
+        Returns: Database["public"]["Tables"]["loaner_assignments"]["Row"][];
+      };
+      set_reservation_loaner_request: {
+        Args: {
+          p_reservation_id: string;
+          p_requested: boolean;
+        };
+        Returns: Database["public"]["Tables"]["reservations"]["Row"][];
       };
     };
   };

@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import {
-  adminSessionCookieName,
-  verifyAdminSessionValue,
-} from "@/lib/auth/admin-session";
+import { getAdminAuthFromCookies } from "@/lib/auth/admin-session";
 import { CustomersDashboard } from "../customers-dashboard";
 
 export const metadata: Metadata = {
@@ -17,9 +14,9 @@ export default async function AdminCustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const cookieStore = await cookies();
-  const session = cookieStore.get(adminSessionCookieName)?.value;
+  const auth = await getAdminAuthFromCookies(cookieStore);
 
-  if (!verifyAdminSessionValue(session)) {
+  if (!auth.authenticated) {
     redirect("/admin/login");
   }
 

@@ -11,15 +11,15 @@ export function AdminSettings() {
         <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-lg font-bold">アカウント設定</h2>
           <Link
-            href="/admin/settings/password"
+            href="/admin/settings/account"
             className="mt-4 flex items-center justify-between rounded-md border border-slate-200 px-4 py-4 transition hover:border-blue-300 hover:bg-blue-50"
           >
             <span>
               <span className="block font-semibold text-slate-950">
-                パスワード変更
+                アカウント設定
               </span>
               <span className="mt-1 block text-sm text-slate-500">
-                管理画面へログインするパスワードを変更します。
+                メールアドレスとパスワードを変更します。
               </span>
             </span>
             <span aria-hidden="true" className="text-xl text-blue-600">›</span>

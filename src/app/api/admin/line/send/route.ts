@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import {
-  adminSessionCookieName,
-  verifyAdminSessionValue,
-} from "@/lib/auth/admin-session";
+import { getAdminAuthFromRequest } from "@/lib/auth/admin-session";
 import {
   type LineAudienceFilters,
 } from "@/lib/line/audience";
@@ -15,8 +12,8 @@ import {
   uploadLineImage,
 } from "@/lib/line/distribution";
 
-const isAuthenticated = (request: NextRequest) =>
-  verifyAdminSessionValue(request.cookies.get(adminSessionCookieName)?.value);
+const isAuthenticated = async (request: NextRequest) =>
+  (await getAdminAuthFromRequest(request)).authenticated;
 
 const textValue = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
@@ -69,7 +66,7 @@ async function parsePayload(request: NextRequest): Promise<SendPayload> {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json(
       { ok: false, message: "ログインが必要です。" },
       { status: 401 },

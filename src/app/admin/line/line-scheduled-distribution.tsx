@@ -2,6 +2,9 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AdminInlineDatePicker } from "@/app/admin/shared/admin-inline-date-picker";
+import { LineEmojiPicker } from "./line-emoji-picker";
+import { LineImageDropzone } from "./line-image-dropzone";
 import { prepareLineImage } from "./line-image-client";
 
 type Filters = {
@@ -81,21 +84,6 @@ const groups = [
   },
 ];
 
-const variableSamples: Record<string, string> = {
-  name: "山田 太郎",
-  phone: "090-1234-5678",
-  vehicle_name: "プリウス",
-  plate_number: "静岡 300 あ 12-34",
-  shaken_expiry_date: "2026/08/31",
-  reservation_date: "2026/07/10 10:00",
-  age: "40",
-};
-
-const previewMessage = (body: string) =>
-  body.replace(/\{\{([a-z_]+)\}\}/g, (_, key: string) =>
-    key in variableSamples ? variableSamples[key] : `{{${key}}}`,
-  );
-
 const todayInJapan = () =>
   new Intl.DateTimeFormat("sv-SE", {
     year: "numeric",
@@ -135,7 +123,6 @@ export function LineScheduledDistribution() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [processingImage, setProcessingImage] = useState(false);
-  const imageInputRef = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<CustomerOption[]>([]);
@@ -263,7 +250,6 @@ export function LineScheduledDistribution() {
     } catch (error) {
       setImageFile(null);
       setImagePreviewUrl("");
-      if (imageInputRef.current) imageInputRef.current.value = "";
       setMessage(error instanceof Error ? error.message : "画像の処理に失敗しました。");
     } finally {
       setProcessingImage(false);
@@ -273,7 +259,6 @@ export function LineScheduledDistribution() {
   function removeImage() {
     setImageFile(null);
     setImagePreviewUrl("");
-    if (imageInputRef.current) imageInputRef.current.value = "";
   }
 
   function openConfirmation() {
@@ -381,20 +366,16 @@ export function LineScheduledDistribution() {
         <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-bold">配信日時</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-2 text-sm font-semibold text-slate-700">
-              配信日
-              <input
-                type="date"
-                min={todayInJapan()}
-                value={scheduledDate}
-                onChange={(event) => {
-                  setScheduledDate(event.target.value);
-                  setErrors((current) => ({ ...current, date: "" }));
-                }}
-                className={`h-11 rounded-md border px-3 text-base font-normal outline-none focus:border-blue-500 ${errors.date ? "border-red-400" : "border-slate-300"}`}
-              />
-              <span className="min-h-5 text-xs font-semibold text-red-600">{errors.date}</span>
-            </label>
+            <AdminInlineDatePicker
+              error={errors.date}
+              label="配信日"
+              minDate={todayInJapan()}
+              onSelectDate={(dateKey) => {
+                setScheduledDate(dateKey);
+                setErrors((current) => ({ ...current, date: "" }));
+              }}
+              selectedDate={scheduledDate}
+            />
             <label className="grid gap-2 text-sm font-semibold text-slate-700">
               配信時刻
               <select
@@ -427,26 +408,23 @@ export function LineScheduledDistribution() {
             配信タイトル
             <input value={title} onChange={(event) => { setTitle(event.target.value); setErrors((current) => ({ ...current, content: "" })); }} className="h-11 rounded-md border border-slate-300 px-3 text-base font-normal outline-none focus:border-blue-500" />
           </label>
-          <label className="grid gap-2 text-sm font-semibold text-slate-700">
-            配信本文
-            <textarea value={body} onChange={(event) => { setBody(event.target.value); setErrors((current) => ({ ...current, content: "" })); }} rows={10} maxLength={5000} className="rounded-md border border-slate-300 px-3 py-2 text-base font-normal outline-none focus:border-blue-500" />
-          </label>
-          <div className="grid gap-2">
-            <label className="text-sm font-semibold text-slate-700">添付画像</label>
-            <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" disabled={processingImage} onChange={(event) => void handleImageChange(event.target.files?.[0] ?? null)} className="block w-full rounded-md border border-slate-300 bg-white text-sm text-slate-600 file:mr-4 file:h-11 file:cursor-pointer file:border-0 file:border-r file:border-slate-300 file:bg-slate-50 file:px-4 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-50" />
-            <p className="text-xs text-slate-500">jpg・jpeg・png・webp / 10MB以内 / 1枚</p>
-            {processingImage ? <p className="text-sm font-semibold text-blue-700">画像を最適化しています...</p> : null}
-            {imageFile ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm">
-                <span className="font-semibold text-blue-900">{imageFile.name}（{Math.ceil(imageFile.size / 1024)}KB）</span>
-                <button type="button" onClick={removeImage} className="font-semibold text-red-600 hover:text-red-700">画像を削除</button>
-              </div>
-            ) : null}
-          </div>
+          <LineEmojiPicker
+            label="配信本文"
+            value={body}
+            onValueChange={(value) => {
+              setBody(value);
+              setErrors((current) => ({ ...current, content: "" }));
+            }}
+            className="rounded-md border border-slate-300 px-3 py-2 text-base font-normal outline-none focus:border-blue-500"
+          />
+          <LineImageDropzone
+            file={imageFile}
+            onRemove={removeImage}
+            onSelectFile={handleImageChange}
+            previewUrl={imagePreviewUrl}
+            processing={processingImage}
+          />
           <span className="min-h-5 text-xs font-semibold text-red-600">{errors.content}</span>
-          <p className="text-xs leading-6 text-slate-500">
-            使用可能: {"{{name}} {{phone}} {{vehicle_name}} {{plate_number}} {{shaken_expiry_date}} {{reservation_date}} {{age}}"}
-          </p>
         </section>
 
         <section className="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -495,7 +473,7 @@ export function LineScheduledDistribution() {
         <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-bold">配信プレビュー</h2>
           <div className="min-h-48 whitespace-pre-wrap rounded-md bg-[#8cabd9] p-4 text-sm leading-6">
-            {previewBody ? <div className="ml-auto max-w-[90%] rounded-md bg-white p-3 shadow-sm">{previewMessage(previewBody)}</div> : null}
+            {previewBody ? <div className="ml-auto max-w-[90%] whitespace-pre-wrap rounded-md bg-white p-3 shadow-sm">{previewBody}</div> : null}
             {imagePreviewUrl ? (
               <div className="ml-auto mt-2 max-w-[90%] overflow-hidden rounded-md bg-white shadow-sm first:mt-0">
                 <Image src={imagePreviewUrl} alt="予約配信画像プレビュー" width={640} height={480} unoptimized className="h-auto max-h-80 w-full object-contain" />

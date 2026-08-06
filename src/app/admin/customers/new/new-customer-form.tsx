@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminHeader } from "../../admin-header";
+import { AdminInlineDatePicker } from "../../shared/admin-inline-date-picker";
 
 type SubmitState =
   | { status: "idle"; message: "" }
@@ -39,6 +40,8 @@ export function NewCustomerForm() {
     message: "",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [birthDate, setBirthDate] = useState("");
+  const [shakenExpiryDate, setShakenExpiryDate] = useState("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -116,11 +119,11 @@ export function NewCustomerForm() {
         ) : null}
 
         <form onSubmit={handleSubmit} className="grid gap-5">
-          <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200 px-5 py-4">
               <h2 className="text-base font-semibold">顧客情報</h2>
             </div>
-            <div className="grid gap-4 p-5 md:grid-cols-2">
+            <div className="grid items-start gap-4 p-5 md:grid-cols-2">
               <label className="grid gap-2 text-sm font-medium text-slate-800">
                 氏名
                 <input
@@ -148,15 +151,20 @@ export function NewCustomerForm() {
                   className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
               </label>
-              <label className="grid gap-2 text-sm font-medium text-slate-800">
-                生年月日
-                <input
-                  name="birthDate"
-                  type="date"
-                  max={getTodayJstDateKey()}
-                  className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              <div>
+                <AdminInlineDatePicker
+                  className="gap-2 font-medium text-slate-800"
+                  dropdownClassName="right-0 w-[min(86vw,600px)]"
+                  label="生年月日"
+                  maxDate={getTodayJstDateKey()}
+                  minDate={null}
+                  onSelectDate={setBirthDate}
+                  selectedDate={birthDate}
+                  showCalendarIcon
+                  showMonthYearSelectors
                 />
-              </label>
+                <input type="hidden" name="birthDate" value={birthDate} />
+              </div>
               <label className="grid gap-2 text-sm font-medium text-slate-800">
                 性別
                 <select
@@ -181,7 +189,7 @@ export function NewCustomerForm() {
             </div>
           </section>
 
-          <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200 px-5 py-4">
               <h2 className="text-base font-semibold">車両情報</h2>
               <p className="mt-1 text-sm text-slate-500">
@@ -205,14 +213,22 @@ export function NewCustomerForm() {
                   className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
               </label>
-              <label className="grid gap-2 text-sm font-medium text-slate-800">
-                車検満了日
-                <input
-                  name="shakenExpiryDate"
-                  type="date"
-                  className="h-11 rounded-md border border-slate-300 bg-white px-3 text-base font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              <div>
+                <AdminInlineDatePicker
+                  label="車検満了日"
+                  minDate={null}
+                  onSelectDate={setShakenExpiryDate}
+                  selectedDate={shakenExpiryDate}
+                  showCalendarIcon
+                  showMonthYearSelectors
+                  yearSelectionFutureYears={20}
                 />
-              </label>
+                <input
+                  type="hidden"
+                  name="shakenExpiryDate"
+                  value={shakenExpiryDate}
+                />
+              </div>
               <label className="grid gap-2 text-sm font-medium text-slate-800 md:col-span-2">
                 車両メモ
                 <textarea

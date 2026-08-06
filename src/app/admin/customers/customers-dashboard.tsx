@@ -364,6 +364,10 @@ export function CustomersDashboard({
               customerId={selectedCustomerId}
               embedded
               onCustomerUpdated={() => loadCustomers(query)}
+              onCustomerDeleted={() => {
+                setSelectedCustomerId("");
+                void loadCustomers(query);
+              }}
             />
           ) : (
             <div className="grid min-h-[520px] place-items-center rounded-[12px] border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">

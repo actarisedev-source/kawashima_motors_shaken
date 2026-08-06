@@ -10,6 +10,7 @@ import {
 } from "react";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { normalizePhone } from "@/lib/customers/phone";
+import { isImeCompositionActive } from "@/lib/forms/ime";
 import {
   getJstDateKey,
   reservationTimeSlots,
@@ -71,6 +72,7 @@ type ReservationDraft = {
   licensePlate: string;
   inspectionExpiresOn: string;
   birthDate: string;
+  loanerCarRequested: boolean;
   note: string;
 };
 
@@ -79,6 +81,7 @@ type FieldErrors = {
   phone: string;
   birthDate: string;
   reservationDateTime: string;
+  loanerCarRequested: string;
 };
 
 type SlotMark = "○" | "△" | "×";
@@ -89,7 +92,11 @@ const emptyFieldErrors: FieldErrors = {
   phone: "",
   birthDate: "",
   reservationDateTime: "",
+  loanerCarRequested: "",
 };
+
+const privacyPolicyText =
+  "川島モータースは、予約受付およびご連絡のために、お客様の氏名、電話番号、車両情報その他の入力情報を取得します。取得した個人情報は、予約内容の確認、ご連絡、サービス提供およびこれらに付随する業務のために利用し、法令に基づく場合を除き、本人の同意なく第三者へ提供しません。個人情報は適切に管理し、利用目的の達成に必要な範囲で取り扱います。";
 
 const formatMonth = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -229,6 +236,8 @@ export function ReservationForm({
   const [phone, setPhone] = useState("");
   const [fieldErrors, setFieldErrors] =
     useState<FieldErrors>(emptyFieldErrors);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
+  const [privacyConsentError, setPrivacyConsentError] = useState("");
   const [lineIdToken, setLineIdToken] = useState("");
   const [reservationDraft, setReservationDraft] =
     useState<ReservationDraft | null>(null);
@@ -242,7 +251,19 @@ export function ReservationForm({
   const [availabilityMessage, setAvailabilityMessage] =
     useState("最新情報を取得中です");
   const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
+  const reservationDateTimeErrorRef = useRef<HTMLElement | null>(null);
+  const customerNameInputRef = useRef<HTMLInputElement | null>(null);
+  const customerKanaInputRef = useRef<HTMLInputElement | null>(null);
+  const phoneInputRef = useRef<HTMLInputElement | null>(null);
+  const customerKanaComposingRef = useRef(false);
+  const phoneComposingRef = useRef(false);
+  const birthDateInputRef = useRef<HTMLInputElement | null>(null);
+  const loanerCarRequestedRef = useRef<HTMLFieldSetElement | null>(null);
+  const loanerCarRequestedInputRef = useRef<HTMLInputElement | null>(null);
+  const privacyConsentInputRef = useRef<HTMLInputElement | null>(null);
   const submissionInFlightRef = useRef(false);
+  const showConfirmationRef = useRef(false);
+  const confirmationHistoryActiveRef = useRef(false);
 
   const currentTodayKey = getJstDateKey(new Date());
   const todayDate = useMemo(() => getDateFromKey(currentTodayKey), [currentTodayKey]);
@@ -346,6 +367,58 @@ export function ReservationForm({
     document.body.scrollTop = 0;
   }, [showConfirmation]);
 
+  useEffect(() => {
+    showConfirmationRef.current = showConfirmation;
+  }, [showConfirmation]);
+
+  useEffect(() => {
+    function handlePopState() {
+      if (!confirmationHistoryActiveRef.current) {
+        return;
+      }
+
+      confirmationHistoryActiveRef.current = false;
+
+      if (showConfirmationRef.current) {
+        setShowConfirmation(false);
+        onConfirmationChange?.(false);
+        setSubmitState({ status: "idle", message: "" });
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [onConfirmationChange]);
+
+  function openConfirmation() {
+    if (!confirmationHistoryActiveRef.current) {
+      window.history.pushState(
+        { kawashimaReservationConfirmation: true },
+        "",
+        window.location.href,
+      );
+      confirmationHistoryActiveRef.current = true;
+    }
+
+    setShowConfirmation(true);
+    onConfirmationChange?.(true);
+  }
+
+  function closeConfirmation() {
+    if (confirmationHistoryActiveRef.current) {
+      window.history.back();
+      return;
+    }
+
+    setShowConfirmation(false);
+    onConfirmationChange?.(false);
+    setSubmitState({ status: "idle", message: "" });
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }
+
   function moveCalendarMonth(amount: number) {
     setCalendarViewDate((current) => {
       const next = new Date(current);
@@ -358,6 +431,36 @@ export function ReservationForm({
     });
     setSelectedDate("");
     setSelectedTime("");
+  }
+
+  function scrollToFirstError(
+    candidates: {
+      target: HTMLElement | null;
+      focus?: HTMLElement | null;
+    }[],
+  ) {
+    const firstError = candidates
+      .filter(
+        (candidate): candidate is { target: HTMLElement; focus?: HTMLElement | null } =>
+          Boolean(candidate.target),
+      )
+      .sort(
+        (a, b) =>
+          a.target.getBoundingClientRect().top -
+          b.target.getBoundingClientRect().top,
+      )[0];
+
+    if (!firstError) {
+      return;
+    }
+
+    firstError.target.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    if (firstError.focus) {
+      window.setTimeout(() => {
+        firstError.focus?.focus({ preventScroll: true });
+      }, 250);
+    }
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -373,6 +476,9 @@ export function ReservationForm({
     const normalizedPhone = normalizePhone(phone);
     const vehicleModel = String(formData.get("vehicleModel") ?? "").trim();
     const birthDate = String(formData.get("birthDate") ?? "").trim();
+    const loanerCarRequestedValue = String(
+      formData.get("loanerCarRequested") ?? "",
+    );
     const nextFieldErrors: FieldErrors = {
       customerName: customerName ? "" : "お名前を入力してください。",
       phone: normalizedPhone ? "" : "電話番号を入力してください。",
@@ -382,18 +488,67 @@ export function ReservationForm({
           : "",
       reservationDateTime:
         selectedDate && selectedTime ? "" : "予約日時を選択してください。",
+      loanerCarRequested: loanerCarRequestedValue
+        ? ""
+        : "代車希望を選択してください。",
     };
     const hasFieldError = Object.values(nextFieldErrors).some(Boolean);
+    const hasKanaError = !isValidHiragana(customerKana);
+    const hasPrivacyConsentError = !privacyConsent;
 
     setPhone(normalizedPhone);
     setFieldErrors(nextFieldErrors);
+    setPrivacyConsentError(
+      hasPrivacyConsentError ? "個人情報の取り扱いに同意してください。" : "",
+    );
 
-    if (!isValidHiragana(customerKana)) {
+    if (hasKanaError) {
       setCustomerKanaError(kanaErrorMessage);
     }
 
-    if (hasFieldError || !isValidHiragana(customerKana)) {
+    if (hasFieldError || hasKanaError || hasPrivacyConsentError) {
       setSubmitState({ status: "idle", message: "" });
+      scrollToFirstError([
+        nextFieldErrors.reservationDateTime
+          ? {
+              target: reservationDateTimeErrorRef.current,
+              focus: reservationDateTimeErrorRef.current,
+            }
+          : { target: null },
+        nextFieldErrors.customerName
+          ? {
+              target: customerNameInputRef.current,
+              focus: customerNameInputRef.current,
+            }
+          : { target: null },
+        hasKanaError
+          ? {
+              target: customerKanaInputRef.current,
+              focus: customerKanaInputRef.current,
+            }
+          : { target: null },
+        nextFieldErrors.phone
+          ? { target: phoneInputRef.current, focus: phoneInputRef.current }
+          : { target: null },
+        nextFieldErrors.birthDate
+          ? {
+              target: birthDateInputRef.current,
+              focus: birthDateInputRef.current,
+            }
+          : { target: null },
+        nextFieldErrors.loanerCarRequested
+          ? {
+              target: loanerCarRequestedRef.current,
+              focus: loanerCarRequestedInputRef.current,
+            }
+          : { target: null },
+        hasPrivacyConsentError
+          ? {
+              target: privacyConsentInputRef.current,
+              focus: privacyConsentInputRef.current,
+            }
+          : { target: null },
+      ]);
       return;
     }
 
@@ -420,11 +575,11 @@ export function ReservationForm({
         formData.get("inspectionExpiresOn") ?? "",
       ).trim(),
       birthDate,
+      loanerCarRequested: loanerCarRequestedValue === "true",
       note: String(formData.get("note") ?? "").trim(),
     });
     setSubmitState({ status: "idle", message: "" });
-    setShowConfirmation(true);
-    onConfirmationChange?.(true);
+    openConfirmation();
   }
 
   async function handleConfirmReservation() {
@@ -460,6 +615,7 @@ export function ReservationForm({
           vehicleModel: reservationDraft.vehicleModel || undefined,
           licensePlate: reservationDraft.licensePlate,
           inspectionExpiresOn: reservationDraft.inspectionExpiresOn,
+          loanerCarRequested: reservationDraft.loanerCarRequested,
           reservedAt: `${reservationDraft.reservedDate}T${reservationDraft.reservedTime}:00+09:00`,
           note: reservationDraft.note,
           lineIdToken: lineIdToken || undefined,
@@ -512,6 +668,7 @@ export function ReservationForm({
             showLineLinkGuide: successState.showLineLinkGuide,
           }),
         );
+        confirmationHistoryActiveRef.current = false;
         window.location.assign("/reservations/complete");
         return;
       } catch {
@@ -556,6 +713,10 @@ export function ReservationForm({
       ["ナンバー", reservationDraft.licensePlate || "未入力"],
       ["車検満了日", reservationDraft.inspectionExpiresOn || "未入力"],
       ["生年月日", reservationDraft.birthDate || "未入力"],
+      [
+        "代車希望",
+        reservationDraft.loanerCarRequested ? "希望する" : "希望しない",
+      ],
     ];
 
     return (
@@ -597,13 +758,8 @@ export function ReservationForm({
           <button
             type="button"
             disabled={submitState.status === "submitting"}
-            onClick={() => {
-              setShowConfirmation(false);
-              onConfirmationChange?.(false);
-              setSubmitState({ status: "idle", message: "" });
-              window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-            }}
-            className="flex h-13 items-center justify-center rounded-[12px] border border-zinc-300 bg-white px-5 text-base font-bold text-zinc-800 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={closeConfirmation}
+            className="flex h-13 cursor-pointer items-center justify-center rounded-lg border border-zinc-300 bg-white px-5 text-base font-bold text-zinc-800 transition-colors duration-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             入力内容を修正
           </button>
@@ -626,7 +782,11 @@ export function ReservationForm({
       noValidate
       className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-3 shadow-sm sm:gap-5 sm:p-5"
     >
-      <section className="grid gap-3 sm:gap-5">
+      <section
+        ref={reservationDateTimeErrorRef}
+        tabIndex={-1}
+        className="grid gap-3 scroll-mt-8 outline-none sm:gap-5"
+      >
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2.5 shadow-sm sm:px-8 sm:py-4">
           <button
             type="button"
@@ -834,10 +994,18 @@ export function ReservationForm({
         ) : null}
       </section>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          お名前
+      <section className="mt-5 grid gap-3 sm:gap-4">
+        <h2 className="text-base font-bold text-zinc-900">お客様情報</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              お名前
+              <span className="ml-1 text-xs font-semibold text-red-600">
+                （必須）
+              </span>
+            </span>
           <input
+            ref={customerNameInputRef}
             name="customerName"
             defaultValue={reservationDraft?.customerName ?? ""}
             aria-invalid={fieldErrors.customerName ? "true" : "false"}
@@ -860,15 +1028,40 @@ export function ReservationForm({
           >
             {fieldErrors.customerName}
           </span>
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          ふりがな
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              ふりがな
+              <span className="ml-1 text-xs font-semibold text-red-600">
+                （必須）
+              </span>
+            </span>
           <input
+            ref={customerKanaInputRef}
             name="customerKana"
             value={customerKana}
+            onCompositionStart={() => {
+              customerKanaComposingRef.current = true;
+            }}
+            onCompositionEnd={(event) => {
+              customerKanaComposingRef.current = false;
+              const confirmedValue = event.currentTarget.value;
+              setCustomerKana(confirmedValue);
+              setCustomerKanaError(
+                isValidHiragana(confirmedValue) ? "" : kanaErrorMessage,
+              );
+            }}
             onChange={(event) => {
               const nextValue = event.target.value;
               setCustomerKana(nextValue);
+              if (
+                isImeCompositionActive(
+                  customerKanaComposingRef.current,
+                  event.nativeEvent,
+                )
+              ) {
+                return;
+              }
               setCustomerKanaError(
                 isValidHiragana(nextValue) ? "" : kanaErrorMessage,
               );
@@ -887,18 +1080,40 @@ export function ReservationForm({
           >
             {customerKanaError}
           </span>
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          電話番号
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              電話番号
+              <span className="ml-1 text-xs font-semibold text-red-600">
+                （必須）
+              </span>
+            </span>
           <input
+            ref={phoneInputRef}
             name="phone"
             type="tel"
             inputMode="tel"
             value={phone}
             aria-invalid={fieldErrors.phone ? "true" : "false"}
             aria-describedby="phone-error"
+            onCompositionStart={() => {
+              phoneComposingRef.current = true;
+            }}
+            onCompositionEnd={(event) => {
+              phoneComposingRef.current = false;
+              setPhone(normalizePhone(event.currentTarget.value));
+              setFieldErrors((current) => ({ ...current, phone: "" }));
+            }}
             onChange={(event) => {
-              setPhone(normalizePhone(event.target.value));
+              const nextValue = event.target.value;
+              setPhone(
+                isImeCompositionActive(
+                  phoneComposingRef.current,
+                  event.nativeEvent,
+                )
+                  ? nextValue
+                  : normalizePhone(nextValue),
+              );
               setFieldErrors((current) => ({ ...current, phone: "" }));
             }}
             className={
@@ -913,9 +1128,14 @@ export function ReservationForm({
           >
             {fieldErrors.phone}
           </span>
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          性別（任意）
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              性別
+              <span className="ml-1 text-xs font-semibold text-zinc-500">
+                （任意）
+              </span>
+            </span>
           <select
             name="gender"
             defaultValue={reservationDraft?.gender ?? ""}
@@ -926,27 +1146,84 @@ export function ReservationForm({
             <option value="女性">女性</option>
           </select>
           <span aria-hidden="true" className="min-h-4" />
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          車種（任意）
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              生年月日
+              <span className="ml-1 text-xs font-semibold text-zinc-500">
+                （任意）
+              </span>
+            </span>
+            <input
+              ref={birthDateInputRef}
+              name="birthDate"
+              type="date"
+              max={currentTodayKey}
+              defaultValue={reservationDraft?.birthDate ?? ""}
+              aria-invalid={fieldErrors.birthDate ? "true" : "false"}
+              aria-describedby="birth-date-error"
+              onChange={() =>
+                setFieldErrors((current) => ({ ...current, birthDate: "" }))
+              }
+              className={
+                fieldErrors.birthDate
+                  ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
+                  : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
+              }
+            />
+            <span
+              id="birth-date-error"
+              className="min-h-4 text-xs font-semibold leading-4 text-red-600"
+            >
+              {fieldErrors.birthDate}
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section className="grid gap-3 sm:gap-4">
+        <header>
+          <h2 className="text-base font-bold text-zinc-900">お車情報</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            わかる範囲でご入力ください。
+          </p>
+        </header>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              車種
+              <span className="ml-1 text-xs font-semibold text-zinc-500">
+                （任意）
+              </span>
+            </span>
           <input
             name="vehicleModel"
             defaultValue={reservationDraft?.vehicleModel ?? ""}
             className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
           />
           <span aria-hidden="true" className="min-h-4" />
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          ナンバー（任意）
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              ナンバー
+              <span className="ml-1 text-xs font-semibold text-zinc-500">
+                （任意）
+              </span>
+            </span>
           <input
             name="licensePlate"
             defaultValue={reservationDraft?.licensePlate ?? ""}
             className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
           />
           <span aria-hidden="true" className="min-h-4" />
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          車検満了日（任意）
+          </label>
+          <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
+            <span>
+              車検満了日
+              <span className="ml-1 text-xs font-semibold text-zinc-500">
+                （任意）
+              </span>
+            </span>
           <input
             name="inspectionExpiresOn"
             type="date"
@@ -954,33 +1231,57 @@ export function ReservationForm({
             className="h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
           />
           <span aria-hidden="true" className="min-h-4" />
-        </label>
-        <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
-          生年月日（任意）
-          <input
-            name="birthDate"
-            type="date"
-            max={currentTodayKey}
-            defaultValue={reservationDraft?.birthDate ?? ""}
-            aria-invalid={fieldErrors.birthDate ? "true" : "false"}
-            aria-describedby="birth-date-error"
-            onChange={() =>
-              setFieldErrors((current) => ({ ...current, birthDate: "" }))
-            }
-            className={
-              fieldErrors.birthDate
-                ? "h-11 rounded-md border border-red-400 px-3 text-base font-normal outline-none focus:border-red-500"
-                : "h-11 rounded-md border border-zinc-300 px-3 text-base font-normal outline-none focus:border-blue-600"
-            }
-          />
-          <span
-            id="birth-date-error"
-            className="min-h-4 text-xs font-semibold leading-4 text-red-600"
-          >
-            {fieldErrors.birthDate}
+          </label>
+        </div>
+      </section>
+
+      <fieldset
+        ref={loanerCarRequestedRef}
+        className="grid gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 sm:p-4"
+      >
+        <legend className="px-1 text-sm font-bold text-zinc-800">
+          代車希望
+        </legend>
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          {[
+            { value: "true", label: "希望する" },
+            { value: "false", label: "希望しない" },
+          ].map((option, index) => (
+            <label
+              key={option.value}
+              className="flex cursor-pointer items-center gap-2 text-sm font-bold text-zinc-800"
+            >
+              <input
+                ref={index === 0 ? loanerCarRequestedInputRef : undefined}
+                type="radio"
+                name="loanerCarRequested"
+                value={option.value}
+                defaultChecked={
+                  reservationDraft
+                    ? String(reservationDraft.loanerCarRequested) === option.value
+                    : false
+                }
+                onChange={() =>
+                  setFieldErrors((current) => ({
+                    ...current,
+                    loanerCarRequested: "",
+                  }))
+                }
+                className="h-4 w-4 border-zinc-300 text-blue-600 focus:ring-blue-500"
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
+        <p className="text-xs font-medium text-zinc-500">
+          ※代車の空き状況により、ご希望に添えない場合があります。
+        </p>
+        {fieldErrors.loanerCarRequested ? (
+          <span className="text-xs font-semibold leading-4 text-red-600">
+            {fieldErrors.loanerCarRequested}
           </span>
-        </label>
-      </div>
+        ) : null}
+      </fieldset>
 
       <label className="grid gap-1.5 text-sm font-medium text-zinc-800">
         ご要望
@@ -991,12 +1292,40 @@ export function ReservationForm({
           className="rounded-md border border-zinc-300 px-3 py-2 text-base font-normal outline-none focus:border-blue-600"
         />
       </label>
+      <section className="grid gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 sm:p-4">
+        <div>
+          <h2 className="text-sm font-bold text-zinc-900">
+            個人情報の取り扱いについて
+          </h2>
+          <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-zinc-200 bg-white px-3 py-3 text-sm leading-6 text-zinc-700">
+            <p>{privacyPolicyText}</p>
+          </div>
+        </div>
+        <label className="flex items-start gap-2 text-sm font-bold text-zinc-800">
+          <input
+            ref={privacyConsentInputRef}
+            type="checkbox"
+            checked={privacyConsent}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              setPrivacyConsent(checked);
+              if (checked) {
+                setPrivacyConsentError("");
+              }
+            }}
+            className="mt-0.5 h-5 w-5 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span>個人情報の取り扱いに同意します</span>
+        </label>
+        {privacyConsentError ? (
+          <p className="text-xs font-semibold text-red-600" role="alert">
+            {privacyConsentError}
+          </p>
+        ) : null}
+      </section>
       <button
         type="submit"
-        disabled={
-          submitState.status === "submitting" ||
-          Boolean(customerKanaError)
-        }
+        disabled={submitState.status === "submitting"}
         className="flex h-14 items-center justify-center rounded-[12px] bg-blue-600 px-5 text-lg font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-zinc-300"
       >
         {submitState.status === "submitting" ? "送信中..." : "予約に進む"}

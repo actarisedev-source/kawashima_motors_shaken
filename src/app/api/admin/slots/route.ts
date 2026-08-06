@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import {
-  adminSessionCookieName,
-  verifyAdminSessionValue,
-} from "@/lib/auth/admin-session";
+import { getAdminAuthFromRequest } from "@/lib/auth/admin-session";
 import {
   buildSpecialCapacityMap,
   buildWeeklyCapacityMap,
@@ -23,8 +20,8 @@ const unauthorizedResponse = () =>
     { status: 401 },
   );
 
-const isAuthenticated = (request: NextRequest) =>
-  verifyAdminSessionValue(request.cookies.get(adminSessionCookieName)?.value);
+const isAuthenticated = async (request: NextRequest) =>
+  (await getAdminAuthFromRequest(request)).authenticated;
 
 const parseWeeklySettings = (value: unknown) => {
   if (!value || typeof value !== "object") {
@@ -111,7 +108,7 @@ const parseSpecialSettings = (value: unknown) => {
 };
 
 export async function GET(request: NextRequest) {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return unauthorizedResponse();
   }
 
@@ -145,7 +142,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return unauthorizedResponse();
   }
 
@@ -174,7 +171,7 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return unauthorizedResponse();
   }
 
@@ -205,7 +202,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return unauthorizedResponse();
   }
 

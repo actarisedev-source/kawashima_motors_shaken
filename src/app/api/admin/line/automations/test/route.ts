@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import {
-  adminSessionCookieName,
-  verifyAdminSessionValue,
-} from "@/lib/auth/admin-session";
+import { getAdminAuthFromRequest } from "@/lib/auth/admin-session";
 import {
   lineAutomationTypes,
   sendLineAutomation,
@@ -13,11 +10,8 @@ import { getLineConfig } from "@/lib/line/config";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
-  if (
-    !verifyAdminSessionValue(
-      request.cookies.get(adminSessionCookieName)?.value,
-    )
-  ) {
+  const auth = await getAdminAuthFromRequest(request);
+  if (!auth.authenticated) {
     return NextResponse.json(
       { ok: false, message: "ログインが必要です。" },
       { status: 401 },

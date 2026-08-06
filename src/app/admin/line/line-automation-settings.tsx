@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  LineEmojiPicker,
+  type LineInsertItem,
+} from "./line-emoji-picker";
 
 type AutomationType =
   | "shaken_60_days"
@@ -40,6 +44,54 @@ const automationDisplayOrder: AutomationType[] = [
   "shaken_30_days",
   "shaken_60_days",
 ];
+
+const standardAutomationInsertItems: LineInsertItem[] = [
+  { label: "お名前", token: "{{name}}", icon: "person" },
+  { label: "電話番号", token: "{{phone}}", icon: "phone" },
+  { label: "車種", token: "{{vehicle_name}}", icon: "car" },
+  { label: "ナンバー", token: "{{plate_number}}", icon: "number" },
+  {
+    label: "車検満了日",
+    token: "{{shaken_expiry_date}}",
+    icon: "date",
+  },
+  { label: "予約日時", token: "{{reservation_date}}", icon: "reservation" },
+];
+
+const reservationCompletionInsertItems: LineInsertItem[] = [
+  { label: "お名前", token: "{{customer_name}}", icon: "person" },
+  { label: "車種", token: "{{vehicle_name}}", icon: "car" },
+  { label: "ナンバー", token: "{{plate_number}}", icon: "number" },
+  {
+    label: "予約日時",
+    token: "{{reservation_datetime}}",
+    icon: "reservation",
+  },
+  {
+    label: "代車希望",
+    token: "{{loaner_car_requested}}",
+    icon: "loaner",
+  },
+];
+
+const automationPreviewSamples: Record<string, string> = {
+  name: "川島 太郎",
+  customer_name: "川島 太郎",
+  phone: "090-1234-5678",
+  vehicle_name: "プリウス",
+  plate_number: "長野 300 あ 12-34",
+  shaken_expiry_date: "○○年○○月○○日",
+  reservation_date: "○○年○○月○○日 ○○:○○",
+  reservation_datetime: "○○年○○月○○日 ○○:○○",
+  loaner_car_requested: "希望する",
+};
+
+const renderAutomationPreview = (body: string) =>
+  body.replace(/\{\{([a-z_]+)\}\}/g, (_, key: string) =>
+    key in automationPreviewSamples
+      ? automationPreviewSamples[key]
+      : `{{${key}}}`,
+  );
 
 const formatDateTime = (value: string | null) =>
   value
@@ -246,29 +298,41 @@ export function LineAutomationSettings() {
                     />
                   </label>
                 ) : null}
-                <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                  {setting.automation_type === "reservation_completion"
-                    ? "メッセージ本文"
-                    : "配信本文"}
-                  <textarea
-                    value={setting.body}
-                    onChange={(event) =>
-                      updateSetting(
-                        setting.automation_type,
-                        "body",
-                        event.target.value,
-                      )
-                    }
-                    rows={12}
-                    maxLength={5000}
-                    className="rounded-[5px] border border-slate-300 px-3 py-2 text-base font-normal leading-7 outline-none focus:border-blue-500"
-                  />
-                </label>
-                <p className="text-xs leading-6 text-slate-500">
-                  使用可能: {setting.automation_type === "reservation_completion"
-                    ? "{{reservation_datetime}} {{customer_name}} {{vehicle_name}} {{plate_number}}"
-                    : "{{name}} {{phone}} {{vehicle_name}} {{plate_number}} {{shaken_expiry_date}} {{reservation_date}}"}
-                </p>
+                <LineEmojiPicker
+                  label={
+                    setting.automation_type === "reservation_completion"
+                      ? "メッセージ本文"
+                      : "配信本文"
+                  }
+                  value={setting.body}
+                  onValueChange={(value) =>
+                    updateSetting(setting.automation_type, "body", value)
+                  }
+                  insertItems={
+                    setting.automation_type === "reservation_completion"
+                      ? reservationCompletionInsertItems
+                      : standardAutomationInsertItems
+                  }
+                  rows={12}
+                  className="rounded-[5px] border border-slate-300 px-3 py-2 text-base font-normal leading-7 outline-none focus:border-blue-500"
+                />
+                <div className="grid gap-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-700">
+                      配信プレビュー
+                    </p>
+                    <p className="text-xs font-normal text-slate-500">
+                      ※差し込み項目はサンプルデータで表示しています。
+                    </p>
+                  </div>
+                  <div className="min-h-32 whitespace-pre-wrap rounded-md bg-[#8cabd9] p-4 text-sm font-normal leading-6 text-slate-800">
+                    {setting.body ? (
+                      <div className="ml-auto max-w-[90%] rounded-md bg-white p-3 shadow-sm">
+                        {renderAutomationPreview(setting.body)}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               </div>
 
               {setting.automation_type !== "reservation_completion" ? (

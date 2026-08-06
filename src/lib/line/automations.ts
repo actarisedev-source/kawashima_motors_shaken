@@ -266,11 +266,11 @@ export async function sendLineAutomation(
   for (const target of pending) {
     const lineUserId = target.customer.line_user_id;
     if (!lineUserId) continue;
-    const renderedBody = renderLineAutomationMessage(setting.body, target);
+    const messageBody = renderLineAutomationMessage(setting.body, target);
     let status: "成功" | "失敗" = "成功";
     let errorMessage: string | null = null;
     try {
-      await pushLineTextMessage(accessToken, lineUserId, renderedBody);
+      await pushLineTextMessage(accessToken, lineUserId, messageBody);
       successCount += 1;
     } catch (error) {
       status = "失敗";
@@ -288,7 +288,7 @@ export async function sendLineAutomation(
           ? `自動配信テスト: ${lineAutomationDefinitions[setting.automation_type].label}`
           : lineAutomationDefinitions[setting.automation_type].label,
         title: setting.title,
-        body: renderedBody,
+        body: messageBody,
         status,
         error_message: errorMessage,
         sent_at: status === "成功" ? new Date().toISOString() : null,

@@ -7,6 +7,7 @@ export type Reservation = {
   vehicleId: string;
   reservedAt: string;
   status: ReservationStatus;
+  loanerCarRequested: boolean | null;
   note: string | null;
   createdAt: string;
   updatedAt: string;
@@ -25,4 +26,3 @@ export type ReservationWithRelations = Reservation & {
     inspectionExpiresOn: string | null;
   };
 };
-
