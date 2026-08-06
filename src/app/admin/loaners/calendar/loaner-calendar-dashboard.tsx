@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   addLoanerCalendarDays,
+  formatLoanerCalendarDate,
+  getLoanerCalendarDayDisplay,
   getLoanerCalendarAssignmentSegment,
+  getLoanerCalendarJstDateKey,
   getLoanerCalendarWeekStart,
   isLoanerAssignmentOnDate,
   type LoanerCalendarAssignmentStatus,
@@ -22,7 +25,6 @@ import {
   formatLoanerDate,
   getLoanerReturnDateKey,
 } from "@/lib/loaners/loaner-period";
-import { getJstDateKey } from "@/lib/reservations/slots";
 import { AdminHeader } from "../../admin-header";
 import { AdminInlineDatePicker } from "../../shared/admin-inline-date-picker";
 import { LoanerAdminTabs } from "../loaner-admin-tabs";
@@ -42,8 +44,6 @@ const calendarStatusStyles: Record<
   checked_out: "border-amber-500 bg-amber-500 text-slate-950",
 };
 
-const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
-
 const formatDateTime = (value: string | null) =>
   value
     ? new Intl.DateTimeFormat("ja-JP", {
@@ -55,20 +55,6 @@ const formatDateTime = (value: string | null) =>
         timeZone: "Asia/Tokyo",
       }).format(new Date(value))
     : "—";
-
-const formatCalendarDay = (dateKey: string) => {
-  const date = new Date(`${dateKey}T00:00:00+09:00`);
-  return {
-    monthDay: `${date.getMonth() + 1}/${date.getDate()}`,
-    weekday: weekdayLabels[date.getDay()],
-    weekdayIndex: date.getDay(),
-  };
-};
-
-const formatCalendarDate = (dateKey: string) => {
-  const date = new Date(`${dateKey}T00:00:00+09:00`);
-  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}(${weekdayLabels[date.getDay()]})`;
-};
 
 function LoadingSpinner({ label }: { label: string }) {
   return (
@@ -227,7 +213,9 @@ function AssignmentDetailModal({
             <div>
               <dt className="text-xs font-semibold text-slate-500">貸出開始日</dt>
               <dd className="mt-1 text-sm font-semibold">
-                {formatLoanerDate(getJstDateKey(assignment.scheduledStartAt))}
+                {formatLoanerDate(
+                  getLoanerCalendarJstDateKey(assignment.scheduledStartAt),
+                )}
               </dd>
             </div>
             <div>
@@ -342,7 +330,7 @@ function DesktopCalendar({
             代車
           </div>
           {dateKeys.map((dateKey) => {
-            const day = formatCalendarDay(dateKey);
+            const day = getLoanerCalendarDayDisplay(dateKey);
             const isToday = dateKey === today;
             const isHoliday = holidays.has(dateKey);
             return (
@@ -491,7 +479,9 @@ function MobileCalendar({
                   </span>
                 ) : null}
                 <span className="mt-1 block text-xs">
-                  {formatLoanerDate(getJstDateKey(assignment.scheduledStartAt))}
+                  {formatLoanerDate(
+                    getLoanerCalendarJstDateKey(assignment.scheduledStartAt),
+                  )}
                   {" 〜 "}
                   {formatLoanerDate(
                     getLoanerReturnDateKey(assignment.scheduledEndAt),
@@ -510,8 +500,12 @@ function MobileCalendar({
   );
 }
 
-export function LoanerCalendarDashboard() {
-  const today = getJstDateKey(new Date());
+export function LoanerCalendarDashboard({
+  initialToday,
+}: {
+  initialToday: string;
+}) {
+  const today = initialToday;
   const [selectedDate, setSelectedDate] = useState(today);
   const [keyword, setKeyword] = useState("");
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
@@ -673,9 +667,11 @@ export function LoanerCalendarDashboard() {
             </div>
             <p className="text-sm font-bold text-slate-700 md:min-w-64 md:text-center">
               <span className="hidden md:inline">
-                {formatCalendarDate(dateKeys[0])} ～ {formatCalendarDate(dateKeys[6])}
+                {formatLoanerCalendarDate(dateKeys[0])} ～ {formatLoanerCalendarDate(dateKeys[6])}
               </span>
-              <span className="md:hidden">{formatCalendarDate(selectedDate)}</span>
+              <span className="md:hidden">
+                {formatLoanerCalendarDate(selectedDate)}
+              </span>
             </p>
           </div>
 

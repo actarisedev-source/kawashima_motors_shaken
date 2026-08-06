@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getAdminAuthFromCookies } from "@/lib/auth/admin-session";
+import { getLoanerCalendarJstDateKey } from "@/lib/loaners/loaner-calendar";
 import { LoanerCalendarDashboard } from "./loaner-calendar-dashboard";
 
 export const metadata: Metadata = {
@@ -14,5 +15,7 @@ export default async function AdminLoanerCalendarPage() {
 
   if (!auth.authenticated) redirect("/admin/login");
 
-  return <LoanerCalendarDashboard />;
+  const initialToday = getLoanerCalendarJstDateKey(new Date());
+
+  return <LoanerCalendarDashboard initialToday={initialToday} />;
 }
