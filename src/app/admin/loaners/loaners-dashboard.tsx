@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   loanerCategories,
   loanerCategoryLabels,
@@ -71,7 +71,9 @@ export function LoanersDashboard() {
     emptyLoanerFleetSummary,
   );
   const [suggestedSortOrder, setSuggestedSortOrder] = useState(10);
+  const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
+  const [isQueryComposing, setIsQueryComposing] = useState(false);
   const [category, setCategory] = useState<LoanerCategory | "all">("all");
   const [status, setStatus] = useState<LoanerFleetStatus | "all">("all");
   const [loadState, setLoadState] = useState<LoadState>({
@@ -91,6 +93,16 @@ export function LoanersDashboard() {
     () => filterLoanerFleetByStatus(items, checkedOutIdSet, status),
     [checkedOutIdSet, items, status],
   );
+
+  useEffect(() => {
+    if (isQueryComposing) return;
+
+    const timer = window.setTimeout(() => {
+      setQuery(queryInput.trim());
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [isQueryComposing, queryInput]);
 
   const loadLoaners = useCallback(
     async (signal?: AbortSignal) => {
@@ -175,14 +187,10 @@ export function LoanersDashboard() {
     const controller = new AbortController();
     void loadLoaners(controller.signal);
     return () => controller.abort();
-  }, [category, loadLoaners]);
-
-  function handleSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    void loadLoaners();
-  }
+  }, [loadLoaners]);
 
   function clearFilters() {
+    setQueryInput("");
     setQuery("");
     setCategory("all");
     setStatus("all");
@@ -251,8 +259,10 @@ export function LoanersDashboard() {
     );
   }
 
+  const hasActiveFilters =
+    queryInput.trim() !== "" || category !== "all" || status !== "all";
   const noRegisteredVehicles =
-    summary.total === 0 && !query.trim() && category === "all" && status === "all";
+    summary.total === 0 && !hasActiveFilters;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
@@ -324,56 +334,42 @@ export function LoanersDashboard() {
         </section>
 
         <section className="rounded-md border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-200 p-4 lg:flex-row lg:items-end lg:justify-between">
-            <form
-              className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_180px_160px_auto_auto]"
-              onSubmit={handleSearch}
-            >
-              <label className="text-sm font-semibold text-slate-700">
-                キーワード検索
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="車名・表示名・ナンバー・メモ"
-                  className="mt-1.5 h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
-              </label>
-              <label className="text-sm font-semibold text-slate-700">
-                分類
-                <select value={category} onChange={(event) => setCategory(event.target.value as LoanerCategory | "all")} className="mt-1.5 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm">
-                  <option value="all">すべて</option>
-                  {loanerCategories.map((value) => <option key={value} value={value}>{loanerCategoryLabels[value]}</option>)}
-                </select>
-              </label>
-              <label className="text-sm font-semibold text-slate-700">
-                状態
-                <select
-                  value={status}
-                  onChange={(event) =>
-                    setStatus(event.target.value as LoanerFleetStatus | "all")
-                  }
-                  className="mt-1.5 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+          <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-end">
+            <label className="min-w-0 flex-1 text-sm font-semibold text-slate-700">
+              キーワード検索
+              <input
+                value={queryInput}
+                onChange={(event) => setQueryInput(event.target.value)}
+                onCompositionStart={() => setIsQueryComposing(true)}
+                onCompositionEnd={(event) => {
+                  setQueryInput(event.currentTarget.value);
+                  setIsQueryComposing(false);
+                }}
+                placeholder="車名・表示名・ナンバー・メモ"
+                className="mt-1.5 h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+            <label className="w-full text-sm font-semibold text-slate-700 lg:w-48 lg:shrink-0">
+              分類
+              <select value={category} onChange={(event) => setCategory(event.target.value as LoanerCategory | "all")} className="mt-1.5 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm">
+                <option value="all">すべて</option>
+                {loanerCategories.map((value) => <option key={value} value={value}>{loanerCategoryLabels[value]}</option>)}
+              </select>
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2 lg:ml-auto lg:flex lg:shrink-0">
+              {hasActiveFilters ? (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="h-10 w-full cursor-pointer rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 lg:w-auto"
                 >
-                  <option value="all">すべて</option>
-                  <option value="loaned">貸出中</option>
-                  <option value="available">空車</option>
-                  <option value="inactive">使用停止</option>
-                </select>
-              </label>
-              <button type="submit" className="h-10 cursor-pointer self-end rounded-md border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 hover:bg-blue-50">
-                検索
+                  条件をクリア
+                </button>
+              ) : null}
+              <button type="button" onClick={openCreateModal} className="h-10 w-full cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-bold text-white shadow-sm hover:bg-blue-700 lg:w-auto">
+                ＋ 代車を追加
               </button>
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="h-10 cursor-pointer self-end rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                条件をクリア
-              </button>
-            </form>
-            <button type="button" onClick={openCreateModal} className="h-11 cursor-pointer rounded-md bg-blue-600 px-5 text-sm font-bold text-white shadow-sm hover:bg-blue-700">
-              ＋ 代車を追加
-            </button>
+            </div>
           </div>
 
           {loadState.status === "loading" ? (

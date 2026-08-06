@@ -72,17 +72,27 @@ test("使用停止・貸出中・空車の優先判定を一覧絞り込みで�
   );
 });
 
-test("集計カードと状態プルダウンは同じstatus stateへ連動する", () => {
+test("集計カードだけでstatus stateを変更し、検索条件をまとめて解除する", () => {
   assert.match(loanersDashboard, /aria-pressed={status === filter}/);
   assert.ok(loanersDashboard.includes("onClick={() => setStatus(filter)}"));
-  assert.match(loanersDashboard, /value={status}/);
-  assert.match(loanersDashboard, /setStatus\(event\.target\.value/);
-  assert.match(loanersDashboard, /<option value="loaned">貸出中<\/option>/);
-  assert.match(loanersDashboard, /<option value="available">空車<\/option>/);
-  assert.doesNotMatch(loanersDashboard, />使用可能<\/option>/);
+  assert.doesNotMatch(loanersDashboard, /value={status}/);
+  assert.doesNotMatch(loanersDashboard, /<option value="loaned">/);
+  assert.doesNotMatch(loanersDashboard, /type="submit"/);
+  assert.doesNotMatch(loanersDashboard, /handleSearch/);
+  assert.match(loanersDashboard, /hasActiveFilters \? \(/);
+  assert.match(loanersDashboard, /setQueryInput\(""\)/);
   assert.match(loanersDashboard, /setQuery\(""\)/);
   assert.match(loanersDashboard, /setCategory\("all"\)/);
   assert.match(loanersDashboard, /setStatus\("all"\)/);
+});
+
+test("キーワード検索はIME変換中を除外してdebounce後に自動実行する", () => {
+  assert.match(loanersDashboard, /setTimeout\(\(\) => \{/);
+  assert.match(loanersDashboard, /}, 350\)/);
+  assert.match(loanersDashboard, /if \(isQueryComposing\) return/);
+  assert.match(loanersDashboard, /onCompositionStart/);
+  assert.match(loanersDashboard, /onCompositionEnd/);
+  assert.match(loanersDashboard, /setQuery\(queryInput\.trim\(\)\)/);
 });
 
 test("印刷一覧は代車希望・車両・ナンバー・貸出期間と未割当を表示する", () => {
