@@ -95,12 +95,18 @@ test("キーワード検索はIME変換中を除外してdebounce後に自動実
   assert.match(loanersDashboard, /setQuery\(queryInput\.trim\(\)\)/);
 });
 
-test("印刷一覧は代車希望・車両・ナンバー・貸出期間と未割当を表示する", () => {
+test("印刷一覧は代車情報を割当済み2行・未割当または希望なし1行で表示する", () => {
   assert.match(adminDashboard, /代車情報/);
-  assert.match(adminDashboard, /代車希望あり/);
+  assert.doesNotMatch(adminDashboard, /代車希望あり/);
   assert.match(adminDashboard, /代車希望なし/);
   assert.match(adminDashboard, /未割当/);
+  assert.match(adminDashboard, /font-semibold">代車：/);
+  assert.match(adminDashboard, /font-semibold">貸出期間：/);
   assert.match(adminDashboard, /loanerAssignment\.vehicle\.displayName/);
   assert.match(adminDashboard, /loanerAssignment\.vehicle\.plateNumber/);
   assert.match(adminDashboard, /getLoanerReturnDateKey/);
+  assert.match(adminDashboard, /whitespace-nowrap/);
+  assert.match(adminDashboard, /<span> ～ <\/span>/);
+  assert.doesNotMatch(adminDashboard, /<br \/>～<br \/>/);
+  assert.match(adminDashboard, /px-3 py-2 align-middle/);
 });

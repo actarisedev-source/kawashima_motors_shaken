@@ -1090,51 +1090,51 @@ export function AdminDashboard({
           <tbody>
             {selectedDateItems.map((item) => (
               <tr key={item.id}>
-                <td className="border border-slate-400 px-3 py-3 font-semibold">
+                <td className="border border-slate-400 px-3 py-2 font-semibold">
                   {getJstTimeKey(item.reservedAt)}
                 </td>
-                <td className="border border-slate-400 px-3 py-3">
+                <td className="border border-slate-400 px-3 py-2">
                   {item.customerName} 様
                 </td>
-                <td className="border border-slate-400 px-3 py-3">
+                <td className="border border-slate-400 px-3 py-2">
                   {item.vehicleModel}
                 </td>
-                <td className="border border-slate-400 px-3 py-3">
+                <td className="border border-slate-400 px-3 py-2">
                   {item.licensePlate || "未登録"}
                 </td>
-                <td className="border border-slate-400 px-3 py-3">
+                <td className="border border-slate-400 px-3 py-2 align-middle">
                   {item.loanerCarRequested === true ? (
-                    <div className="grid gap-1.5">
-                      <p className="font-semibold">代車希望あり</p>
-                      {item.loanerAssignment ? (
-                        <dl className="grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-1 text-xs leading-relaxed">
-                          <dt className="font-semibold text-slate-600">代車</dt>
-                          <dd>{item.loanerAssignment.vehicle.displayName}</dd>
-                          <dt className="font-semibold text-slate-600">ナンバー</dt>
-                          <dd>{item.loanerAssignment.vehicle.plateNumber}</dd>
-                          <dt className="font-semibold text-slate-600">貸出期間</dt>
-                          <dd>
-                            {formatLoanerDate(
-                              getJstDateKey(
-                                item.loanerAssignment.scheduledStartAt,
-                              ),
-                            )}
-                            <br />～<br />
-                            {formatLoanerDate(
-                              getLoanerReturnDateKey(
-                                item.loanerAssignment.scheduledEndAt,
-                              ),
-                            )}
-                          </dd>
-                        </dl>
-                      ) : (
-                        <p className="font-semibold">未割当</p>
-                      )}
-                    </div>
+                    item.loanerAssignment ? (
+                      <div className="grid gap-0.5 text-xs leading-tight">
+                        <p>
+                          <span className="font-semibold">代車：</span>
+                          {item.loanerAssignment.vehicle.displayName}
+                          <span>
+                            （{item.loanerAssignment.vehicle.plateNumber}）
+                          </span>
+                        </p>
+                        <p className="whitespace-nowrap">
+                          <span className="font-semibold">貸出期間：</span>
+                          {formatLoanerDate(
+                            getJstDateKey(
+                              item.loanerAssignment.scheduledStartAt,
+                            ),
+                          )}
+                          <span> ～ </span>
+                          {formatLoanerDate(
+                            getLoanerReturnDateKey(
+                              item.loanerAssignment.scheduledEndAt,
+                            ),
+                          )}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs font-semibold leading-tight">未割当</p>
+                    )
                   ) : item.loanerCarRequested === false ? (
-                    <p className="font-semibold">代車希望なし</p>
+                    <p className="text-xs font-semibold leading-tight">代車希望なし</p>
                   ) : (
-                    <p>代車希望 —</p>
+                    <p className="text-xs leading-tight">代車希望 —</p>
                   )}
                 </td>
               </tr>
