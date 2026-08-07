@@ -8,9 +8,11 @@ import { getLineConfig } from "@/lib/line/config";
 import {
   allowedLineImageTypes,
   maxLineImageBytes,
+  removeLineImages,
   sendLineDistribution,
-  uploadLineImage,
+  uploadLineImages,
 } from "@/lib/line/distribution";
+import { maxLineImageCount } from "@/lib/line/images";
 
 const isAuthenticated = async (request: NextRequest) =>
   (await getAdminAuthFromRequest(request)).authenticated;
@@ -23,7 +25,7 @@ type SendPayload = {
   messageBody: string;
   targetLabel: string;
   filters: LineAudienceFilters;
-  image: File | null;
+  images: File[];
 };
 
 const parseFilters = (value: FormDataEntryValue | null) => {
@@ -38,15 +40,20 @@ const parseFilters = (value: FormDataEntryValue | null) => {
 async function parsePayload(request: NextRequest): Promise<SendPayload> {
   if (request.headers.get("content-type")?.includes("multipart/form-data")) {
     const formData = await request.formData();
-    const imageValue = formData.get("image");
+    const legacyImageValue = formData.get("image");
+    const images = [
+      ...formData.getAll("images"),
+      ...(legacyImageValue ? [legacyImageValue] : []),
+    ].filter(
+      (value): value is File => value instanceof File && value.size > 0,
+    );
     return {
       title: textValue(formData.get("title")),
       messageBody: textValue(formData.get("messageBody")),
       targetLabel:
         textValue(formData.get("targetLabel")) || "LINE連携済み全員",
       filters: parseFilters(formData.get("filters")),
-      image:
-        imageValue instanceof File && imageValue.size > 0 ? imageValue : null,
+      images,
     };
   }
 
@@ -61,7 +68,7 @@ async function parsePayload(request: NextRequest): Promise<SendPayload> {
     messageBody: textValue(body.messageBody),
     targetLabel: textValue(body.targetLabel) || "LINE連携済み全員",
     filters: body.filters ?? {},
-    image: null,
+    images: [],
   };
 }
 
@@ -87,8 +94,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { title, messageBody, targetLabel, filters, image } = payload;
-  if (!title || (!messageBody && !image)) {
+  const { title, messageBody, targetLabel, filters, images } = payload;
+  if (!title || (!messageBody && !images.length)) {
     return NextResponse.json(
       {
         ok: false,
@@ -103,9 +110,17 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+  if (images.length > maxLineImageCount) {
+    return NextResponse.json(
+      { ok: false, message: "添付画像は4枚まで選択できます。" },
+      { status: 400 },
+    );
+  }
   if (
-    image &&
-    (!allowedLineImageTypes.has(image.type) || image.size > maxLineImageBytes)
+    images.some(
+      (image) =>
+        !allowedLineImageTypes.has(image.type) || image.size > maxLineImageBytes,
+    )
   ) {
     return NextResponse.json(
       {
@@ -125,20 +140,27 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const imageUrl = image ? await uploadLineImage(image, "manual") : null;
-    const result = await sendLineDistribution({
-      accessToken,
-      title,
-      messageBody,
-      imageUrl,
-      targetLabel,
-      filters,
-    });
+    const imageUrls = await uploadLineImages(images, "manual");
+    let result;
+    try {
+      result = await sendLineDistribution({
+        accessToken,
+        title,
+        messageBody,
+        imageUrls,
+        targetLabel,
+        filters,
+      });
+    } catch (error) {
+      if (imageUrls.length) await removeLineImages(imageUrls);
+      throw error;
+    }
 
     return NextResponse.json({
       ok: true,
       ...result,
-      imageUrl,
+      imageUrl: imageUrls[0] ?? null,
+      imageUrls,
     });
   } catch (error) {
     const message =

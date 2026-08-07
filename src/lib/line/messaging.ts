@@ -6,6 +6,22 @@ export type LinePushMessage =
       previewImageUrl: string;
     };
 
+export const buildLinePushMessages = (
+  text: string,
+  imageUrls: string[],
+): LinePushMessage[] => {
+  const messages: LinePushMessage[] = [];
+  if (text) messages.push({ type: "text", text });
+  for (const imageUrl of imageUrls) {
+    messages.push({
+      type: "image",
+      originalContentUrl: imageUrl,
+      previewImageUrl: imageUrl,
+    });
+  }
+  return messages;
+};
+
 export async function pushLineMessages(
   accessToken: string,
   lineUserId: string,

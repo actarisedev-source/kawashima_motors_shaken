@@ -3,9 +3,10 @@ import {
   type LineAudienceFilters,
 } from "@/lib/line/audience";
 import {
+  buildLinePushMessages,
   pushLineMessages,
-  type LinePushMessage,
 } from "@/lib/line/messaging";
+import { maxLineImageCount } from "@/lib/line/images";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export const lineImageBucket = "line-message-images";
@@ -16,14 +17,53 @@ export const allowedLineImageTypes = new Set([
   "image/webp",
 ]);
 
-export async function uploadLineImage(image: File, folder: "manual" | "scheduled") {
+const getLineImageStoragePath = (
+  image: File,
+  folder: "manual" | "scheduled",
+) => {
   const extension =
     image.type === "image/png"
       ? "png"
       : image.type === "image/webp"
         ? "webp"
         : "jpg";
-  const objectPath = `${folder}/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${extension}`;
+  return `${folder}/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${extension}`;
+};
+
+export const getLineImageObjectPath = (imageUrl: string) => {
+  try {
+    const pathname = new URL(imageUrl).pathname;
+    const marker = `/storage/v1/object/public/${lineImageBucket}/`;
+    const markerIndex = pathname.indexOf(marker);
+    if (markerIndex < 0) return null;
+    const objectPath = decodeURIComponent(
+      pathname.slice(markerIndex + marker.length),
+    );
+    if (!objectPath || objectPath.startsWith("/") || objectPath.includes("..")) {
+      return null;
+    }
+    return objectPath;
+  } catch {
+    return null;
+  }
+};
+
+export async function removeLineImages(imageUrls: string[]) {
+  const objectPaths = imageUrls
+    .map(getLineImageObjectPath)
+    .filter((value): value is string => Boolean(value));
+  if (!objectPaths.length) return;
+  const { error } = await supabaseServer.storage
+    .from(lineImageBucket)
+    .remove(objectPaths);
+  if (error) throw new Error(`画像の削除に失敗しました: ${error.message}`);
+}
+
+export async function uploadLineImage(
+  image: File,
+  folder: "manual" | "scheduled",
+) {
+  const objectPath = getLineImageStoragePath(image, folder);
   const { error } = await supabaseServer.storage
     .from(lineImageBucket)
     .upload(objectPath, image, {
@@ -33,15 +73,47 @@ export async function uploadLineImage(image: File, folder: "manual" | "scheduled
     });
   if (error) throw new Error(`画像の保存に失敗しました: ${error.message}`);
 
-  return supabaseServer.storage.from(lineImageBucket).getPublicUrl(objectPath)
-    .data.publicUrl;
+  const publicUrl = supabaseServer.storage
+    .from(lineImageBucket)
+    .getPublicUrl(objectPath).data.publicUrl;
+  if (!publicUrl) {
+    await supabaseServer.storage.from(lineImageBucket).remove([objectPath]);
+    throw new Error("画像URLの生成に失敗しました。");
+  }
+  return publicUrl;
+}
+
+export async function uploadLineImages(
+  images: File[],
+  folder: "manual" | "scheduled",
+) {
+  if (images.length > maxLineImageCount) {
+    throw new Error("添付画像は4枚まで選択できます。");
+  }
+
+  const uploadedUrls: string[] = [];
+  try {
+    for (const image of images) {
+      uploadedUrls.push(await uploadLineImage(image, folder));
+    }
+    return uploadedUrls;
+  } catch (error) {
+    if (uploadedUrls.length) {
+      try {
+        await removeLineImages(uploadedUrls);
+      } catch (cleanupError) {
+        console.error("Failed to clean up LINE images", cleanupError);
+      }
+    }
+    throw error;
+  }
 }
 
 type SendLineDistributionInput = {
   accessToken: string;
   title: string;
   messageBody: string;
-  imageUrl: string | null;
+  imageUrls: string[];
   targetLabel: string;
   filters: LineAudienceFilters;
   targetTypePrefix?: string;
@@ -72,15 +144,7 @@ export async function sendLineDistribution(input: SendLineDistributionInput) {
     let errorMessage: string | null = null;
 
     try {
-      const messages: LinePushMessage[] = [];
-      if (messageBody) messages.push({ type: "text", text: messageBody });
-      if (input.imageUrl) {
-        messages.push({
-          type: "image",
-          originalContentUrl: input.imageUrl,
-          previewImageUrl: input.imageUrl,
-        });
-      }
+      const messages = buildLinePushMessages(messageBody, input.imageUrls);
       await pushLineMessages(input.accessToken, lineUserId, messages);
       successCount += 1;
     } catch (error) {
@@ -98,7 +162,8 @@ export async function sendLineDistribution(input: SendLineDistributionInput) {
         target_type: targetType,
         title: input.title,
         body: messageBody,
-        image_url: input.imageUrl,
+        image_url: input.imageUrls[0] ?? null,
+        image_urls: input.imageUrls,
         status,
         error_message: errorMessage,
         sent_at: status === "成功" ? new Date().toISOString() : null,
