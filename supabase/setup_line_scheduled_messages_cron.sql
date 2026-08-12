@@ -22,7 +22,7 @@ where jobname = 'line-automations-hourly';
 
 select cron.schedule(
   'line-automations-hourly',
-  '0 * * * *',
+  '*/15 * * * *',
   $cron$
     select net.http_get(
       url := (

@@ -7,6 +7,7 @@ import { LineEmojiPicker } from "./line-emoji-picker";
 import { LineImageDropzone } from "./line-image-dropzone";
 import { useLineImageAttachments } from "./use-line-image-attachments";
 import { resolveLineImageUrls } from "@/lib/line/images";
+import { lineScheduledTimeOptions } from "@/lib/line/scheduled-time";
 
 type Filters = {
   shaken: string[];
@@ -93,11 +94,6 @@ const todayInJapan = () =>
     day: "2-digit",
     timeZone: "Asia/Tokyo",
   }).format(new Date());
-
-const scheduledTimeOptions = Array.from(
-  { length: 13 },
-  (_, index) => `${String(index + 8).padStart(2, "0")}:00`,
-);
 
 const formatDateTime = (value: string) =>
   new Intl.DateTimeFormat("ja-JP", {
@@ -359,7 +355,7 @@ export function LineScheduledDistribution() {
                 className={`h-11 rounded-md border px-3 text-base font-normal outline-none focus:border-blue-500 ${errors.time ? "border-red-400" : "border-slate-300"}`}
               >
                 <option value="">時刻を選択</option>
-                {scheduledTimeOptions.map((time) => (
+                {lineScheduledTimeOptions.map((time) => (
                   <option key={time} value={time}>
                     {time}
                   </option>
@@ -370,7 +366,7 @@ export function LineScheduledDistribution() {
           </div>
           <p className="text-xs leading-5 text-slate-500">
             日本時間で指定してください。<br />
-            予約配信は毎時0分に確認し、指定時刻以降に送信されます。
+            予約配信は15分ごとに確認し、指定時刻以降に送信されます。
           </p>
         </section>
 
