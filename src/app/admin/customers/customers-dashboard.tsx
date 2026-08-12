@@ -160,8 +160,8 @@ export function CustomersDashboard({
           </div>
         ) : null}
 
-        <section className="w-full overflow-x-auto rounded-[5px] border border-blue-100 bg-white shadow-sm lg:col-span-2 lg:w-fit">
-          <div className="grid min-w-[1200px] grid-cols-[190px_310px_700px]">
+        <section className="w-full overflow-x-auto rounded-[5px] border border-blue-100 bg-white shadow-sm lg:col-span-2">
+          <div className="grid min-w-[900px] grid-cols-[190px_310px_minmax(0,1fr)]">
             <div className="flex flex-col bg-blue-50/60 px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className="grid h-7 w-7 place-items-center rounded-[5px] border border-blue-100 bg-white text-blue-600">
