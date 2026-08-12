@@ -265,10 +265,10 @@ const navItems = [
 
 const navButtonClassName = (active: boolean) =>
   [
-    "flex h-10 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-sm font-semibold transition sm:px-3",
+    "flex h-11 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-sm font-semibold transition sm:px-3",
     active
       ? "border-blue-600 bg-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.14)]"
-      : "border-slate-200 bg-white text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-blue-100 hover:bg-blue-50/60 hover:text-blue-700",
+      : "border-slate-200 bg-white text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-blue-100 hover:bg-blue-50 hover:text-blue-700",
   ].join(" ");
 
 export function AdminHeader({
