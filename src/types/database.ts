@@ -228,6 +228,7 @@ export type Database = {
           title: string;
           body: string;
           image_url: string | null;
+          image_urls: string[];
           status: "成功" | "失敗";
           error_message: string | null;
           sent_at: string | null;
@@ -245,6 +246,7 @@ export type Database = {
           title: string;
           body: string;
           image_url?: string | null;
+          image_urls?: string[];
           status: "成功" | "失敗";
           error_message?: string | null;
           sent_at?: string | null;
@@ -301,6 +303,7 @@ export type Database = {
           title: string;
           body: string;
           image_url: string | null;
+          image_urls: string[];
           target_label: string;
           target_conditions: Json;
           target_count: number;
@@ -318,6 +321,7 @@ export type Database = {
           title: string;
           body?: string;
           image_url?: string | null;
+          image_urls?: string[];
           target_label?: string;
           target_conditions?: Json;
           target_count?: number;

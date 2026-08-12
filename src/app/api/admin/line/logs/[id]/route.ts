@@ -1,31 +1,15 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getAdminAuthFromRequest } from "@/lib/auth/admin-session";
+import {
+  getLineImageObjectPath,
+  removeLineImages,
+} from "@/lib/line/distribution";
+import { resolveLineImageUrls } from "@/lib/line/images";
 import { supabaseServer } from "@/lib/supabase/server";
-
-const lineImageBucket = "line-message-images";
 
 const isAuthenticated = async (request: NextRequest) =>
   (await getAdminAuthFromRequest(request)).authenticated;
-
-const getStorageObjectPath = (imageUrl: string) => {
-  try {
-    const pathname = new URL(imageUrl).pathname;
-    const marker = `/storage/v1/object/public/${lineImageBucket}/`;
-    const markerIndex = pathname.indexOf(marker);
-    if (markerIndex < 0) return null;
-
-    const objectPath = decodeURIComponent(
-      pathname.slice(markerIndex + marker.length),
-    );
-    if (!objectPath || objectPath.startsWith("/") || objectPath.includes("..")) {
-      return null;
-    }
-    return objectPath;
-  } catch {
-    return null;
-  }
-};
 
 export async function DELETE(
   request: NextRequest,
@@ -48,7 +32,7 @@ export async function DELETE(
 
   const { data: log, error: logError } = await supabaseServer
     .from("line_message_logs")
-    .select("id,image_url")
+    .select("id,image_url,image_urls")
     .eq("id", id)
     .maybeSingle();
 
@@ -58,7 +42,6 @@ export async function DELETE(
       { status: 500 },
     );
   }
-
   if (!log) {
     return NextResponse.json(
       { ok: false, message: "配信履歴が見つかりません。" },
@@ -66,46 +49,62 @@ export async function DELETE(
     );
   }
 
-  let storageObjectPath: string | null = null;
-  if (log.image_url) {
-    const [logReferences, scheduledReferences] = await Promise.all([
-      supabaseServer
-        .from("line_message_logs")
-        .select("id", { count: "exact", head: true })
-        .eq("image_url", log.image_url)
-        .neq("id", id),
-      supabaseServer
-        .from("line_scheduled_messages")
-        .select("id", { count: "exact", head: true })
-        .eq("image_url", log.image_url),
-    ]);
-
-    const referenceError = logReferences.error || scheduledReferences.error;
+  const removableImageUrls: string[] = [];
+  for (const imageUrl of resolveLineImageUrls(log.image_urls, log.image_url)) {
+    const [legacyLogs, arrayLogs, legacyScheduled, arrayScheduled] =
+      await Promise.all([
+        supabaseServer
+          .from("line_message_logs")
+          .select("id", { count: "exact", head: true })
+          .eq("image_url", imageUrl)
+          .neq("id", id),
+        supabaseServer
+          .from("line_message_logs")
+          .select("id", { count: "exact", head: true })
+          .contains("image_urls", [imageUrl])
+          .neq("id", id),
+        supabaseServer
+          .from("line_scheduled_messages")
+          .select("id", { count: "exact", head: true })
+          .eq("image_url", imageUrl),
+        supabaseServer
+          .from("line_scheduled_messages")
+          .select("id", { count: "exact", head: true })
+          .contains("image_urls", [imageUrl]),
+      ]);
+    const referenceError =
+      legacyLogs.error ||
+      arrayLogs.error ||
+      legacyScheduled.error ||
+      arrayScheduled.error;
     if (referenceError) {
       return NextResponse.json(
         { ok: false, message: referenceError.message },
         { status: 500 },
       );
     }
-
-    if (
-      (logReferences.count ?? 0) === 0 &&
-      (scheduledReferences.count ?? 0) === 0
-    ) {
-      storageObjectPath = getStorageObjectPath(log.image_url);
+    const hasReference = [
+      legacyLogs,
+      arrayLogs,
+      legacyScheduled,
+      arrayScheduled,
+    ].some((result) => (result.count ?? 0) > 0);
+    if (!hasReference && getLineImageObjectPath(imageUrl)) {
+      removableImageUrls.push(imageUrl);
     }
   }
 
-  if (storageObjectPath) {
-    const { error: storageError } = await supabaseServer.storage
-      .from(lineImageBucket)
-      .remove([storageObjectPath]);
-
-    if (storageError) {
+  if (removableImageUrls.length) {
+    try {
+      await removeLineImages(removableImageUrls);
+    } catch (error) {
       return NextResponse.json(
         {
           ok: false,
-          message: `添付画像の削除に失敗しました: ${storageError.message}`,
+          message:
+            error instanceof Error
+              ? error.message
+              : "添付画像の削除に失敗しました。",
         },
         { status: 500 },
       );
@@ -118,7 +117,6 @@ export async function DELETE(
     .eq("id", id)
     .select("id")
     .single();
-
   if (deleteError) {
     return NextResponse.json(
       { ok: false, message: deleteError.message },
@@ -129,6 +127,7 @@ export async function DELETE(
   return NextResponse.json({
     ok: true,
     deletedId: deletedLog.id,
-    imageDeleted: Boolean(storageObjectPath),
+    imageDeleted: removableImageUrls.length > 0,
+    imageDeletedCount: removableImageUrls.length,
   });
 }

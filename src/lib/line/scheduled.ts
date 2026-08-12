@@ -1,5 +1,6 @@
 import type { LineAudienceFilters } from "@/lib/line/audience";
 import { sendLineDistribution } from "@/lib/line/distribution";
+import { resolveLineImageUrls } from "@/lib/line/images";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { Database, Json } from "@/types/database";
 
@@ -54,7 +55,7 @@ export async function processDueScheduledMessages(
         accessToken,
         title: message.title,
         messageBody: message.body,
-        imageUrl: message.image_url,
+        imageUrls: resolveLineImageUrls(message.image_urls, message.image_url),
         targetLabel: message.target_label,
         targetTypePrefix: "予約配信",
         filters: parseFilters(message.target_conditions),

@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminInlineDatePicker } from "@/app/admin/shared/admin-inline-date-picker";
 import { LineEmojiPicker } from "./line-emoji-picker";
 import { LineImageDropzone } from "./line-image-dropzone";
-import { prepareLineImage } from "./line-image-client";
+import { useLineImageAttachments } from "./use-line-image-attachments";
+import { resolveLineImageUrls } from "@/lib/line/images";
 
 type Filters = {
   shaken: string[];
@@ -27,6 +28,7 @@ type ScheduledMessage = {
   title: string;
   body: string;
   image_url: string | null;
+  image_urls: string[];
   target_label: string;
   target_count: number;
   scheduled_at: string;
@@ -120,9 +122,6 @@ export function LineScheduledDistribution() {
   const [scheduledTime, setScheduledTime] = useState("");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
-  const [processingImage, setProcessingImage] = useState(false);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<CustomerOption[]>([]);
@@ -133,6 +132,9 @@ export function LineScheduledDistribution() {
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState({ date: "", time: "", content: "" });
+  const lineImages = useLineImageAttachments(setMessage, () =>
+    setErrors((current) => ({ ...current, content: "" })),
+  );
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [pendingCancel, setPendingCancel] = useState<ScheduledMessage | null>(null);
@@ -155,7 +157,7 @@ export function LineScheduledDistribution() {
     const value = new Date(`${scheduledDate}T${scheduledTime}:00+09:00`);
     return Number.isNaN(value.getTime()) ? "未設定" : formatDateTime(value.toISOString());
   }, [scheduledDate, scheduledTime]);
-  const previewBody = body || (!imageFile ? title : "");
+  const previewBody = body || (!lineImages.attachments.length ? title : "");
 
   const loadAudience = useCallback(async () => {
     setLoadingCount(true);
@@ -222,13 +224,6 @@ export function LineScheduledDistribution() {
     if (pendingCancel) cancelDialogRef.current?.focus();
   }, [pendingCancel]);
 
-  useEffect(
-    () => () => {
-      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-    },
-    [imagePreviewUrl],
-  );
-
   function toggleFilter(key: keyof Filters, value: string) {
     setFilters((current) => ({
       ...current,
@@ -238,34 +233,11 @@ export function LineScheduledDistribution() {
     }));
   }
 
-  async function handleImageChange(file: File | null) {
-    if (!file) return;
-    setProcessingImage(true);
-    setMessage("");
-    try {
-      const prepared = await prepareLineImage(file);
-      setImageFile(prepared);
-      setImagePreviewUrl(URL.createObjectURL(prepared));
-      setErrors((current) => ({ ...current, content: "" }));
-    } catch (error) {
-      setImageFile(null);
-      setImagePreviewUrl("");
-      setMessage(error instanceof Error ? error.message : "画像の処理に失敗しました。");
-    } finally {
-      setProcessingImage(false);
-    }
-  }
-
-  function removeImage() {
-    setImageFile(null);
-    setImagePreviewUrl("");
-  }
-
   function openConfirmation() {
     const nextErrors = { date: "", time: "", content: "" };
     if (!scheduledDate) nextErrors.date = "配信日を選択してください。";
     if (!scheduledTime) nextErrors.time = "配信時刻を選択してください。";
-    if (!title.trim() && !body.trim() && !imageFile) {
+    if (!title.trim() && !body.trim() && !lineImages.attachments.length) {
       nextErrors.content = "配信タイトル、本文、画像のいずれかを入力してください。";
     }
     if (scheduledDate && scheduledTime) {
@@ -295,7 +267,7 @@ export function LineScheduledDistribution() {
       payload.set("messageBody", body);
       payload.set("targetLabel", targetLabel);
       payload.set("filters", JSON.stringify(filters));
-      if (imageFile) payload.set("image", imageFile);
+      for (const image of lineImages.files) payload.append("images", image);
       const response = await fetch("/api/admin/line/scheduled", {
         method: "POST",
         body: payload,
@@ -311,7 +283,7 @@ export function LineScheduledDistribution() {
       setScheduledTime("");
       setTitle("");
       setBody("");
-      removeImage();
+      lineImages.clearFiles();
       await loadScheduledMessages();
     } catch {
       setMessage("通信に失敗しました。時間をおいてもう一度お試しください。");
@@ -418,11 +390,12 @@ export function LineScheduledDistribution() {
             className="rounded-md border border-slate-300 px-3 py-2 text-base font-normal outline-none focus:border-blue-500"
           />
           <LineImageDropzone
-            file={imageFile}
-            onRemove={removeImage}
-            onSelectFile={handleImageChange}
-            previewUrl={imagePreviewUrl}
-            processing={processingImage}
+            attachments={lineImages.attachments}
+            onAddFiles={lineImages.addFiles}
+            onMove={lineImages.moveFile}
+            onRemove={lineImages.removeFile}
+            onReplaceFile={lineImages.replaceFile}
+            processing={lineImages.processing}
           />
           <span className="min-h-5 text-xs font-semibold text-red-600">{errors.content}</span>
         </section>
@@ -474,14 +447,14 @@ export function LineScheduledDistribution() {
           <h2 className="text-base font-bold">配信プレビュー</h2>
           <div className="min-h-48 whitespace-pre-wrap rounded-md bg-[#8cabd9] p-4 text-sm leading-6">
             {previewBody ? <div className="ml-auto max-w-[90%] whitespace-pre-wrap rounded-md bg-white p-3 shadow-sm">{previewBody}</div> : null}
-            {imagePreviewUrl ? (
-              <div className="ml-auto mt-2 max-w-[90%] overflow-hidden rounded-md bg-white shadow-sm first:mt-0">
-                <Image src={imagePreviewUrl} alt="予約配信画像プレビュー" width={640} height={480} unoptimized className="h-auto max-h-80 w-full object-contain" />
+            {lineImages.attachments.map((attachment, index) => (
+              <div key={attachment.previewUrl} className="ml-auto mt-2 max-w-[90%] overflow-hidden rounded-md bg-white shadow-sm first:mt-0">
+                <Image src={attachment.previewUrl} alt={`予約配信画像${index + 1}プレビュー`} width={640} height={480} unoptimized className="h-auto max-h-80 w-full object-contain" />
               </div>
-            ) : null}
-            {!previewBody && !imagePreviewUrl ? <div className="ml-auto max-w-[90%] rounded-md bg-white p-3 text-slate-500 shadow-sm">本文または画像を設定するとプレビューを表示します。</div> : null}
+            ))}
+            {!previewBody && !lineImages.attachments.length ? <div className="ml-auto max-w-[90%] rounded-md bg-white p-3 text-slate-500 shadow-sm">本文または画像を設定するとプレビューを表示します。</div> : null}
           </div>
-          <button type="button" disabled={processingImage || !configured || count === 0 || loadingCount} onClick={openConfirmation} className="h-12 rounded-md bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">予約する</button>
+          <button type="button" disabled={lineImages.processing || !configured || count === 0 || loadingCount} onClick={openConfirmation} className="h-12 rounded-md bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">予約する</button>
         </section>
       </aside>
 
@@ -503,7 +476,7 @@ export function LineScheduledDistribution() {
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div><p className="text-xs font-semibold text-slate-500">対象件数</p><p className="mt-1 font-bold">{item.target_count}件</p></div>
-                  <div><p className="text-xs font-semibold text-slate-500">画像</p><p className="mt-1 font-bold">{item.image_url ? "画像あり" : "なし"}</p></div>
+                  <div><p className="text-xs font-semibold text-slate-500">画像</p><p className="mt-1 font-bold">{resolveLineImageUrls(item.image_urls, item.image_url).length ? `${resolveLineImageUrls(item.image_urls, item.image_url).length}枚` : "なし"}</p></div>
                   <div className="col-span-2"><p className="text-xs font-semibold text-slate-500">作成日時</p><p className="mt-1 font-bold">{formatDateTime(item.created_at)}</p></div>
                   {item.error_message ? <p className="col-span-2 text-xs font-semibold text-red-700">{item.error_message}</p> : null}
                 </div>

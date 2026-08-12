@@ -78,7 +78,7 @@ export async function GET(
     supabaseServer
       .from("line_message_logs")
       .select(
-        "id,target_type,title,body,image_url,status,error_message,sent_at,created_at,automation_type",
+        "id,target_type,title,body,image_url,image_urls,status,error_message,sent_at,created_at,automation_type",
       )
       .eq("customer_id", id)
       .order("created_at", { ascending: false }),
@@ -157,6 +157,7 @@ export async function GET(
         title: log.title,
         body: log.body,
         imageUrl: log.image_url,
+        imageUrls: log.image_urls,
         status: log.status,
         errorMessage: log.error_message,
       })),

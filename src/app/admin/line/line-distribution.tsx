@@ -6,8 +6,9 @@ import { AdminHeader } from "../admin-header";
 import { LineAutomationSettings } from "./line-automation-settings";
 import { LineEmojiPicker } from "./line-emoji-picker";
 import { LineImageDropzone } from "./line-image-dropzone";
-import { prepareLineImage } from "./line-image-client";
 import { LineScheduledDistribution } from "./line-scheduled-distribution";
+import { useLineImageAttachments } from "./use-line-image-attachments";
+import { resolveLineImageUrls } from "@/lib/line/images";
 
 type LineTab = "manual" | "scheduled" | "automations" | "history";
 
@@ -35,6 +36,7 @@ type MessageLog = {
   status: "成功" | "失敗";
   error_message: string | null;
   image_url: string | null;
+  image_urls: string[];
   sent_at: string | null;
   created_at: string;
   automation_type: string | null;
@@ -94,6 +96,9 @@ const formatMessageLogDate = (log: MessageLog) =>
     timeZone: "Asia/Tokyo",
   }).format(new Date(log.sent_at ?? log.created_at));
 
+const getMessageLogImageUrls = (log: MessageLog) =>
+  resolveLineImageUrls(log.image_urls, log.image_url);
+
 const getMessageDeliveryType = (log: MessageLog) => {
   if (log.target_type.startsWith("予約配信:")) {
     return "予約";
@@ -118,9 +123,6 @@ export function LineDistribution() {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
-  const [processingImage, setProcessingImage] = useState(false);
   const [count, setCount] = useState(0);
   const [excludedCount, setExcludedCount] = useState(0);
   const [configured, setConfigured] = useState(true);
@@ -132,6 +134,7 @@ export function LineDistribution() {
   const [deliveryCompleted, setDeliveryCompleted] = useState(false);
   const deliveryLockedRef = useRef(false);
   const [message, setMessage] = useState("");
+  const lineImages = useLineImageAttachments(setMessage);
   const [logs, setLogs] = useState<MessageLog[]>([]);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [pendingDeleteLog, setPendingDeleteLog] =
@@ -191,13 +194,6 @@ export function LineDistribution() {
     if (pendingDeleteLog) deleteCancelButtonRef.current?.focus();
   }, [pendingDeleteLog, deleteConfirmationStep]);
 
-  useEffect(
-    () => () => {
-      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-    },
-    [imagePreviewUrl],
-  );
-
   useEffect(() => {
     if (!query.trim()) {
       setCandidates([]);
@@ -222,30 +218,6 @@ export function LineDistribution() {
         ? current[key].filter((item) => item !== value)
         : [...current[key], value],
     }));
-  }
-
-  async function handleImageChange(file: File | null) {
-    if (!file) return;
-    setProcessingImage(true);
-    setMessage("");
-    try {
-      const prepared = await prepareLineImage(file);
-      setImageFile(prepared);
-      setImagePreviewUrl(URL.createObjectURL(prepared));
-    } catch (error) {
-      setImageFile(null);
-      setImagePreviewUrl("");
-      setMessage(
-        error instanceof Error ? error.message : "画像の処理に失敗しました。",
-      );
-    } finally {
-      setProcessingImage(false);
-    }
-  }
-
-  function removeImage() {
-    setImageFile(null);
-    setImagePreviewUrl("");
   }
 
   function openDeleteConfirmation(log: MessageLog) {
@@ -314,7 +286,7 @@ export function LineDistribution() {
       payload.set("messageBody", body);
       payload.set("targetLabel", targetLabel);
       payload.set("filters", JSON.stringify(filters));
-      if (imageFile) payload.set("image", imageFile);
+      for (const image of lineImages.files) payload.append("images", image);
 
       const response = await fetch("/api/admin/line/send", {
         method: "POST",
@@ -402,12 +374,13 @@ export function LineDistribution() {
               className="rounded-md border border-slate-300 px-3 py-2 text-base font-normal outline-none focus:border-blue-500"
             />
             <LineImageDropzone
+              attachments={lineImages.attachments}
               disabled={deliveryCompleted}
-              file={imageFile}
-              onRemove={removeImage}
-              onSelectFile={handleImageChange}
-              previewUrl={imagePreviewUrl}
-              processing={processingImage}
+              onAddFiles={lineImages.addFiles}
+              onMove={lineImages.moveFile}
+              onRemove={lineImages.removeFile}
+              onReplaceFile={lineImages.replaceFile}
+              processing={lineImages.processing}
             />
           </section>
 
@@ -461,25 +434,28 @@ export function LineDistribution() {
                   {body}
                 </div>
               ) : null}
-              {imagePreviewUrl ? (
-                <div className="ml-auto mt-2 max-w-[90%] overflow-hidden rounded-md bg-white shadow-sm first:mt-0">
+              {lineImages.attachments.map((attachment, index) => (
+                <div
+                  key={attachment.previewUrl}
+                  className="ml-auto mt-2 max-w-[90%] overflow-hidden rounded-md bg-white shadow-sm first:mt-0"
+                >
                   <Image
-                    src={imagePreviewUrl}
-                    alt="配信画像プレビュー"
+                    src={attachment.previewUrl}
+                    alt={`配信画像${index + 1}プレビュー`}
                     width={640}
                     height={480}
                     unoptimized
                     className="h-auto max-h-80 w-full object-contain"
                   />
                 </div>
-              ) : null}
-              {!body && !imagePreviewUrl ? (
+              ))}
+              {!body && !lineImages.attachments.length ? (
                 <div className="ml-auto max-w-[90%] rounded-md bg-white p-3 text-slate-500 shadow-sm">
                   本文または画像を設定するとプレビューを表示します。
                 </div>
               ) : null}
             </div>
-            <button type="button" disabled={deliveryCompleted || processingImage || !configured || !title.trim() || (!body.trim() && !imageFile) || count === 0 || loadingCount} onClick={() => setConfirming(true)} className="h-12 rounded-md bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">{deliveryCompleted ? "配信済み" : "配信実行"}</button>
+            <button type="button" disabled={deliveryCompleted || lineImages.processing || !configured || !title.trim() || (!body.trim() && !lineImages.attachments.length) || count === 0 || loadingCount} onClick={() => setConfirming(true)} className="h-12 rounded-md bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">{deliveryCompleted ? "配信済み" : "配信実行"}</button>
           </section>
           <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold">最近の配信結果</h2>
@@ -491,9 +467,9 @@ export function LineDistribution() {
                     <span className={log.status === "成功" ? "rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700" : "rounded-md bg-red-50 px-2 py-1 text-xs font-bold text-red-700"}>{log.status}</span>
                   </div>
                   <p className="mt-1 text-xs text-slate-500">{log.target_type} / {new Intl.DateTimeFormat("ja-JP", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Tokyo" }).format(new Date(log.sent_at ?? log.created_at))}</p>
-                  {log.image_url ? (
+                  {getMessageLogImageUrls(log).length ? (
                     <p className="mt-1 text-xs font-semibold text-blue-700">
-                      画像あり
+                      画像{getMessageLogImageUrls(log).length}枚
                     </p>
                   ) : null}
                   {log.error_message ? <p className="mt-2 text-xs text-red-600">{log.error_message}</p> : null}
@@ -532,9 +508,9 @@ export function LineDistribution() {
                     <div className="min-w-0">
                       <p className="font-bold text-slate-900">{log.title}</p>
                       <p className="mt-1 text-slate-600">{log.target_type}</p>
-                      {log.image_url ? (
+                      {getMessageLogImageUrls(log).length ? (
                         <p className="mt-1 text-xs font-semibold text-blue-700">
-                          画像あり
+                          画像{getMessageLogImageUrls(log).length}枚
                         </p>
                       ) : null}
                       <p className="mt-1 text-xs text-slate-500">
@@ -615,25 +591,28 @@ export function LineDistribution() {
                             {log.body || "本文なし"}
                           </dd>
                         </div>
-                        {log.image_url ? (
+                        {getMessageLogImageUrls(log).length ? (
                           <div className="sm:col-span-2">
                             <dt className="text-xs font-semibold text-slate-500">
                               画像
                             </dt>
-                            <dd className="mt-2">
-                              <a
-                                href={log.image_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="block w-fit"
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={log.image_url}
-                                  alt={`${log.title}の配信画像`}
-                                  className="max-h-80 w-auto max-w-full rounded-[5px] border border-slate-200 object-contain"
-                                />
-                              </a>
+                            <dd className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                              {getMessageLogImageUrls(log).map((imageUrl, index) => (
+                                <a
+                                  key={imageUrl}
+                                  href={imageUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={imageUrl}
+                                    alt={`${log.title}の配信画像${index + 1}`}
+                                    className="aspect-square w-full rounded-[5px] border border-slate-200 object-cover"
+                                  />
+                                </a>
+                              ))}
                             </dd>
                           </div>
                         ) : null}
@@ -666,7 +645,7 @@ export function LineDistribution() {
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-5" role="dialog" aria-modal="true" aria-labelledby="line-confirm-title">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <h2 id="line-confirm-title" className="text-xl font-bold">LINE配信確認</h2>
-            <dl className="mt-5 grid gap-4 text-sm"><div><dt className="font-semibold text-slate-500">対象</dt><dd className="mt-1 font-bold">{targetLabel}</dd></div><div><dt className="font-semibold text-slate-500">配信内容</dt><dd className="mt-1 font-bold">{body.trim() ? "テキスト" : ""}{body.trim() && imageFile ? " ＋ " : ""}{imageFile ? "画像" : ""}</dd></div><div><dt className="font-semibold text-slate-500">対象件数</dt><dd className="mt-1 text-2xl font-black text-blue-700">{count}件</dd></div></dl>
+            <dl className="mt-5 grid gap-4 text-sm"><div><dt className="font-semibold text-slate-500">対象</dt><dd className="mt-1 font-bold">{targetLabel}</dd></div><div><dt className="font-semibold text-slate-500">配信内容</dt><dd className="mt-1 font-bold">{body.trim() ? "テキスト" : ""}{body.trim() && lineImages.attachments.length ? " ＋ " : ""}{lineImages.attachments.length ? `画像${lineImages.attachments.length}枚` : ""}</dd></div><div><dt className="font-semibold text-slate-500">対象件数</dt><dd className="mt-1 text-2xl font-black text-blue-700">{count}件</dd></div></dl>
             <p className="mt-5 font-semibold">この内容で送信しますか？</p>
             <div className="mt-6 flex justify-end gap-3"><button type="button" disabled={sending} onClick={() => setConfirming(false)} className="h-10 rounded-md border border-slate-300 px-4 text-sm font-semibold">キャンセル</button><button type="button" disabled={sending || deliveryCompleted} onClick={() => void sendMessages()} className="h-10 rounded-md bg-blue-600 px-5 text-sm font-bold text-white disabled:bg-slate-400">{sending ? "送信中..." : deliveryCompleted ? "配信済み" : "送信する"}</button></div>
           </div>

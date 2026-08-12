@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabaseServer
     .from("line_message_logs")
     .select(
-      "id,customer_id,target_type,title,body,status,error_message,image_url,sent_at,created_at,automation_type",
+      "id,customer_id,target_type,title,body,status,error_message,image_url,image_urls,sent_at,created_at,automation_type",
     )
     .order("created_at", { ascending: false })
     .limit(20);

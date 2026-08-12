@@ -8,8 +8,10 @@ import {
 import {
   allowedLineImageTypes,
   maxLineImageBytes,
-  uploadLineImage,
+  removeLineImages,
+  uploadLineImages,
 } from "@/lib/line/distribution";
+import { maxLineImageCount } from "@/lib/line/images";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { Json } from "@/types/database";
 
@@ -101,11 +103,15 @@ export async function POST(request: NextRequest) {
     const targetLabel =
       textValue(formData.get("targetLabel")) || "LINE連携済み全員";
     const filters = parseFilters(formData.get("filters"));
-    const imageValue = formData.get("image");
-    const image =
-      imageValue instanceof File && imageValue.size > 0 ? imageValue : null;
+    const legacyImageValue = formData.get("image");
+    const images = [
+      ...formData.getAll("images"),
+      ...(legacyImageValue ? [legacyImageValue] : []),
+    ].filter(
+      (value): value is File => value instanceof File && value.size > 0,
+    );
 
-    if (!rawTitle && !rawBody && !image) {
+    if (!rawTitle && !rawBody && !images.length) {
       return NextResponse.json(
         { ok: false, message: "配信タイトル、本文、画像のいずれかを入力してください。" },
         { status: 400 },
@@ -117,9 +123,17 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    if (images.length > maxLineImageCount) {
+      return NextResponse.json(
+        { ok: false, message: "添付画像は4枚まで選択できます。" },
+        { status: 400 },
+      );
+    }
     if (
-      image &&
-      (!allowedLineImageTypes.has(image.type) || image.size > maxLineImageBytes)
+      images.some(
+        (image) =>
+          !allowedLineImageTypes.has(image.type) || image.size > maxLineImageBytes,
+      )
     ) {
       return NextResponse.json(
         {
@@ -139,17 +153,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const imageUrl = image
-      ? await uploadLineImage(image, "scheduled")
-      : null;
+    const imageUrls = await uploadLineImages(images, "scheduled");
     const title = rawTitle || (rawBody ? rawBody.slice(0, 50) : "画像配信");
-    const body = rawBody || (!image ? rawTitle : "");
+    const body = rawBody || (!images.length ? rawTitle : "");
     const { data, error } = await supabaseServer
       .from("line_scheduled_messages")
       .insert({
         title,
         body,
-        image_url: imageUrl,
+        image_url: imageUrls[0] ?? null,
+        image_urls: imageUrls,
         target_label: targetLabel,
         target_conditions: filters as unknown as Json,
         target_count: audience.length,
@@ -157,7 +170,10 @@ export async function POST(request: NextRequest) {
       })
       .select("*")
       .single();
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (imageUrls.length) await removeLineImages(imageUrls);
+      throw new Error(error.message);
+    }
 
     return NextResponse.json({ ok: true, message: data });
   } catch (error) {

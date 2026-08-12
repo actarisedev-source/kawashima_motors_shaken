@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { getAgeFromBirthDate } from "@/lib/customers/birth-date";
 import { isValidHiragana, kanaErrorMessage } from "@/lib/customers/kana";
 import { isImeCompositionActive } from "@/lib/forms/ime";
+import { resolveLineImageUrls } from "@/lib/line/images";
 import { getJstDateKey } from "@/lib/reservations/slots";
 import {
   AdminNewReservationModal,
@@ -36,6 +37,7 @@ type LineMessageLogItem = {
   title: string;
   body: string;
   imageUrl: string | null;
+  imageUrls: string[];
   status: "成功" | "失敗";
   errorMessage: string | null;
 };
@@ -64,6 +66,9 @@ type CustomerDetailItem = {
   }[];
   lineMessageLogs: LineMessageLogItem[];
 };
+
+const getCustomerLogImageUrls = (log: LineMessageLogItem) =>
+  resolveLineImageUrls(log.imageUrls, log.imageUrl);
 
 type LoadState =
   | { status: "loading"; message: "読み込み中です。" }
@@ -1437,9 +1442,9 @@ export function CustomerDetail({
                               <p className="mt-1 truncate text-sm font-semibold text-slate-900">
                                 {log.title}
                               </p>
-                              {log.imageUrl ? (
+                              {getCustomerLogImageUrls(log).length ? (
                                 <span className="mt-2 inline-flex rounded-[5px] bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
-                                  画像あり
+                                  画像{getCustomerLogImageUrls(log).length}枚
                                 </span>
                               ) : null}
                             </div>
@@ -1485,20 +1490,25 @@ export function CustomerDetail({
                                   {log.body || "本文なし"}
                                 </dd>
                               </div>
-                              {log.imageUrl ? (
+                              {getCustomerLogImageUrls(log).length ? (
                                 <div className="min-w-0 md:col-span-2">
                                   <dt className={readonlyLabelClassName}>
                                     画像URL
                                   </dt>
-                                  <dd className="mt-1 break-all">
-                                    <a
-                                      href={log.imageUrl}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="font-semibold text-blue-700 hover:text-blue-900"
-                                    >
-                                      {log.imageUrl}
-                                    </a>
+                                  <dd className="mt-1 grid gap-1 break-all">
+                                    {getCustomerLogImageUrls(log).map(
+                                      (imageUrl, index) => (
+                                        <a
+                                          key={imageUrl}
+                                          href={imageUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="font-semibold text-blue-700 hover:text-blue-900"
+                                        >
+                                          画像{index + 1}: {imageUrl}
+                                        </a>
+                                      ),
+                                    )}
                                   </dd>
                                 </div>
                               ) : null}
