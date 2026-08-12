@@ -392,6 +392,7 @@ export function LineScheduledDistribution() {
           <LineImageDropzone
             attachments={lineImages.attachments}
             onAddFiles={lineImages.addFiles}
+            onMove={lineImages.moveFile}
             onRemove={lineImages.removeFile}
             onReplaceFile={lineImages.replaceFile}
             processing={lineImages.processing}

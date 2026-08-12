@@ -377,6 +377,7 @@ export function LineDistribution() {
               attachments={lineImages.attachments}
               disabled={deliveryCompleted}
               onAddFiles={lineImages.addFiles}
+              onMove={lineImages.moveFile}
               onRemove={lineImages.removeFile}
               onReplaceFile={lineImages.replaceFile}
               processing={lineImages.processing}

@@ -9,6 +9,27 @@ export type LineImageAttachment = {
   previewUrl: string;
 };
 
+export function reorderLineImageAttachments<T>(
+  attachments: T[],
+  fromIndex: number,
+  toIndex: number,
+) {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= attachments.length ||
+    toIndex >= attachments.length
+  ) {
+    return attachments;
+  }
+
+  const next = [...attachments];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+}
+
 export function useLineImageAttachments(
   onError: (message: string) => void,
   onChange?: () => void,
@@ -87,6 +108,14 @@ export function useLineImageAttachments(
     onChange?.();
   }
 
+  function moveFile(fromIndex: number, toIndex: number) {
+    setAttachments((current) => {
+      const next = reorderLineImageAttachments(current, fromIndex, toIndex);
+      return next === current ? current : next;
+    });
+    if (fromIndex !== toIndex) onChange?.();
+  }
+
   function clearFiles() {
     for (const attachment of attachmentsRef.current) {
       URL.revokeObjectURL(attachment.previewUrl);
@@ -100,6 +129,7 @@ export function useLineImageAttachments(
     addFiles,
     clearFiles,
     files: attachments.map((attachment) => attachment.file),
+    moveFile,
     processing,
     removeFile,
     replaceFile,

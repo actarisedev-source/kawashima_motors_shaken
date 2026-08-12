@@ -57,6 +57,17 @@ test("本文と画像4枚のpayloadはtext、image 4件の計5件になる", () 
   ]);
 });
 
+test("並び替え後のURL配列順でLINE payloadを組み立てる", () => {
+  const reorderedUrls = [urls[2], urls[0], urls[1], urls[3]];
+  const messages = buildLinePushMessages("本文", reorderedUrls);
+  assert.deepEqual(
+    messages.map((message) =>
+      message.type === "image" ? message.originalContentUrl : "text",
+    ),
+    ["text", ...reorderedUrls],
+  );
+});
+
 test("既存1枚データはimage_urlから配列へフォールバックする", () => {
   assert.deepEqual(resolveLineImageUrls([], urls[0]), [urls[0]]);
   assert.deepEqual(resolveLineImageUrls(null, urls[0]), [urls[0]]);
@@ -102,10 +113,28 @@ test("共通UIは追加・削除・差し替えとPC4列・スマホ2列に対�
   assert.match(dropzone, /multiple/);
   assert.match(dropzone, /grid-cols-2 gap-3 sm:grid-cols-4/);
   assert.match(dropzone, /onReplaceFile/);
+  assert.match(dropzone, /draggable=\{!isDisabled\}/);
+  assert.match(dropzone, /application\/x-line-image-index/);
+  assert.match(dropzone, /onMove\(fromIndex, index\)/);
+  assert.match(dropzone, /画像\$\{index \+ 1\}を左へ移動/);
+  assert.match(dropzone, /画像\$\{index \+ 1\}を右へ移動/);
   assert.match(dropzone, /onRemove\(index\)/);
   assert.match(hook, /attachments\.length \+ files\.length > maxLineImageCount/);
+  assert.match(hook, /reorderLineImageAttachments/);
+  assert.match(hook, /moveFile/);
   assert.match(hook, /current\.filter/);
   assert.match(hook, /current\.map/);
+});
+
+test("即時・予約画面は並び替え後のfiles配列をpayloadへ渡す", async () => {
+  const [manual, scheduled] = await Promise.all([
+    read("src/app/admin/line/line-distribution.tsx"),
+    read("src/app/admin/line/line-scheduled-distribution.tsx"),
+  ]);
+  for (const source of [manual, scheduled]) {
+    assert.match(source, /onMove=\{lineImages\.moveFile\}/);
+    assert.match(source, /for \(const image of lineImages\.files\) payload\.append\("images", image\)/);
+  }
 });
 
 test("予約配信・履歴はimage_urlsを優先し旧image_urlも表示する", async () => {
