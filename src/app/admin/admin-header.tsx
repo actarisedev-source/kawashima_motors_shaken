@@ -319,7 +319,7 @@ export function AdminHeader({
                 Kawashima Motors
               </p>
               <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
-                <h1 className="truncate text-[22px] font-bold leading-7 text-slate-950">
+                <h1 className="truncate text-[24px] font-bold leading-[30px] text-slate-950">
                   {title}
                 </h1>
                 <button
