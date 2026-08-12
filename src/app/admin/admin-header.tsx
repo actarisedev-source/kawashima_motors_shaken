@@ -248,14 +248,14 @@ const navItems = [
     href: "/admin/line",
     label: "LINE配信",
     Icon: MessageIcon,
-    iconClassName: "h-7 w-[35px]",
+    iconClassName: "h-5 w-6",
     match: (path: string) => path.startsWith("/admin/line"),
   },
   {
     href: "/admin/settings",
     label: "設定",
     Icon: GearIcon,
-    iconClassName: "h-[23px] w-[23px]",
+    iconClassName: "h-5 w-5",
     match: (path: string) =>
       path === "/admin/settings" ||
       path.startsWith("/admin/settings/account") ||
@@ -265,19 +265,22 @@ const navItems = [
 
 const navButtonClassName = (active: boolean) =>
   [
-    "relative flex h-[52px] min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-3 text-[15px] font-semibold transition lg:h-12 lg:rounded-b-none lg:rounded-t-lg lg:border-b-0 lg:px-1.5 lg:text-sm xl:px-3 xl:text-[15px]",
+    "flex h-10 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-sm font-semibold transition sm:px-3",
     active
-      ? "z-10 border-slate-200 bg-slate-50 text-blue-700 shadow-[0_-4px_10px_-6px_rgba(15,23,42,0.18)] lg:h-14 lg:after:absolute lg:after:inset-x-0 lg:after:-bottom-[3px] lg:after:h-1 lg:after:bg-slate-50 lg:after:content-['']"
-      : "border-slate-200 bg-slate-100 text-slate-700 shadow-[0_1px_4px_rgba(15,23,42,0.06)] hover:border-slate-300 hover:bg-white hover:text-blue-700",
+      ? "border-blue-200 bg-blue-50 text-blue-700 shadow-[0_1px_2px_rgba(37,99,235,0.08)]"
+      : "border-slate-200 bg-white text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-blue-100 hover:bg-blue-50/60 hover:text-blue-700",
   ].join(" ");
 
 export function AdminHeader({
+  title,
+  description,
   onRefresh,
   children,
 }: AdminHeaderProps) {
   const pathname = usePathname();
   const [isConfirmingLogout, setIsConfirmingLogout] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const confirmLogoutButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -295,26 +298,61 @@ export function AdminHeader({
     window.location.href = "/admin/login";
   }
 
+  async function handleRefresh() {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } catch (error) {
+      console.error("Failed to refresh admin data.", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
   return (
     <>
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-7xl px-5 pt-3 sm:px-6 lg:px-8">
-          <div className="flex min-h-8 items-center justify-start gap-3 pb-2">
-            <p className="text-base font-bold text-blue-700">
-              Kawashima Motors
-            </p>
+        <div className="mx-auto grid max-w-7xl gap-2 px-5 py-2.5 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <p className="shrink-0 text-base font-bold text-blue-700">
+                Kawashima Motors
+              </p>
+              <div className="min-w-0 border-l border-slate-200 pl-3">
+                <h1 className="truncate text-lg font-bold text-slate-950">
+                  {title}
+                </h1>
+                {description ? (
+                  <p className="truncate text-xs font-medium text-slate-500">
+                    {description}
+                  </p>
+                ) : null}
+              </div>
+            </div>
             <button
               type="button"
-              onClick={() => void onRefresh()}
-              className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-blue-600 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              onClick={() => void handleRefresh()}
+              disabled={isRefreshing}
+              className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-blue-600 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 disabled:shadow-none"
             >
-              <RefreshIcon className="h-4 w-4" />
-              最新に更新
+              <RefreshIcon
+                className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+              />
+              {isRefreshing ? "更新中..." : "最新に更新"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsConfirmingLogout(true)}
+              className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+            >
+              <LogoutIcon className="h-[18px] w-[18px] shrink-0" />
+              ログアウト
             </button>
           </div>
           <nav
             aria-label="管理画面メニュー"
-            className="grid w-full grid-cols-2 items-end gap-2 pb-2 sm:grid-cols-4 lg:grid-cols-[1fr_1fr_1fr_1.15fr_1.15fr_1.05fr_.75fr_1.05fr] lg:gap-1.5 lg:pb-0"
+            className="grid w-full grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-[1fr_1fr_1fr_1.08fr_1.08fr_1fr_.78fr]"
           >
             {navItems.map((item) => (
               <Link
@@ -323,19 +361,11 @@ export function AdminHeader({
                 className={navButtonClassName(item.match(pathname))}
               >
                 <item.Icon
-                  className={`${item.iconClassName ?? "h-[27px] w-[27px]"} shrink-0`}
+                  className={`${item.iconClassName ?? "h-5 w-5"} shrink-0`}
                 />
                 <span>{item.label}</span>
               </Link>
             ))}
-            <button
-              type="button"
-              onClick={() => setIsConfirmingLogout(true)}
-              className="relative flex h-[52px] min-w-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 bg-slate-100 px-3 text-[15px] font-semibold text-slate-700 shadow-[0_1px_4px_rgba(15,23,42,0.06)] transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 lg:h-12 lg:rounded-b-none lg:rounded-t-lg lg:border-b-0 lg:px-1.5 lg:text-sm xl:px-3 xl:text-[15px]"
-            >
-              <LogoutIcon className="h-[27px] w-[27px] shrink-0" />
-              ログアウト
-            </button>
           </nav>
         </div>
       </header>
