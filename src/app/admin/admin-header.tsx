@@ -346,7 +346,7 @@ export function AdminHeader({
           </div>
           <nav
             aria-label="管理画面メニュー"
-            className="grid w-full grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-[1fr_1fr_1fr_1.08fr_1.08fr_1fr_.78fr]"
+            className="grid w-full grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-7"
           >
             {navItems.map((item) => (
               <Link
