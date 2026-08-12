@@ -315,7 +315,7 @@ export function AdminHeader({
         <div className="mx-auto grid max-w-7xl gap-1.5 px-5 py-2 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
             <div className="grid min-w-0 flex-1 gap-0.5">
-              <p className="text-[13px] font-bold leading-4 text-blue-700">
+              <p className="text-[12px] font-bold leading-4 tracking-[-0.04em] text-blue-700">
                 Kawashima Motors
               </p>
               <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
