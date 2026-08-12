@@ -267,13 +267,12 @@ const navButtonClassName = (active: boolean) =>
   [
     "flex h-10 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-sm font-semibold transition sm:px-3",
     active
-      ? "border-blue-200 bg-blue-50 text-blue-700 shadow-[0_1px_2px_rgba(37,99,235,0.08)]"
+      ? "border-blue-600 bg-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.14)]"
       : "border-slate-200 bg-white text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-blue-100 hover:bg-blue-50/60 hover:text-blue-700",
   ].join(" ");
 
 export function AdminHeader({
   title,
-  description,
   onRefresh,
   children,
 }: AdminHeaderProps) {
@@ -313,34 +312,29 @@ export function AdminHeader({
   return (
     <>
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto grid max-w-7xl gap-2 px-5 py-2.5 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              <p className="shrink-0 text-base font-bold text-blue-700">
+        <div className="mx-auto grid max-w-7xl gap-1.5 px-5 py-2 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+            <div className="grid min-w-0 flex-1 gap-0.5">
+              <p className="text-[13px] font-bold leading-4 text-blue-700">
                 Kawashima Motors
               </p>
-              <div className="min-w-0 border-l border-slate-200 pl-3">
-                <h1 className="truncate text-lg font-bold text-slate-950">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+                <h1 className="truncate text-[22px] font-bold leading-7 text-slate-950">
                   {title}
                 </h1>
-                {description ? (
-                  <p className="truncate text-xs font-medium text-slate-500">
-                    {description}
-                  </p>
-                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void handleRefresh()}
+                  disabled={isRefreshing}
+                  className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-blue-600 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 disabled:shadow-none"
+                >
+                  <RefreshIcon
+                    className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+                  />
+                  {isRefreshing ? "更新中..." : "最新に更新"}
+                </button>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => void handleRefresh()}
-              disabled={isRefreshing}
-              className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-blue-600 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 disabled:shadow-none"
-            >
-              <RefreshIcon
-                className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
-              />
-              {isRefreshing ? "更新中..." : "最新に更新"}
-            </button>
             <button
               type="button"
               onClick={() => setIsConfirmingLogout(true)}
