@@ -102,7 +102,7 @@ https://<Vercelのドメイン>/api/line/health
 ### LINE自動配信
 
 `/admin/line`の「自動配信設定」タブで通知ごとの有効状態、本文、配信時刻を設定します。
-Vercel Hobbyの日次Cron制限を避けるため、Supabase Cronから毎時0分にAPIを起動し、
+Vercel Hobbyの日次Cron制限を避けるため、Supabase Cronから15分ごとにAPIを起動し、
 設定時刻または予約配信日時を過ぎた未実行の通知を処理します。日時判定は日本時間です。
 同じ顧客・車両または予約・通知種別への同日重複送信は配信ログで防止します。
 
@@ -116,7 +116,7 @@ Authorization: Bearer <CRON_SECRET>
 ```
 
 Supabase Vaultへ本番URLとVercelに設定したものと同じ`CRON_SECRET`を保存し、
-Supabase Cronから毎時このAPIを呼び出します。設定SQLは予約配信のmigration適用時に
+Supabase Cronから15分ごとにこのAPIを呼び出します。設定SQLは予約配信のmigration適用時に
 `supabase/setup_line_scheduled_messages_cron.sql`をSQL Editorで実行します。
 
 ### 顧客LINE連携
