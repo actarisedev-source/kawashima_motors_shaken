@@ -215,69 +215,89 @@ export function LoanerAvailabilityModal({
               </p>
             </div>
           ) : (
-            <div className="grid items-stretch gap-3 lg:grid-cols-2">
+            <div className="grid items-stretch gap-2.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {items.map((item) => {
                 const conflict = item.conflictingAssignment;
                 const isCurrent = item.id === currentLoanerVehicleId;
                 return (
-                  <article
+                  <button
                     key={item.id}
+                    type="button"
+                    disabled={!item.available || isCurrent}
+                    aria-pressed={isCurrent}
+                    aria-label={`${item.displayName} ${item.plateNumber} ${loanerCategoryLabels[item.category]}`}
+                    onClick={() => onSelect(item)}
                     className={[
-                      "h-full rounded-md border p-3.5",
-                      item.available || isCurrent
-                        ? "border-slate-200 bg-white"
-                        : "border-slate-200 bg-slate-50 opacity-70",
+                      "h-full min-h-[104px] rounded-md border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-1",
+                      isCurrent
+                        ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                        : item.available
+                          ? "cursor-pointer border-slate-200 bg-white text-slate-900 hover:border-blue-200 hover:bg-blue-50/60"
+                          : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-500 opacity-70",
                     ].join(" ")}
                   >
-                    <div className="flex h-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex h-full min-w-0 flex-col justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2">
                           <LoanerCategoryDot
                             category={item.category}
-                            className="h-3 w-3"
+                            className={[
+                              "h-3 w-3",
+                              isCurrent ? "ring-2 ring-white/90" : "",
+                            ].join(" ")}
                           />
-                          <p className="truncate text-base font-bold text-slate-950">
+                          <p
+                            className={[
+                              "truncate text-sm font-bold",
+                              isCurrent ? "text-white" : "text-slate-950",
+                            ].join(" ")}
+                          >
                             {item.displayName}
                           </p>
                         </div>
-                        <p className="mt-1 text-sm font-medium text-slate-600">
+                        <p
+                          className={[
+                            "mt-0.5 truncate text-xs font-semibold",
+                            isCurrent ? "text-blue-50" : "text-slate-600",
+                          ].join(" ")}
+                        >
+                          {item.vehicleName}
+                        </p>
+                        <p
+                          className={[
+                            "mt-1 truncate text-xs font-medium",
+                            isCurrent ? "text-blue-50" : "text-slate-500",
+                          ].join(" ")}
+                        >
                           {item.plateNumber}
                         </p>
-                        {isCurrent ? (
-                          <p className="mt-2 w-fit rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
-                            現在選択中
-                          </p>
-                        ) : null}
-                        {!item.available && !isCurrent ? (
-                          <div className="mt-2 text-sm font-semibold text-slate-600">
-                            <p>{item.unavailableReason}</p>
-                            {conflict ? (
-                              <p className="mt-1 text-xs font-medium text-slate-500">
-                                {formatLoanerDate(
-                                  new Date(conflict.scheduledStartAt)
-                                    .toLocaleDateString("sv-SE", {
-                                      timeZone: "Asia/Tokyo",
-                                    }),
-                                )}
-                                {" ～ "}
-                                {formatLoanerDate(
-                                  getLoanerReturnDateKey(conflict.scheduledEndAt),
-                                )}
-                              </p>
-                            ) : null}
-                          </div>
-                        ) : null}
                       </div>
-                      <button
-                        type="button"
-                        disabled={!item.available || isCurrent}
-                        onClick={() => onSelect(item)}
-                        className="h-10 w-full shrink-0 rounded-md bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 sm:w-auto"
-                      >
-                        {isCurrent ? "選択中" : item.available ? "選択" : "選択不可"}
-                      </button>
+                      {isCurrent ? (
+                        <p className="w-fit rounded-full bg-white/15 px-2 py-0.5 text-xs font-semibold text-white ring-1 ring-white/30">
+                          現在選択中
+                        </p>
+                      ) : null}
+                      {!item.available && !isCurrent ? (
+                        <div className="text-xs font-semibold text-slate-600">
+                          <p className="line-clamp-2">{item.unavailableReason}</p>
+                          {conflict ? (
+                            <p className="mt-1 font-medium text-slate-500">
+                              {formatLoanerDate(
+                                new Date(conflict.scheduledStartAt)
+                                  .toLocaleDateString("sv-SE", {
+                                    timeZone: "Asia/Tokyo",
+                                  }),
+                              )}
+                              {" ～ "}
+                              {formatLoanerDate(
+                                getLoanerReturnDateKey(conflict.scheduledEndAt),
+                              )}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
-                  </article>
+                  </button>
                 );
               })}
             </div>
