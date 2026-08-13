@@ -15,6 +15,13 @@ const adminDashboard = readFileSync(
   new URL("../src/app/admin/admin-dashboard.tsx", import.meta.url),
   "utf8",
 );
+const loanerCategoryBadge = readFileSync(
+  new URL(
+    "../src/app/admin/loaners/loaner-category-badge.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("代車一覧は総台数・貸出中・空車・使用停止を集計する", () => {
   const summary = summarizeLoanerFleet(
@@ -109,4 +116,39 @@ test("印刷一覧は代車情報を割当済み2行・未割当または希望�
   assert.match(adminDashboard, /<span> ～ <\/span>/);
   assert.doesNotMatch(adminDashboard, /<br \/>～<br \/>/);
   assert.match(adminDashboard, /px-3 py-2 align-middle/);
+});
+
+test("予約一覧の代車列は割当済みをカテゴリ色の丸印で優先表示する", () => {
+  assert.match(
+    adminDashboard,
+    /<th className="whitespace-nowrap px-3 py-3 text-center">\s*代車\s*<\/th>/,
+  );
+  assert.match(adminDashboard, /function ReservationLoanerCell/);
+  assert.match(adminDashboard, /item\.loanerAssignment\?\.vehicle\.category/);
+  assert.match(adminDashboard, /loanerCategoryLabels\[category\]/);
+  assert.match(adminDashboard, /aria-label=\{label\}/);
+  assert.match(adminDashboard, /title=\{label\}/);
+  assert.match(
+    adminDashboard,
+    /<LoanerCategoryDot category=\{category\} className="h-4 w-4" \/>/,
+  );
+  assert.match(adminDashboard, />\s*あり\s*<\/span>/);
+  assert.match(adminDashboard, /return <EmptyTableCellMark \/>/);
+
+  const assignedIndex = adminDashboard.indexOf(
+    "const category = item.loanerAssignment?.vehicle.category",
+  );
+  const requestedIndex = adminDashboard.indexOf(
+    "if (item.loanerCarRequested === true)",
+  );
+  assert.ok(assignedIndex !== -1);
+  assert.ok(requestedIndex !== -1);
+  assert.ok(
+    assignedIndex < requestedIndex,
+    "割当済み判定を代車希望あり表示より優先する",
+  );
+
+  assert.match(loanerCategoryBadge, /rental: "bg-red-500"/);
+  assert.match(loanerCategoryBadge, /owned: "bg-amber-400"/);
+  assert.match(loanerCategoryBadge, /sales: "bg-blue-500"/);
 });
