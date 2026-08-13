@@ -228,12 +228,12 @@ export function LoanerAvailabilityModal({
                     aria-label={`${item.displayName} ${item.plateNumber} ${loanerCategoryLabels[item.category]}`}
                     onClick={() => onSelect(item)}
                     className={[
-                      "h-[88px] rounded-md border px-3 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-1",
+                      "h-[88px] rounded-md border px-3 py-3 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-1",
                       isCurrent
                         ? "border-blue-600 bg-blue-600 text-white shadow-sm"
                         : item.available
                           ? "cursor-pointer border-slate-200 bg-white text-slate-900 hover:border-blue-200 hover:bg-blue-50/60"
-                          : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-500 opacity-70",
+                          : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500 opacity-70",
                     ].join(" ")}
                   >
                     <div className="flex h-full min-w-0 flex-col justify-center">

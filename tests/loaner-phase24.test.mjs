@@ -145,6 +145,7 @@ test("代車検索モーダルは固定上部とスクロール一覧を分離�
   assert.match(availabilityModal, /aria-pressed=\{isCurrent\}/);
   assert.match(availabilityModal, /onClick=\{\(\) => onSelect\(item\)\}/);
   assert.match(availabilityModal, /h-\[88px\]/);
+  assert.match(availabilityModal, /shadow-sm transition/);
   assert.match(availabilityModal, /flex h-full min-w-0 flex-col justify-center/);
   assert.match(availabilityModal, /hover:border-blue-200 hover:bg-blue-50\/60/);
   assert.match(availabilityModal, /border-blue-600 bg-blue-600 text-white/);
@@ -154,6 +155,7 @@ test("代車検索モーダルは固定上部とスクロール一覧を分離�
 
 test("貸出中カードは貸出期間を1行表示してカード高88pxを維持する", () => {
   assert.match(availabilityModal, /h-\[88px\]/);
+  assert.match(availabilityModal, /bg-slate-100 text-slate-500/);
   assert.match(availabilityModal, /text-\[11px\] font-semibold leading-4/);
   assert.match(availabilityModal, />\s*貸出中\{" "\}/);
   assert.match(availabilityModal, /getLoanerReturnDateKey\(conflict\.scheduledEndAt\)/);
