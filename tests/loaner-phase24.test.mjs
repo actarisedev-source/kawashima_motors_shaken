@@ -30,6 +30,9 @@ const dateRangePicker = readSource(
 const availabilityModal = readSource(
   "src/app/admin/loaners/loaner-availability-modal.tsx",
 );
+const assignmentPicker = readSource(
+  "src/app/admin/loaners/loaner-assignment-picker.tsx",
+);
 const categoryBadge = readSource(
   "src/app/admin/loaners/loaner-category-badge.tsx",
 );
@@ -146,6 +149,16 @@ test("代車検索モーダルは固定上部とスクロール一覧を分離�
   assert.match(availabilityModal, /hover:border-blue-200 hover:bg-blue-50\/60/);
   assert.match(availabilityModal, /border-blue-600 bg-blue-600 text-white/);
   assert.doesNotMatch(availabilityModal, /item\.available \? "選択"/);
+});
+
+test("新規予約の代車検索は現在選択中IDを再表示モーダルへ渡す", () => {
+  assert.match(
+    assignmentPicker,
+    /currentLoanerVehicleId=\{selectedLoaner\?\.id\}/,
+  );
+  assert.match(availabilityModal, /const isCurrent = item\.id === currentLoanerVehicleId/);
+  assert.match(availabilityModal, /aria-pressed=\{isCurrent\}/);
+  assert.match(availabilityModal, /border-blue-600 bg-blue-600 text-white/);
 });
 
 test("代車検索モーダルは共通分類色と処理中表示を使用する", () => {
