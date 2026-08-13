@@ -91,6 +91,44 @@ test("分類・キーワード・空車のみを絞り込み、表示順で並�
   );
 });
 
+test("キーワード検索は表示名・車名・ナンバーを部分一致で検索する", () => {
+  const items = buildLoanerAvailability(
+    [
+      vehicle({
+        id: "wagon",
+        vehicleName: "ワゴンR",
+        displayName: "ワゴンR",
+        plateNumber: "長野 500 あ 1234",
+      }),
+      vehicle({
+        id: "aqua",
+        vehicleName: "アクア",
+        displayName: "アクア",
+        plateNumber: "長野 500 え 4567",
+      }),
+    ],
+    [],
+    period,
+  );
+
+  assert.deepEqual(
+    filterLoanerAvailability(items, {
+      keyword: "ワゴン",
+      category: "all",
+      availableOnly: true,
+    }).map((item) => item.id),
+    ["wagon"],
+  );
+  assert.deepEqual(
+    filterLoanerAvailability(items, {
+      keyword: "1234",
+      category: "all",
+      availableOnly: true,
+    }).map((item) => item.id),
+    ["wagon"],
+  );
+});
+
 test("利用可能台数は検索条件内の空車だけを数える", () => {
   const available = vehicle({
     id: "available-owned",

@@ -102,6 +102,7 @@ export function LoanerAssignmentPicker({
         <LoanerAvailabilityModal
           startDate={startDate}
           endDate={endDate}
+          currentLoanerVehicleId={selectedLoaner?.id}
           onClose={() => setIsSearchOpen(false)}
           onSelect={(item) => {
             onSelectLoaner(item);

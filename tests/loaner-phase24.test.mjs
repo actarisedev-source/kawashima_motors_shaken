@@ -30,6 +30,9 @@ const dateRangePicker = readSource(
 const availabilityModal = readSource(
   "src/app/admin/loaners/loaner-availability-modal.tsx",
 );
+const assignmentPicker = readSource(
+  "src/app/admin/loaners/loaner-assignment-picker.tsx",
+);
 const categoryBadge = readSource(
   "src/app/admin/loaners/loaner-category-badge.tsx",
 );
@@ -129,14 +132,34 @@ test("予約詳細は貸出中の代車操作と確認UIを提供する", () => 
   assert.doesNotMatch(actions, /updatedAt/);
 });
 
-test("代車検索モーダルは固定上部とスクロール一覧を分離しPCで2列表示する", () => {
+test("代車検索モーダルは固定上部とスクロール一覧を分離しPCで5列表示する", () => {
   assert.match(availabilityModal, />\s*代車検索\s*</);
   assert.match(availabilityModal, /h-\[90dvh\]/);
   assert.match(availabilityModal, /w-\[90vw\]/);
   assert.match(availabilityModal, /max-w-\[1600px\]/);
   assert.match(availabilityModal, /shrink-0 border-b/);
   assert.match(availabilityModal, /min-h-0 flex-1 overflow-y-auto/);
-  assert.match(availabilityModal, /lg:grid-cols-2/);
+  assert.match(availabilityModal, /md:grid-cols-3/);
+  assert.match(availabilityModal, /lg:grid-cols-4/);
+  assert.match(availabilityModal, /xl:grid-cols-5/);
+  assert.match(availabilityModal, /aria-pressed=\{isCurrent\}/);
+  assert.match(availabilityModal, /onClick=\{\(\) => onSelect\(item\)\}/);
+  assert.match(availabilityModal, /min-h-\[88px\]/);
+  assert.match(availabilityModal, /justify-center gap-1\.5/);
+  assert.match(availabilityModal, /hover:border-blue-200 hover:bg-blue-50\/60/);
+  assert.match(availabilityModal, /border-blue-600 bg-blue-600 text-white/);
+  assert.doesNotMatch(availabilityModal, /現在選択中/);
+  assert.doesNotMatch(availabilityModal, /item\.available \? "選択"/);
+});
+
+test("新規予約の代車検索は現在選択中IDを再表示モーダルへ渡す", () => {
+  assert.match(
+    assignmentPicker,
+    /currentLoanerVehicleId=\{selectedLoaner\?\.id\}/,
+  );
+  assert.match(availabilityModal, /const isCurrent = item\.id === currentLoanerVehicleId/);
+  assert.match(availabilityModal, /aria-pressed=\{isCurrent\}/);
+  assert.match(availabilityModal, /border-blue-600 bg-blue-600 text-white/);
 });
 
 test("代車検索モーダルは共通分類色と処理中表示を使用する", () => {
