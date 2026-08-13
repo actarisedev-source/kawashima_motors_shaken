@@ -18,6 +18,7 @@ import {
   formatLoanerDate,
   getLoanerReturnDateKey,
 } from "@/lib/loaners/loaner-period";
+import { loanerCategoryLabels } from "@/lib/loaners/loaner-vehicle";
 import { AdminHeader } from "./admin-header";
 import {
   AdminNewReservationModal,
@@ -40,7 +41,10 @@ import {
   LoanerAssignmentPicker,
   type SelectedLoaner,
 } from "./loaners/loaner-assignment-picker";
-import { LoanerCategoryBadge } from "./loaners/loaner-category-badge";
+import {
+  LoanerCategoryBadge,
+  LoanerCategoryDot,
+} from "./loaners/loaner-category-badge";
 import {
   LoanerAssignmentActions,
   LoanerRequestControl,
@@ -114,6 +118,33 @@ function EmptyTableCellMark() {
       />
     </>
   );
+}
+
+function ReservationLoanerCell({ item }: { item: ReservationItem }) {
+  const category = item.loanerAssignment?.vehicle.category;
+
+  if (category) {
+    const label = loanerCategoryLabels[category];
+    return (
+      <span
+        aria-label={label}
+        title={label}
+        className="inline-flex h-6 w-6 items-center justify-center"
+      >
+        <LoanerCategoryDot category={category} className="h-4 w-4" />
+      </span>
+    );
+  }
+
+  if (item.loanerCarRequested === true) {
+    return (
+      <span className="inline-flex items-center whitespace-nowrap rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
+        あり
+      </span>
+    );
+  }
+
+  return <EmptyTableCellMark />;
 }
 
 export function AdminDashboard({
@@ -645,7 +676,7 @@ export function AdminDashboard({
                     <th className="px-4 py-3">予約状況</th>
                     <th className="px-4 py-3">予約内容</th>
                     <th className="whitespace-nowrap px-3 py-3 text-center">
-                      代車希望
+                      代車
                     </th>
                     <th className="px-4 py-3 text-center">ステータス</th>
                     <th className="w-10 px-4 py-3" aria-label="予約詳細" />
@@ -748,21 +779,7 @@ export function AdminDashboard({
                             </span>
                           </td>
                           <td className="px-3 py-4 text-center">
-                            {item.loanerCarRequested === true ? (
-                              <span className="inline-flex items-center whitespace-nowrap rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
-                                有り
-                              </span>
-                            ) : (
-                              <span
-                                className={
-                                  item.loanerCarRequested === null
-                                    ? "text-sm font-semibold text-slate-400"
-                                    : "text-sm font-medium text-slate-700"
-                                }
-                              >
-                                {item.loanerCarRequested === null ? "—" : "無し"}
-                              </span>
-                            )}
+                            <ReservationLoanerCell item={item} />
                           </td>
                           <td className="px-4 py-4 text-center">
                             <span
