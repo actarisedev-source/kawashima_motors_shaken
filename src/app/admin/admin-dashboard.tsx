@@ -15,6 +15,12 @@ import {
   getAdminLoanerRequestLabel,
 } from "@/lib/reservations/admin-loaner-request";
 import {
+  filterActiveAdminReservations,
+  getAdminReservationSlotLabel,
+  groupAdminReservationsByTime,
+  isActiveAdminReservation,
+} from "@/lib/reservations/admin-reservation-list";
+import {
   formatLoanerDate,
   getLoanerReturnDateKey,
 } from "@/lib/loaners/loaner-period";
@@ -214,7 +220,10 @@ export function AdminDashboard({
     setItems(result.items);
     if (!initialReservationHandledRef.current && initialReservationId) {
       initialReservationHandledRef.current = true;
-      const target = result.items.find((item) => item.id === initialReservationId);
+      const target = result.items.find(
+        (item) =>
+          item.id === initialReservationId && isActiveAdminReservation(item),
+      );
       if (target) {
         const targetDate = getJstDateKey(target.reservedAt);
         const [year, monthNumber] = targetDate.split("-").map(Number);
@@ -227,7 +236,9 @@ export function AdminDashboard({
     }
     setSelectedReservation((current) =>
       current
-        ? (result.items?.find((item) => item.id === current.id) ?? null)
+        ? (result.items?.find(
+            (item) => item.id === current.id && isActiveAdminReservation(item),
+          ) ?? null)
         : current,
     );
     setLoadState({ status: "ready", message: "" });
@@ -495,10 +506,14 @@ export function AdminDashboard({
     setLoanerAssignmentNotice("");
   }, [selectedReservation?.id]);
 
+  const activeItems = useMemo(
+    () => filterActiveAdminReservations(items),
+    [items],
+  );
   const itemsByDate = useMemo(() => {
     const map = new Map<string, ReservationItem[]>();
 
-    for (const item of items) {
+    for (const item of activeItems) {
       const dateKey = getJstDateKey(item.reservedAt);
       map.set(dateKey, [...(map.get(dateKey) ?? []), item]);
     }
@@ -514,7 +529,7 @@ export function AdminDashboard({
     }
 
     return map;
-  }, [items]);
+  }, [activeItems]);
   const selectedDateItems = useMemo(
     () => itemsByDate.get(selectedDate) ?? [],
     [itemsByDate, selectedDate],
@@ -562,14 +577,7 @@ export function AdminDashboard({
     (selectedReservationDateIsPast && selectedReservation.status === "完了");
 
   const selectedItemsByTime = useMemo(() => {
-    const map = new Map<string, ReservationItem[]>();
-
-    for (const item of selectedDateItems) {
-      const time = getJstTimeKey(item.reservedAt);
-      map.set(time, [...(map.get(time) ?? []), item]);
-    }
-
-    return map;
+    return groupAdminReservationsByTime(selectedDateItems);
   }, [selectedDateItems]);
 
   return (
@@ -770,7 +778,7 @@ export function AdminDashboard({
                                     : "bg-blue-50 text-blue-700 ring-blue-200",
                               ].join(" ")}
                             >
-                              {reservationNumber} / {capacity}
+                              {getAdminReservationSlotLabel(index, capacity)}
                             </span>
                           </td>
                           <td className="px-4 py-4">
