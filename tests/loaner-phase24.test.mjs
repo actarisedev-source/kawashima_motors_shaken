@@ -148,6 +148,7 @@ test("代車検索モーダルは固定上部とスクロール一覧を分離�
   assert.match(availabilityModal, /justify-center gap-1\.5/);
   assert.match(availabilityModal, /hover:border-blue-200 hover:bg-blue-50\/60/);
   assert.match(availabilityModal, /border-blue-600 bg-blue-600 text-white/);
+  assert.doesNotMatch(availabilityModal, /現在選択中/);
   assert.doesNotMatch(availabilityModal, /item\.available \? "選択"/);
 });
 

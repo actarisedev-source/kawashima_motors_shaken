@@ -272,11 +272,6 @@ export function LoanerAvailabilityModal({
                           {item.plateNumber}
                         </p>
                       </div>
-                      {isCurrent ? (
-                        <p className="w-fit rounded-full bg-white/15 px-2 py-0.5 text-xs font-semibold text-white ring-1 ring-white/30">
-                          現在選択中
-                        </p>
-                      ) : null}
                       {!item.available && !isCurrent ? (
                         <div className="text-xs font-semibold text-slate-600">
                           <p className="line-clamp-2">{item.unavailableReason}</p>
