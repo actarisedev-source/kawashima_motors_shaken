@@ -141,6 +141,8 @@ test("代車検索モーダルは固定上部とスクロール一覧を分離�
   assert.match(availabilityModal, /xl:grid-cols-5/);
   assert.match(availabilityModal, /aria-pressed=\{isCurrent\}/);
   assert.match(availabilityModal, /onClick=\{\(\) => onSelect\(item\)\}/);
+  assert.match(availabilityModal, /min-h-\[88px\]/);
+  assert.match(availabilityModal, /justify-center gap-1\.5/);
   assert.match(availabilityModal, /hover:border-blue-200 hover:bg-blue-50\/60/);
   assert.match(availabilityModal, /border-blue-600 bg-blue-600 text-white/);
   assert.doesNotMatch(availabilityModal, /item\.available \? "選択"/);
