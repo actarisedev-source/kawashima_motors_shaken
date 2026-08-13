@@ -228,7 +228,7 @@ export function LoanerAvailabilityModal({
                     aria-label={`${item.displayName} ${item.plateNumber} ${loanerCategoryLabels[item.category]}`}
                     onClick={() => onSelect(item)}
                     className={[
-                      "h-full min-h-[88px] rounded-md border px-3 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-1",
+                      "h-[88px] rounded-md border px-3 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-1",
                       isCurrent
                         ? "border-blue-600 bg-blue-600 text-white shadow-sm"
                         : item.available
@@ -236,7 +236,7 @@ export function LoanerAvailabilityModal({
                           : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-500 opacity-70",
                     ].join(" ")}
                   >
-                    <div className="flex h-full min-w-0 flex-col justify-center gap-1.5">
+                    <div className="flex h-full min-w-0 flex-col justify-center">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <LoanerCategoryDot
@@ -273,10 +273,10 @@ export function LoanerAvailabilityModal({
                         </p>
                       </div>
                       {!item.available && !isCurrent ? (
-                        <div className="text-xs font-semibold text-slate-600">
-                          <p className="line-clamp-2">{item.unavailableReason}</p>
+                        <div className="mt-1 min-w-0 text-[11px] font-semibold leading-4 text-slate-600">
                           {conflict ? (
-                            <p className="mt-1 font-medium text-slate-500">
+                            <p className="truncate">
+                              貸出中{" "}
                               {formatLoanerDate(
                                 new Date(conflict.scheduledStartAt)
                                   .toLocaleDateString("sv-SE", {
@@ -288,6 +288,8 @@ export function LoanerAvailabilityModal({
                                 getLoanerReturnDateKey(conflict.scheduledEndAt),
                               )}
                             </p>
+                          ) : item.unavailableReason ? (
+                            <p className="truncate">{item.unavailableReason}</p>
                           ) : null}
                         </div>
                       ) : null}

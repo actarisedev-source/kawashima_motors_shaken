@@ -144,12 +144,20 @@ test("代車検索モーダルは固定上部とスクロール一覧を分離�
   assert.match(availabilityModal, /xl:grid-cols-5/);
   assert.match(availabilityModal, /aria-pressed=\{isCurrent\}/);
   assert.match(availabilityModal, /onClick=\{\(\) => onSelect\(item\)\}/);
-  assert.match(availabilityModal, /min-h-\[88px\]/);
-  assert.match(availabilityModal, /justify-center gap-1\.5/);
+  assert.match(availabilityModal, /h-\[88px\]/);
+  assert.match(availabilityModal, /flex h-full min-w-0 flex-col justify-center/);
   assert.match(availabilityModal, /hover:border-blue-200 hover:bg-blue-50\/60/);
   assert.match(availabilityModal, /border-blue-600 bg-blue-600 text-white/);
   assert.doesNotMatch(availabilityModal, /現在選択中/);
   assert.doesNotMatch(availabilityModal, /item\.available \? "選択"/);
+});
+
+test("貸出中カードは貸出期間を1行表示してカード高88pxを維持する", () => {
+  assert.match(availabilityModal, /h-\[88px\]/);
+  assert.match(availabilityModal, /text-\[11px\] font-semibold leading-4/);
+  assert.match(availabilityModal, />\s*貸出中\{" "\}/);
+  assert.match(availabilityModal, /getLoanerReturnDateKey\(conflict\.scheduledEndAt\)/);
+  assert.doesNotMatch(availabilityModal, /line-clamp-2/);
 });
 
 test("新規予約の代車検索は現在選択中IDを再表示モーダルへ渡す", () => {
