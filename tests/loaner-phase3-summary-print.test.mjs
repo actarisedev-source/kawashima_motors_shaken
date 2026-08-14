@@ -22,6 +22,10 @@ const loanerCategoryBadge = readFileSync(
   ),
   "utf8",
 );
+const loanerAdminTabs = readFileSync(
+  new URL("../src/app/admin/loaners/loaner-admin-tabs.tsx", import.meta.url),
+  "utf8",
+);
 
 test("代車一覧は総台数・貸出中・空車・使用停止を集計する", () => {
   const summary = summarizeLoanerFleet(
@@ -119,16 +123,25 @@ test("印刷一覧は代車情報を割当済み2行・未割当または希望�
   assert.match(adminDashboard, /px-3 py-2 align-middle/);
 });
 
-test("代車一覧は車名とナンバーを主表示し貸出期間を表示する", () => {
+test("代車一覧は車名とナンバーを主表示し現在/次回貸出を表示する", () => {
   assert.match(loanersDashboard, /placeholder="車名・ナンバー・メモ"/);
   assert.doesNotMatch(loanersDashboard, /<th className="px-4 py-3">表示名<\/th>/);
   assert.match(loanersDashboard, /<th className="px-4 py-3">車種<\/th>/);
   assert.match(loanersDashboard, /<th className="px-4 py-3">ナンバー<\/th>/);
-  assert.match(loanersDashboard, /<th className="px-4 py-3">貸出期間<\/th>/);
+  assert.match(loanersDashboard, /<th className="px-4 py-3">現在\/次回貸出<\/th>/);
+  assert.doesNotMatch(loanersDashboard, /<th className="px-4 py-3">貸出期間<\/th>/);
   assert.match(loanersDashboard, /renderLoanerPeriod\(item\)/);
   assert.match(loanersDashboard, /getLoanerReturnDateKey/);
   assert.match(loanersDashboard, /item\.vehicleName/);
   assert.match(loanersDashboard, /item\.plateNumber/);
+});
+
+test("代車管理タブは代車一覧と貸出履歴の2画面だけを結ぶ", () => {
+  assert.match(loanerAdminTabs, /active: "vehicles" \| "history"/);
+  assert.match(loanerAdminTabs, /href="\/admin\/loaners"/);
+  assert.match(loanerAdminTabs, /href="\/admin\/loaners\/history"/);
+  assert.doesNotMatch(loanerAdminTabs, /href="\/admin\/loaners\/calendar"/);
+  assert.doesNotMatch(loanerAdminTabs, />\s*カレンダー\s*<\/Link>/);
 });
 
 test("予約一覧の代車列は割当済みをカテゴリ色の丸印で優先表示する", () => {
