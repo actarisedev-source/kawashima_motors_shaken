@@ -56,7 +56,7 @@ export const getDuplicateLoanerMessage = (
     return "同じナンバーの代車が登録されています。";
   }
   if (duplicate === "displayName") {
-    return "同じ表示名の代車が登録されています。";
+    return "同じ車名とナンバーの代車が登録されています。";
   }
   return null;
 };
@@ -70,7 +70,7 @@ export const getLoanerDatabaseErrorMessage = (error: {
       return "同じナンバーの代車が登録されています。";
     }
     if (error.message?.includes("display_name")) {
-      return "同じ表示名の代車が登録されています。";
+      return "同じ車名とナンバーの代車が登録されています。";
     }
   }
   if (error.code === "23503") {

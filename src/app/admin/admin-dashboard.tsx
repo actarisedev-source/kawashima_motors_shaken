@@ -885,10 +885,10 @@ export function AdminDashboard({
                         category={selectedReservation.loanerAssignment.vehicle.category}
                       />
                       <p className="mt-2 font-bold text-slate-950">
-                        {selectedReservation.loanerAssignment.vehicle.displayName}
+                        {selectedReservation.loanerAssignment.vehicle.vehicleName}
                       </p>
                       <p className="mt-1 text-sm font-medium text-slate-600">
-                        {selectedReservation.loanerAssignment.vehicle.vehicleName} / {selectedReservation.loanerAssignment.vehicle.plateNumber}
+                        {selectedReservation.loanerAssignment.vehicle.plateNumber}
                       </p>
                       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
                         <div>
@@ -1133,7 +1133,7 @@ export function AdminDashboard({
                       <div className="grid gap-0.5 text-xs leading-tight">
                         <p>
                           <span className="font-semibold">代車：</span>
-                          {item.loanerAssignment.vehicle.displayName}
+                          {item.loanerAssignment.vehicle.vehicleName}
                           <span>
                             （{item.loanerAssignment.vehicle.plateNumber}）
                           </span>

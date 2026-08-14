@@ -146,7 +146,7 @@ export function LoanerAvailabilityModal({
               <input
                 value={keyword}
                 onChange={(event) => setKeyword(event.target.value)}
-                placeholder="車名・表示名・ナンバー"
+                placeholder="車名・ナンバー"
                 className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
               />
             </label>
@@ -225,7 +225,7 @@ export function LoanerAvailabilityModal({
                     type="button"
                     disabled={!item.available || isCurrent}
                     aria-pressed={isCurrent}
-                    aria-label={`${item.displayName} ${item.plateNumber} ${loanerCategoryLabels[item.category]}`}
+                    aria-label={`${item.vehicleName} ${item.plateNumber} ${loanerCategoryLabels[item.category]}`}
                     onClick={() => onSelect(item)}
                     className={[
                       "h-[88px] rounded-md border px-3 py-3 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-1",
@@ -252,21 +252,13 @@ export function LoanerAvailabilityModal({
                               isCurrent ? "text-white" : "text-slate-950",
                             ].join(" ")}
                           >
-                            {item.displayName}
+                            {item.vehicleName}
                           </p>
                         </div>
                         <p
                           className={[
                             "mt-0.5 truncate text-xs font-semibold",
                             isCurrent ? "text-blue-50" : "text-slate-600",
-                          ].join(" ")}
-                        >
-                          {item.vehicleName}
-                        </p>
-                        <p
-                          className={[
-                            "mt-1 truncate text-xs font-medium",
-                            isCurrent ? "text-blue-50" : "text-slate-500",
                           ].join(" ")}
                         >
                           {item.plateNumber}

@@ -81,10 +81,10 @@ export function LoanerAssignmentPicker({
             <div>
               <LoanerCategoryBadge category={selectedLoaner.category} />
               <p className="mt-2 font-bold text-slate-950">
-                {selectedLoaner.displayName}
+                {selectedLoaner.vehicleName}
               </p>
               <p className="mt-1 text-sm font-medium text-slate-600">
-                {selectedLoaner.vehicleName} / {selectedLoaner.plateNumber}
+                {selectedLoaner.plateNumber}
               </p>
             </div>
             <button

@@ -144,7 +144,6 @@ function DetailModal({
     ["状態", loanerAssignmentStatusLabels[item.status]],
     ["分類", loanerCategoryLabels[item.vehicle.category]],
     ["車種", item.vehicle.vehicleName || "—"],
-    ["表示名", item.vehicle.displayName || "—"],
     ["ナンバー", item.vehicle.plateNumber || "—"],
     ["貸出開始予定", formatPeriodDate(item.scheduledStartAt)],
     ["返却予定", formatLoanerDate(getLoanerReturnDateKey(item.scheduledEndAt))],
@@ -464,7 +463,7 @@ export function LoanerHistoryDashboard() {
                         <td className="px-3 py-4">
                           <p className="flex items-center gap-2 font-bold text-slate-900">
                             <LoanerCategoryDot category={item.vehicle.category} />
-                            <span className="break-words">{item.vehicle.displayName}</span>
+                            <span className="break-words">{item.vehicle.vehicleName}</span>
                           </p>
                           <p className="mt-0.5 break-words text-xs text-slate-500">{item.vehicle.plateNumber}</p>
                         </td>
@@ -501,7 +500,7 @@ export function LoanerHistoryDashboard() {
                         <StatusBadge status={item.status} />
                         <p className="mt-2 flex items-center gap-2 font-bold text-slate-950">
                           <LoanerCategoryDot category={item.vehicle.category} />
-                          <span className="break-words">{item.vehicle.displayName}</span>
+                          <span className="break-words">{item.vehicle.vehicleName}</span>
                         </p>
                         <p className="mt-1 text-xs text-slate-500">{item.vehicle.plateNumber}</p>
                       </div>
