@@ -26,21 +26,40 @@ export async function GET(request: NextRequest) {
   const auth = await getAdminAuthFromRequest(request);
   if (!auth.authenticated) return unauthorizedResponse();
 
-  const { data, error } = await supabaseServer
-    .from("loaner_vehicles")
-    .select("*")
-    .order("sort_order", { ascending: true })
-    .order("display_name", { ascending: true });
+  const referenceNow = new Date().toISOString();
+  const [vehiclesResult, assignmentsResult] = await Promise.all([
+    supabaseServer
+      .from("loaner_vehicles")
+      .select("*")
+      .order("sort_order", { ascending: true })
+      .order("display_name", { ascending: true }),
+    supabaseServer
+      .from("loaner_assignments")
+      .select("loaner_vehicle_id,scheduled_start_at,scheduled_end_at")
+      .eq("status", "checked_out")
+      .gt("scheduled_end_at", referenceNow)
+      .order("scheduled_start_at", { ascending: true }),
+  ]);
 
-  if (error) {
-    console.error("Failed to load loaner vehicles", error);
+  if (vehiclesResult.error || assignmentsResult.error) {
+    console.error(
+      "Failed to load loaner vehicles",
+      vehiclesResult.error ?? assignmentsResult.error,
+    );
     return NextResponse.json(
       { ok: false, message: "代車一覧の取得に失敗しました。" },
       { status: 500 },
     );
   }
 
-  const allItems = (data ?? []).map(toLoanerVehicle);
+  const allItems = (vehiclesResult.data ?? []).map(toLoanerVehicle);
+  const checkedOutAssignments = (assignmentsResult.data ?? []).map(
+    (assignment) => ({
+      loanerVehicleId: assignment.loaner_vehicle_id,
+      scheduledStartAt: assignment.scheduled_start_at,
+      scheduledEndAt: assignment.scheduled_end_at,
+    }),
+  );
   const searchParams = request.nextUrl.searchParams;
   const categoryParam = searchParams.get("category") ?? "all";
   const statusParam = searchParams.get("status") ?? "all";
@@ -63,6 +82,8 @@ export async function GET(request: NextRequest) {
       active: allItems.filter((item) => item.isActive).length,
       inactive: allItems.filter((item) => !item.isActive).length,
     },
+    checkedOutAssignments,
+    referenceNow,
     suggestedNextSortOrder: getNextLoanerSortOrder(allItems),
   });
 }

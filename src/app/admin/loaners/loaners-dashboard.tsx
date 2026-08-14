@@ -7,10 +7,6 @@ import {
   type LoanerCategory,
   type LoanerVehicle,
 } from "@/lib/loaners/loaner-vehicle";
-import type {
-  LoanerHistoryItem,
-  LoanerHistoryResponse,
-} from "@/lib/loaners/loaner-history";
 import {
   formatLoanerDate,
   getLoanerReturnDateKey,
@@ -19,7 +15,10 @@ import {
   emptyLoanerFleetSummary,
   filterLoanerFleetByStatus,
   getLoanerFleetStatus,
+  getRepresentativeLoanerAssignment,
+  isLoanerAssignmentCurrent,
   summarizeLoanerFleet,
+  type LoanerFleetAssignment,
   type LoanerFleetSummary,
   type LoanerFleetStatus,
 } from "@/lib/loaners/loaner-summary";
@@ -36,11 +35,6 @@ type PendingAction = {
   type: "activate" | "deactivate" | "delete";
   item: LoanerVehicle;
 };
-
-type CheckedOutLoanerAssignment = Pick<
-  LoanerHistoryItem,
-  "loanerVehicleId" | "scheduledStartAt" | "scheduledEndAt"
->;
 
 const actionCopy = (action: PendingAction) => {
   if (action.type === "delete") {
@@ -87,8 +81,9 @@ const getJstDateKey = (value: string) =>
 export function LoanersDashboard() {
   const [items, setItems] = useState<LoanerVehicle[]>([]);
   const [checkedOutAssignments, setCheckedOutAssignments] = useState<
-    CheckedOutLoanerAssignment[]
+    LoanerFleetAssignment[]
   >([]);
+  const [referenceNow, setReferenceNow] = useState(() => new Date().toISOString());
   const [summary, setSummary] = useState<LoanerFleetSummary>(
     emptyLoanerFleetSummary,
   );
@@ -107,22 +102,35 @@ export function LoanersDashboard() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [actionSubmitting, setActionSubmitting] = useState(false);
   const [notice, setNotice] = useState("");
-  const checkedOutAssignmentMap = useMemo(() => {
-    const map = new Map<string, CheckedOutLoanerAssignment>();
+  const assignmentsByVehicleId = useMemo(() => {
+    const map = new Map<string, LoanerFleetAssignment[]>();
     for (const assignment of checkedOutAssignments) {
-      if (!map.has(assignment.loanerVehicleId)) {
-        map.set(assignment.loanerVehicleId, assignment);
-      }
+      const current = map.get(assignment.loanerVehicleId) ?? [];
+      current.push(assignment);
+      map.set(assignment.loanerVehicleId, current);
     }
     return map;
   }, [checkedOutAssignments]);
-  const checkedOutIdSet = useMemo(
-    () => new Set(checkedOutAssignmentMap.keys()),
-    [checkedOutAssignmentMap],
+  const representativeAssignmentMap = useMemo(() => {
+    const map = new Map<string, LoanerFleetAssignment>();
+    for (const [vehicleId, assignments] of assignmentsByVehicleId) {
+      const assignment = getRepresentativeLoanerAssignment(assignments, referenceNow);
+      if (assignment) map.set(vehicleId, assignment);
+    }
+    return map;
+  }, [assignmentsByVehicleId, referenceNow]);
+  const currentLoanedIdSet = useMemo(
+    () =>
+      new Set(
+        checkedOutAssignments
+          .filter((assignment) => isLoanerAssignmentCurrent(assignment, referenceNow))
+          .map((assignment) => assignment.loanerVehicleId),
+      ),
+    [checkedOutAssignments, referenceNow],
   );
   const displayedItems = useMemo(
-    () => filterLoanerFleetByStatus(items, checkedOutIdSet, status),
-    [checkedOutIdSet, items, status],
+    () => filterLoanerFleetByStatus(items, currentLoanedIdSet, status),
+    [currentLoanedIdSet, items, status],
   );
 
   useEffect(() => {
@@ -144,20 +152,18 @@ export function LoanersDashboard() {
 
       try {
         const listUrl = `/api/admin/loaners${params.size ? `?${params}` : ""}`;
-        const [response, allVehiclesResponse, assignmentsResponse] =
+        const [response, allVehiclesResponse] =
           await Promise.all([
             fetch(listUrl, { cache: "no-store", signal }),
             params.size
               ? fetch("/api/admin/loaners", { cache: "no-store", signal })
               : Promise.resolve(null),
-            fetch(
-              "/api/admin/loaner-assignments/history?status=checked_out&page_size=100",
-              { cache: "no-store", signal },
-            ),
           ]);
         const result = (await response.json()) as {
           ok: boolean;
           items?: LoanerVehicle[];
+          checkedOutAssignments?: LoanerFleetAssignment[];
+          referenceNow?: string;
           suggestedNextSortOrder?: number;
           message?: string;
         };
@@ -165,11 +171,11 @@ export function LoanersDashboard() {
           ? ((await allVehiclesResponse.json()) as {
               ok: boolean;
               items?: LoanerVehicle[];
+              checkedOutAssignments?: LoanerFleetAssignment[];
+              referenceNow?: string;
               message?: string;
             })
           : result;
-        const assignmentsResult =
-          (await assignmentsResponse.json()) as LoanerHistoryResponse;
 
         if (
           !response.ok ||
@@ -177,35 +183,31 @@ export function LoanersDashboard() {
           !result.items ||
           (allVehiclesResponse && !allVehiclesResponse.ok) ||
           !allVehiclesResult.ok ||
-          !allVehiclesResult.items ||
-          !assignmentsResponse.ok ||
-          !assignmentsResult.ok ||
-          !assignmentsResult.items
+          !allVehiclesResult.items
         ) {
           setLoadState({
             status: "error",
             message:
               result.message ??
               allVehiclesResult.message ??
-              assignmentsResult.message ??
               "代車一覧の取得に失敗しました。",
           });
           return;
         }
 
-        const checkedOutItems = assignmentsResult.items.map(
-          (item) => ({
-            loanerVehicleId: item.loanerVehicleId,
-            scheduledStartAt: item.scheduledStartAt,
-            scheduledEndAt: item.scheduledEndAt,
-          }),
-        );
+        const checkedOutItems =
+          allVehiclesResult.checkedOutAssignments ?? result.checkedOutAssignments ?? [];
+        const nextReferenceNow =
+          allVehiclesResult.referenceNow ?? result.referenceNow ?? new Date().toISOString();
         setItems(result.items);
         setCheckedOutAssignments(checkedOutItems);
+        setReferenceNow(nextReferenceNow);
         setSummary(
           summarizeLoanerFleet(
             allVehiclesResult.items,
-            checkedOutItems.map((item) => item.loanerVehicleId),
+            checkedOutItems
+              .filter((item) => isLoanerAssignmentCurrent(item, nextReferenceNow))
+              .map((item) => item.loanerVehicleId),
           ),
         );
         setSuggestedSortOrder(result.suggestedNextSortOrder ?? 10);
@@ -284,7 +286,7 @@ export function LoanersDashboard() {
   }
 
   function renderFleetStatusBadge(item: LoanerVehicle) {
-    const fleetStatus = getLoanerFleetStatus(item, checkedOutIdSet);
+    const fleetStatus = getLoanerFleetStatus(item, currentLoanedIdSet);
     return (
       <span
         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${loanerFleetStatusBadgeClasses[fleetStatus]}`}
@@ -295,7 +297,7 @@ export function LoanersDashboard() {
   }
 
   function renderLoanerPeriod(item: LoanerVehicle) {
-    const assignment = checkedOutAssignmentMap.get(item.id);
+    const assignment = representativeAssignmentMap.get(item.id);
     if (!assignment) return <span className="text-slate-400">—</span>;
 
     return (
