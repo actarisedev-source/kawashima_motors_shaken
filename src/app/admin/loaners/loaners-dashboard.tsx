@@ -7,10 +7,6 @@ import {
   type LoanerCategory,
   type LoanerVehicle,
 } from "@/lib/loaners/loaner-vehicle";
-import type {
-  LoanerHistoryItem,
-  LoanerHistoryResponse,
-} from "@/lib/loaners/loaner-history";
 import {
   formatLoanerDate,
   getLoanerReturnDateKey,
@@ -19,7 +15,10 @@ import {
   emptyLoanerFleetSummary,
   filterLoanerFleetByStatus,
   getLoanerFleetStatus,
+  getRepresentativeLoanerAssignment,
+  isLoanerAssignmentCurrent,
   summarizeLoanerFleet,
+  type LoanerFleetAssignment,
   type LoanerFleetSummary,
   type LoanerFleetStatus,
 } from "@/lib/loaners/loaner-summary";
@@ -36,11 +35,6 @@ type PendingAction = {
   type: "activate" | "deactivate" | "delete";
   item: LoanerVehicle;
 };
-
-type CheckedOutLoanerAssignment = Pick<
-  LoanerHistoryItem,
-  "loanerVehicleId" | "scheduledStartAt" | "scheduledEndAt"
->;
 
 const actionCopy = (action: PendingAction) => {
   if (action.type === "delete") {
@@ -87,8 +81,9 @@ const getJstDateKey = (value: string) =>
 export function LoanersDashboard() {
   const [items, setItems] = useState<LoanerVehicle[]>([]);
   const [checkedOutAssignments, setCheckedOutAssignments] = useState<
-    CheckedOutLoanerAssignment[]
+    LoanerFleetAssignment[]
   >([]);
+  const [referenceNow, setReferenceNow] = useState(() => new Date().toISOString());
   const [summary, setSummary] = useState<LoanerFleetSummary>(
     emptyLoanerFleetSummary,
   );
@@ -107,22 +102,35 @@ export function LoanersDashboard() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [actionSubmitting, setActionSubmitting] = useState(false);
   const [notice, setNotice] = useState("");
-  const checkedOutAssignmentMap = useMemo(() => {
-    const map = new Map<string, CheckedOutLoanerAssignment>();
+  const assignmentsByVehicleId = useMemo(() => {
+    const map = new Map<string, LoanerFleetAssignment[]>();
     for (const assignment of checkedOutAssignments) {
-      if (!map.has(assignment.loanerVehicleId)) {
-        map.set(assignment.loanerVehicleId, assignment);
-      }
+      const current = map.get(assignment.loanerVehicleId) ?? [];
+      current.push(assignment);
+      map.set(assignment.loanerVehicleId, current);
     }
     return map;
   }, [checkedOutAssignments]);
-  const checkedOutIdSet = useMemo(
-    () => new Set(checkedOutAssignmentMap.keys()),
-    [checkedOutAssignmentMap],
+  const representativeAssignmentMap = useMemo(() => {
+    const map = new Map<string, LoanerFleetAssignment>();
+    for (const [vehicleId, assignments] of assignmentsByVehicleId) {
+      const assignment = getRepresentativeLoanerAssignment(assignments, referenceNow);
+      if (assignment) map.set(vehicleId, assignment);
+    }
+    return map;
+  }, [assignmentsByVehicleId, referenceNow]);
+  const currentLoanedIdSet = useMemo(
+    () =>
+      new Set(
+        checkedOutAssignments
+          .filter((assignment) => isLoanerAssignmentCurrent(assignment, referenceNow))
+          .map((assignment) => assignment.loanerVehicleId),
+      ),
+    [checkedOutAssignments, referenceNow],
   );
   const displayedItems = useMemo(
-    () => filterLoanerFleetByStatus(items, checkedOutIdSet, status),
-    [checkedOutIdSet, items, status],
+    () => filterLoanerFleetByStatus(items, currentLoanedIdSet, status),
+    [currentLoanedIdSet, items, status],
   );
 
   useEffect(() => {
@@ -144,20 +152,18 @@ export function LoanersDashboard() {
 
       try {
         const listUrl = `/api/admin/loaners${params.size ? `?${params}` : ""}`;
-        const [response, allVehiclesResponse, assignmentsResponse] =
+        const [response, allVehiclesResponse] =
           await Promise.all([
             fetch(listUrl, { cache: "no-store", signal }),
             params.size
               ? fetch("/api/admin/loaners", { cache: "no-store", signal })
               : Promise.resolve(null),
-            fetch(
-              "/api/admin/loaner-assignments/history?status=checked_out&page_size=100",
-              { cache: "no-store", signal },
-            ),
           ]);
         const result = (await response.json()) as {
           ok: boolean;
           items?: LoanerVehicle[];
+          checkedOutAssignments?: LoanerFleetAssignment[];
+          referenceNow?: string;
           suggestedNextSortOrder?: number;
           message?: string;
         };
@@ -165,11 +171,11 @@ export function LoanersDashboard() {
           ? ((await allVehiclesResponse.json()) as {
               ok: boolean;
               items?: LoanerVehicle[];
+              checkedOutAssignments?: LoanerFleetAssignment[];
+              referenceNow?: string;
               message?: string;
             })
           : result;
-        const assignmentsResult =
-          (await assignmentsResponse.json()) as LoanerHistoryResponse;
 
         if (
           !response.ok ||
@@ -177,35 +183,31 @@ export function LoanersDashboard() {
           !result.items ||
           (allVehiclesResponse && !allVehiclesResponse.ok) ||
           !allVehiclesResult.ok ||
-          !allVehiclesResult.items ||
-          !assignmentsResponse.ok ||
-          !assignmentsResult.ok ||
-          !assignmentsResult.items
+          !allVehiclesResult.items
         ) {
           setLoadState({
             status: "error",
             message:
               result.message ??
               allVehiclesResult.message ??
-              assignmentsResult.message ??
               "代車一覧の取得に失敗しました。",
           });
           return;
         }
 
-        const checkedOutItems = assignmentsResult.items.map(
-          (item) => ({
-            loanerVehicleId: item.loanerVehicleId,
-            scheduledStartAt: item.scheduledStartAt,
-            scheduledEndAt: item.scheduledEndAt,
-          }),
-        );
+        const checkedOutItems =
+          allVehiclesResult.checkedOutAssignments ?? result.checkedOutAssignments ?? [];
+        const nextReferenceNow =
+          allVehiclesResult.referenceNow ?? result.referenceNow ?? new Date().toISOString();
         setItems(result.items);
         setCheckedOutAssignments(checkedOutItems);
+        setReferenceNow(nextReferenceNow);
         setSummary(
           summarizeLoanerFleet(
             allVehiclesResult.items,
-            checkedOutItems.map((item) => item.loanerVehicleId),
+            checkedOutItems
+              .filter((item) => isLoanerAssignmentCurrent(item, nextReferenceNow))
+              .map((item) => item.loanerVehicleId),
           ),
         );
         setSuggestedSortOrder(result.suggestedNextSortOrder ?? 10);
@@ -284,7 +286,7 @@ export function LoanersDashboard() {
   }
 
   function renderFleetStatusBadge(item: LoanerVehicle) {
-    const fleetStatus = getLoanerFleetStatus(item, checkedOutIdSet);
+    const fleetStatus = getLoanerFleetStatus(item, currentLoanedIdSet);
     return (
       <span
         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${loanerFleetStatusBadgeClasses[fleetStatus]}`}
@@ -295,7 +297,7 @@ export function LoanersDashboard() {
   }
 
   function renderLoanerPeriod(item: LoanerVehicle) {
-    const assignment = checkedOutAssignmentMap.get(item.id);
+    const assignment = representativeAssignmentMap.get(item.id);
     if (!assignment) return <span className="text-slate-400">—</span>;
 
     return (
@@ -432,7 +434,7 @@ export function LoanersDashboard() {
                 <table className="w-full min-w-[960px] border-collapse text-left text-sm">
                   <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
                     <tr>
-                      <th className="px-4 py-3">分類</th><th className="px-4 py-3">車種</th><th className="px-4 py-3">ナンバー</th><th className="px-4 py-3">状態</th><th className="px-4 py-3">現在/次回貸出</th><th className="px-4 py-3 text-center">表示順</th><th className="px-4 py-3">メモ</th><th className="px-4 py-3 text-right">操作</th>
+                      <th className="px-4 py-3">分類</th><th className="px-4 py-3">車種</th><th className="px-4 py-3">ナンバー</th><th className="px-4 py-3">状態</th><th className="px-4 py-3">貸出期間</th><th className="px-4 py-3 text-center">表示順</th><th className="px-4 py-3">メモ</th><th className="px-4 py-3 text-right">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -455,7 +457,7 @@ export function LoanersDashboard() {
                 {displayedItems.map((item) => (
                   <article key={item.id} className="rounded-md border border-slate-200 p-4">
                     <div className="flex items-start justify-between gap-3"><div><LoanerCategoryBadge category={item.category} /><h2 className="mt-2 font-bold">{item.vehicleName}</h2><p className="mt-1 text-sm font-semibold text-slate-600">{item.plateNumber}</p></div>{renderFleetStatusBadge(item)}</div>
-                    <dl className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><dt className="font-semibold text-slate-500">現在/次回貸出</dt><dd className="mt-1 text-slate-800">{renderLoanerPeriod(item)}</dd></div><div><dt className="font-semibold text-slate-500">表示順</dt><dd className="mt-1 text-slate-800">{item.sortOrder}</dd></div><div className="col-span-2"><dt className="font-semibold text-slate-500">メモ</dt><dd className="mt-1 whitespace-pre-wrap text-slate-800">{item.memo || "—"}</dd></div></dl>
+                    <dl className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><dt className="font-semibold text-slate-500">貸出期間</dt><dd className="mt-1 text-slate-800">{renderLoanerPeriod(item)}</dd></div><div><dt className="font-semibold text-slate-500">表示順</dt><dd className="mt-1 text-slate-800">{item.sortOrder}</dd></div><div className="col-span-2"><dt className="font-semibold text-slate-500">メモ</dt><dd className="mt-1 whitespace-pre-wrap text-slate-800">{item.memo || "—"}</dd></div></dl>
                     <div className="mt-4 grid grid-cols-3 gap-2"><button type="button" onClick={() => openEditModal(item)} className="h-9 rounded-md border border-blue-200 text-xs font-semibold text-blue-700">編集</button><button type="button" onClick={() => setPendingAction({ type: item.isActive ? "deactivate" : "activate", item })} className="h-9 rounded-md border border-slate-300 text-xs font-semibold text-slate-700">{item.isActive ? "使用停止" : "使用再開"}</button><button type="button" onClick={() => setPendingAction({ type: "delete", item })} className="h-9 rounded-md border border-red-200 text-xs font-semibold text-red-700">削除</button></div>
                   </article>
                 ))}
