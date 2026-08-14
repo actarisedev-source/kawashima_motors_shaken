@@ -112,6 +112,8 @@ const statusClasses: Record<ScheduledMessage["status"], string> = {
   取消済み: "bg-slate-100 text-slate-600",
   失敗: "bg-red-50 text-red-700",
 };
+const scheduledHistoryPageSize = 25;
+const scheduledStatusOptions = ["予約中", "送信済み", "取消済み", "失敗"] as const;
 
 export function LineScheduledDistribution() {
   const [scheduledDate, setScheduledDate] = useState("");
@@ -126,6 +128,14 @@ export function LineScheduledDistribution() {
   const [configured, setConfigured] = useState(true);
   const [messages, setMessages] = useState<ScheduledMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
+  const [scheduledPage, setScheduledPage] = useState(1);
+  const [scheduledTotal, setScheduledTotal] = useState(0);
+  const [scheduledTotalPages, setScheduledTotalPages] = useState(1);
+  const [scheduledSearch, setScheduledSearch] = useState("");
+  const [debouncedScheduledSearch, setDebouncedScheduledSearch] = useState("");
+  const [scheduledStatusFilter, setScheduledStatusFilter] = useState<
+    "all" | ScheduledMessage["status"]
+  >("all");
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState({ date: "", time: "", content: "" });
   const lineImages = useLineImageAttachments(setMessage, () =>
@@ -153,6 +163,12 @@ export function LineScheduledDistribution() {
     const value = new Date(`${scheduledDate}T${scheduledTime}:00+09:00`);
     return Number.isNaN(value.getTime()) ? "未設定" : formatDateTime(value.toISOString());
   }, [scheduledDate, scheduledTime]);
+  const scheduledRangeLabel = useMemo(() => {
+    if (!scheduledTotal) return "全0件";
+    const start = (scheduledPage - 1) * scheduledHistoryPageSize + 1;
+    const end = Math.min(scheduledPage * scheduledHistoryPageSize, scheduledTotal);
+    return `全${scheduledTotal}件中 ${start}〜${end}件`;
+  }, [scheduledPage, scheduledTotal]);
   const previewBody = body || (!lineImages.attachments.length ? title : "");
 
   const loadAudience = useCallback(async () => {
@@ -174,17 +190,27 @@ export function LineScheduledDistribution() {
 
   const loadScheduledMessages = useCallback(async () => {
     setLoadingMessages(true);
-    const response = await fetch("/api/admin/line/scheduled", {
+    const params = new URLSearchParams({
+      page: String(scheduledPage),
+      page_size: String(scheduledHistoryPageSize),
+      status: scheduledStatusFilter,
+    });
+    if (debouncedScheduledSearch) {
+      params.set("search", debouncedScheduledSearch);
+    }
+    const response = await fetch(`/api/admin/line/scheduled?${params.toString()}`, {
       cache: "no-store",
     });
     const result = await response.json();
     if (response.ok && result.ok) {
       setMessages(result.messages ?? []);
+      setScheduledTotal(result.total ?? 0);
+      setScheduledTotalPages(result.total_pages ?? 1);
     } else {
       setMessage(result.message ?? "予約済み配信の取得に失敗しました。");
     }
     setLoadingMessages(false);
-  }, []);
+  }, [debouncedScheduledSearch, scheduledPage, scheduledStatusFilter]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadAudience(), 250);
@@ -194,6 +220,14 @@ export function LineScheduledDistribution() {
   useEffect(() => {
     void loadScheduledMessages();
   }, [loadScheduledMessages]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedScheduledSearch(scheduledSearch.trim());
+      setScheduledPage(1);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [scheduledSearch]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -280,6 +314,7 @@ export function LineScheduledDistribution() {
       setTitle("");
       setBody("");
       lineImages.clearFiles();
+      setScheduledPage(1);
       await loadScheduledMessages();
     } catch {
       setMessage("通信に失敗しました。時間をおいてもう一度お試しください。");
@@ -307,6 +342,7 @@ export function LineScheduledDistribution() {
             : item,
         ),
       );
+      await loadScheduledMessages();
       setMessage("予約配信を取り消しました。");
       setPendingCancel(null);
     } catch {
@@ -457,7 +493,43 @@ export function LineScheduledDistribution() {
       <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
         <div>
           <h2 className="text-lg font-bold">予約済み配信一覧</h2>
-          <p className="mt-1 text-sm text-slate-500">送信予定と実行結果を新しい順に表示します。</p>
+          <p className="mt-1 text-sm text-slate-500">
+            送信予定と実行結果を25件ずつ新しい順に表示します。
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-[minmax(240px,1fr)_160px_auto] md:items-end">
+          <label className="grid gap-2 text-sm font-semibold text-slate-700">
+            予約配信検索
+            <input
+              value={scheduledSearch}
+              onChange={(event) => setScheduledSearch(event.target.value)}
+              placeholder="タイトル・本文・対象で検索"
+              className="h-11 rounded-md border border-slate-300 px-3 text-base font-normal outline-none transition focus:border-blue-500"
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-semibold text-slate-700">
+            状態
+            <select
+              value={scheduledStatusFilter}
+              onChange={(event) => {
+                setScheduledStatusFilter(
+                  event.target.value as typeof scheduledStatusFilter,
+                );
+                setScheduledPage(1);
+              }}
+              className="h-11 rounded-md border border-slate-300 px-3 text-base font-normal outline-none transition focus:border-blue-500"
+            >
+              <option value="all">すべて</option>
+              {scheduledStatusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-sm font-semibold text-slate-600 md:pb-3">
+            {scheduledRangeLabel}
+          </p>
         </div>
         {loadingMessages ? (
           <p className="py-8 text-center text-sm text-slate-500">読み込み中です。</p>
@@ -486,6 +558,33 @@ export function LineScheduledDistribution() {
         ) : (
           <p className="py-8 text-center text-sm text-slate-500">予約済みの配信はありません。</p>
         )}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+          <button
+            type="button"
+            disabled={loadingMessages || scheduledPage <= 1}
+            onClick={() =>
+              setScheduledPage((current) => Math.max(1, current - 1))
+            }
+            className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            前へ
+          </button>
+          <p className="text-sm font-bold text-slate-700">
+            {scheduledPage} / {scheduledTotalPages}
+          </p>
+          <button
+            type="button"
+            disabled={loadingMessages || scheduledPage >= scheduledTotalPages}
+            onClick={() =>
+              setScheduledPage((current) =>
+                Math.min(scheduledTotalPages, current + 1),
+              )
+            }
+            className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            次へ
+          </button>
+        </div>
       </section>
 
       {confirming ? (

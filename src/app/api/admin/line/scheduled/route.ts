@@ -19,6 +19,23 @@ import type { Json } from "@/types/database";
 const isAuthenticated = async (request: NextRequest) =>
   (await getAdminAuthFromRequest(request)).authenticated;
 
+const defaultPageSize = 25;
+const maxPageSize = 100;
+const scheduledStatuses = ["予約中", "送信済み", "取消済み", "失敗"] as const;
+
+const quotePostgrestPattern = (keyword: string) =>
+  `"*${keyword.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}*"`;
+
+const parsePositiveInteger = (
+  value: string | null,
+  fallback: number,
+  maxValue?: number,
+) => {
+  const parsed = Number(value ?? "");
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+  return maxValue ? Math.min(parsed, maxValue) : parsed;
+};
+
 const textValue = (value: FormDataEntryValue | null) =>
   typeof value === "string" ? value.trim() : "";
 
@@ -66,18 +83,73 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { data, error } = await supabaseServer
+  const page = parsePositiveInteger(request.nextUrl.searchParams.get("page"), 1);
+  const pageSize = parsePositiveInteger(
+    request.nextUrl.searchParams.get("page_size"),
+    defaultPageSize,
+    maxPageSize,
+  );
+  const search = (request.nextUrl.searchParams.get("search") ?? "")
+    .normalize("NFKC")
+    .trim();
+  const statusParam = request.nextUrl.searchParams.get("status") ?? "all";
+
+  if (search.length > 100) {
+    return NextResponse.json(
+      { ok: false, message: "検索文字は100文字以内で入力してください。" },
+      { status: 400 },
+    );
+  }
+  if (
+    statusParam !== "all" &&
+    !scheduledStatuses.includes(statusParam as (typeof scheduledStatuses)[number])
+  ) {
+    return NextResponse.json(
+      { ok: false, message: "状態の指定が正しくありません。" },
+      { status: 400 },
+    );
+  }
+  const status = statusParam as "all" | (typeof scheduledStatuses)[number];
+
+  let query = supabaseServer
     .from("line_scheduled_messages")
-    .select("*")
-    .order("scheduled_at", { ascending: false })
-    .limit(100);
+    .select("*", { count: "exact" })
+    .order("scheduled_at", { ascending: false });
+
+  if (status !== "all") {
+    query = query.eq("status", status);
+  }
+  if (search) {
+    const pattern = quotePostgrestPattern(search);
+    query = query.or(
+      [
+        `title.ilike.${pattern}`,
+        `body.ilike.${pattern}`,
+        `target_label.ilike.${pattern}`,
+        `status.ilike.${pattern}`,
+        `error_message.ilike.${pattern}`,
+      ].join(","),
+    );
+  }
+
+  const rangeStart = (page - 1) * pageSize;
+  const rangeEnd = rangeStart + pageSize - 1;
+  const { data, error, count } = await query.range(rangeStart, rangeEnd);
   if (error) {
     return NextResponse.json(
       { ok: false, message: error.message },
       { status: 500 },
     );
   }
-  return NextResponse.json({ ok: true, messages: data ?? [] });
+  const total = count ?? 0;
+  return NextResponse.json({
+    ok: true,
+    messages: data ?? [],
+    total,
+    page,
+    page_size: pageSize,
+    total_pages: Math.max(1, Math.ceil(total / pageSize)),
+  });
 }
 
 export async function POST(request: NextRequest) {
