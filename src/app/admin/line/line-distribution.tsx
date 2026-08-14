@@ -118,6 +118,8 @@ const getMessageDeliveryType = (log: MessageLog) => {
   return "セグメント";
 };
 
+const lineHistoryPageSize = 20;
+
 export function LineDistribution() {
   const [activeTab, setActiveTab] = useState<LineTab>("manual");
   const [filters, setFilters] = useState<Filters>(emptyFilters);
@@ -136,6 +138,13 @@ export function LineDistribution() {
   const [message, setMessage] = useState("");
   const lineImages = useLineImageAttachments(setMessage);
   const [logs, setLogs] = useState<MessageLog[]>([]);
+  const [recentLogs, setRecentLogs] = useState<MessageLog[]>([]);
+  const [logPage, setLogPage] = useState(1);
+  const [logTotal, setLogTotal] = useState(0);
+  const [logTotalPages, setLogTotalPages] = useState(1);
+  const [logLoading, setLogLoading] = useState(true);
+  const [logSearch, setLogSearch] = useState("");
+  const [debouncedLogSearch, setDebouncedLogSearch] = useState("");
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [pendingDeleteLog, setPendingDeleteLog] =
     useState<MessageLog | null>(null);
@@ -144,12 +153,41 @@ export function LineDistribution() {
   const [deleteError, setDeleteError] = useState("");
   const [historyMessage, setHistoryMessage] = useState("");
   const deleteCancelButtonRef = useRef<HTMLButtonElement>(null);
+  const logRangeLabel = useMemo(() => {
+    if (!logTotal) return "全0件";
+    const start = (logPage - 1) * lineHistoryPageSize + 1;
+    const end = Math.min(logPage * lineHistoryPageSize, logTotal);
+    return `全${logTotal}件中 ${start}〜${end}件`;
+  }, [logPage, logTotal]);
 
   const loadLogs = useCallback(async () => {
-    const response = await fetch("/api/admin/line/logs", { cache: "no-store" });
+    setLogLoading(true);
+    const params = new URLSearchParams({
+      page: String(logPage),
+      page_size: String(lineHistoryPageSize),
+    });
+    if (debouncedLogSearch) params.set("search", debouncedLogSearch);
+    const response = await fetch(`/api/admin/line/logs?${params.toString()}`, {
+      cache: "no-store",
+    });
     const result = await response.json();
     if (response.ok && result.ok) {
       setLogs(result.logs ?? []);
+      setLogTotal(result.total ?? 0);
+      setLogTotalPages(result.total_pages ?? 1);
+    } else {
+      setHistoryMessage(result.message ?? "配信履歴の取得に失敗しました。");
+    }
+    setLogLoading(false);
+  }, [debouncedLogSearch, logPage]);
+
+  const loadRecentLogs = useCallback(async () => {
+    const response = await fetch("/api/admin/line/logs?page=1&page_size=5", {
+      cache: "no-store",
+    });
+    const result = await response.json();
+    if (response.ok && result.ok) {
+      setRecentLogs(result.logs ?? []);
     }
   }, []);
 
@@ -189,6 +227,19 @@ export function LineDistribution() {
   useEffect(() => {
     void loadLogs();
   }, [loadLogs]);
+
+  useEffect(() => {
+    void loadRecentLogs();
+  }, [loadRecentLogs]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedLogSearch(logSearch.trim());
+      setLogPage(1);
+      setExpandedLogId(null);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [logSearch]);
 
   useEffect(() => {
     if (pendingDeleteLog) deleteCancelButtonRef.current?.focus();
@@ -256,15 +307,18 @@ export function LineDistribution() {
         return;
       }
 
-      setLogs((current) =>
-        current.filter((log) => log.id !== result.deletedId),
-      );
       setExpandedLogId((current) =>
         current === result.deletedId ? null : current,
       );
       setHistoryMessage("配信履歴を削除しました。");
       setPendingDeleteLog(null);
       setDeleteConfirmationStep(1);
+      await loadRecentLogs();
+      if (logs.length <= 1 && logPage > 1) {
+        setLogPage((current) => Math.max(1, current - 1));
+      } else {
+        await loadLogs();
+      }
     } catch {
       setDeleteError("通信に失敗しました。時間をおいてもう一度お試しください。");
     } finally {
@@ -304,6 +358,7 @@ export function LineDistribution() {
       );
       await loadAudience();
       await loadLogs();
+      await loadRecentLogs();
     } catch {
       deliveryLockedRef.current = false;
       setMessage("通信に失敗しました。時間をおいてもう一度お試しください。");
@@ -460,7 +515,7 @@ export function LineDistribution() {
           <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold">最近の配信結果</h2>
             <div className="grid gap-2">
-              {logs.slice(0, 5).map((log) => (
+              {recentLogs.map((log) => (
                 <div key={log.id} className="rounded-md border border-slate-200 p-3 text-sm">
                   <div className="flex items-start justify-between gap-3">
                     <p className="font-bold text-slate-900">{log.title}</p>
@@ -475,7 +530,7 @@ export function LineDistribution() {
                   {log.error_message ? <p className="mt-2 text-xs text-red-600">{log.error_message}</p> : null}
                 </div>
               ))}
-              {!logs.length ? <p className="text-sm text-slate-500">配信履歴はありません。</p> : null}
+              {!recentLogs.length ? <p className="text-sm text-slate-500">配信履歴はありません。</p> : null}
             </div>
           </section>
         </aside>
@@ -490,7 +545,7 @@ export function LineDistribution() {
             <div>
               <h2 className="text-lg font-bold">配信履歴</h2>
               <p className="mt-1 text-sm text-slate-500">
-                即時配信・テスト送信・自動配信の最新20件を表示します。
+                即時配信・予約配信・自動配信の履歴を20件ずつ表示します。
               </p>
             </div>
             {historyMessage ? (
@@ -498,8 +553,27 @@ export function LineDistribution() {
                 {historyMessage}
               </p>
             ) : null}
+            <div className="grid gap-3 md:grid-cols-[minmax(240px,1fr)_auto] md:items-end">
+              <label className="grid gap-2 text-sm font-semibold text-slate-700">
+                履歴検索
+                <input
+                  value={logSearch}
+                  onChange={(event) => setLogSearch(event.target.value)}
+                  placeholder="本文・タイトル・配信種別・顧客名で検索"
+                  className="h-11 rounded-[5px] border border-slate-300 px-3 text-base font-normal outline-none transition focus:border-blue-500"
+                />
+              </label>
+              <p className="text-sm font-semibold text-slate-600 md:pb-3">
+                {logRangeLabel}
+              </p>
+            </div>
             <div className="grid gap-3">
-              {logs.map((log) => (
+              {logLoading ? (
+                <p className="py-10 text-center text-sm text-slate-500">
+                  配信履歴を読み込んでいます。
+                </p>
+              ) : null}
+              {!logLoading && logs.map((log) => (
                 <div
                   key={log.id}
                   className="rounded-[5px] border border-slate-200 bg-white p-4 text-sm transition hover:border-blue-200"
@@ -631,11 +705,34 @@ export function LineDistribution() {
                   ) : null}
                 </div>
               ))}
-              {!logs.length ? (
+              {!logLoading && !logs.length ? (
                 <p className="py-10 text-center text-sm text-slate-500">
                   配信履歴はありません。
                 </p>
               ) : null}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+              <button
+                type="button"
+                disabled={logLoading || logPage <= 1}
+                onClick={() => setLogPage((current) => Math.max(1, current - 1))}
+                className="h-10 rounded-[5px] border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                前へ
+              </button>
+              <p className="text-sm font-bold text-slate-700">
+                {logPage} / {logTotalPages}
+              </p>
+              <button
+                type="button"
+                disabled={logLoading || logPage >= logTotalPages}
+                onClick={() =>
+                  setLogPage((current) => Math.min(logTotalPages, current + 1))
+                }
+                className="h-10 rounded-[5px] border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                次へ
+              </button>
             </div>
           </section>
         </main>
