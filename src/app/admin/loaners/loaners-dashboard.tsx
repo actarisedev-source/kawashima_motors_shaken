@@ -7,7 +7,14 @@ import {
   type LoanerCategory,
   type LoanerVehicle,
 } from "@/lib/loaners/loaner-vehicle";
-import type { LoanerHistoryResponse } from "@/lib/loaners/loaner-history";
+import type {
+  LoanerHistoryItem,
+  LoanerHistoryResponse,
+} from "@/lib/loaners/loaner-history";
+import {
+  formatLoanerDate,
+  getLoanerReturnDateKey,
+} from "@/lib/loaners/loaner-period";
 import {
   emptyLoanerFleetSummary,
   filterLoanerFleetByStatus,
@@ -29,6 +36,11 @@ type PendingAction = {
   type: "activate" | "deactivate" | "delete";
   item: LoanerVehicle;
 };
+
+type CheckedOutLoanerAssignment = Pick<
+  LoanerHistoryItem,
+  "loanerVehicleId" | "scheduledStartAt" | "scheduledEndAt"
+>;
 
 const actionCopy = (action: PendingAction) => {
   if (action.type === "delete") {
@@ -64,9 +76,19 @@ const loanerFleetStatusBadgeClasses: Record<LoanerFleetStatus, string> = {
   inactive: "bg-slate-200 text-slate-600 ring-slate-300",
 };
 
+const getJstDateKey = (value: string) =>
+  new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+
 export function LoanersDashboard() {
   const [items, setItems] = useState<LoanerVehicle[]>([]);
-  const [checkedOutVehicleIds, setCheckedOutVehicleIds] = useState<string[]>([]);
+  const [checkedOutAssignments, setCheckedOutAssignments] = useState<
+    CheckedOutLoanerAssignment[]
+  >([]);
   const [summary, setSummary] = useState<LoanerFleetSummary>(
     emptyLoanerFleetSummary,
   );
@@ -85,9 +107,18 @@ export function LoanersDashboard() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [actionSubmitting, setActionSubmitting] = useState(false);
   const [notice, setNotice] = useState("");
+  const checkedOutAssignmentMap = useMemo(() => {
+    const map = new Map<string, CheckedOutLoanerAssignment>();
+    for (const assignment of checkedOutAssignments) {
+      if (!map.has(assignment.loanerVehicleId)) {
+        map.set(assignment.loanerVehicleId, assignment);
+      }
+    }
+    return map;
+  }, [checkedOutAssignments]);
   const checkedOutIdSet = useMemo(
-    () => new Set(checkedOutVehicleIds),
-    [checkedOutVehicleIds],
+    () => new Set(checkedOutAssignmentMap.keys()),
+    [checkedOutAssignmentMap],
   );
   const displayedItems = useMemo(
     () => filterLoanerFleetByStatus(items, checkedOutIdSet, status),
@@ -162,15 +193,19 @@ export function LoanersDashboard() {
           return;
         }
 
-        const checkedOutIds = assignmentsResult.items.map(
-          (item) => item.loanerVehicleId,
+        const checkedOutItems = assignmentsResult.items.map(
+          (item) => ({
+            loanerVehicleId: item.loanerVehicleId,
+            scheduledStartAt: item.scheduledStartAt,
+            scheduledEndAt: item.scheduledEndAt,
+          }),
         );
         setItems(result.items);
-        setCheckedOutVehicleIds(checkedOutIds);
+        setCheckedOutAssignments(checkedOutItems);
         setSummary(
           summarizeLoanerFleet(
             allVehiclesResult.items,
-            checkedOutIds,
+            checkedOutItems.map((item) => item.loanerVehicleId),
           ),
         );
         setSuggestedSortOrder(result.suggestedNextSortOrder ?? 10);
@@ -255,6 +290,19 @@ export function LoanersDashboard() {
         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${loanerFleetStatusBadgeClasses[fleetStatus]}`}
       >
         {loanerFleetStatusLabels[fleetStatus]}
+      </span>
+    );
+  }
+
+  function renderLoanerPeriod(item: LoanerVehicle) {
+    const assignment = checkedOutAssignmentMap.get(item.id);
+    if (!assignment) return <span className="text-slate-400">—</span>;
+
+    return (
+      <span className="whitespace-nowrap font-semibold text-slate-700">
+        {formatLoanerDate(getJstDateKey(assignment.scheduledStartAt))}
+        <span className="px-1 text-slate-400">〜</span>
+        {formatLoanerDate(getLoanerReturnDateKey(assignment.scheduledEndAt))}
       </span>
     );
   }
@@ -345,7 +393,7 @@ export function LoanersDashboard() {
                   setQueryInput(event.currentTarget.value);
                   setIsQueryComposing(false);
                 }}
-                placeholder="車名・表示名・ナンバー・メモ"
+                placeholder="車名・ナンバー・メモ"
                 className="mt-1.5 h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </label>
@@ -381,20 +429,20 @@ export function LoanersDashboard() {
           ) : (
             <>
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[980px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[960px] border-collapse text-left text-sm">
                   <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
                     <tr>
-                      <th className="px-4 py-3">分類</th><th className="px-4 py-3">表示名</th><th className="px-4 py-3">車種</th><th className="px-4 py-3">ナンバー</th><th className="px-4 py-3">状態</th><th className="px-4 py-3 text-center">表示順</th><th className="px-4 py-3">メモ</th><th className="px-4 py-3 text-right">操作</th>
+                      <th className="px-4 py-3">分類</th><th className="px-4 py-3">車種</th><th className="px-4 py-3">ナンバー</th><th className="px-4 py-3">状態</th><th className="px-4 py-3">貸出期間</th><th className="px-4 py-3 text-center">表示順</th><th className="px-4 py-3">メモ</th><th className="px-4 py-3 text-right">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {displayedItems.map((item) => (
                       <tr key={item.id} className={item.isActive ? "" : "bg-slate-50/70"}>
                         <td className="px-4 py-4"><LoanerCategoryBadge category={item.category} /></td>
-                        <td className="px-4 py-4 font-bold text-slate-950">{item.displayName}</td>
-                        <td className="px-4 py-4 text-slate-700">{item.vehicleName}</td>
+                        <td className="px-4 py-4 font-bold text-slate-950">{item.vehicleName}</td>
                         <td className="whitespace-nowrap px-4 py-4 text-slate-700">{item.plateNumber}</td>
                         <td className="px-4 py-4">{renderFleetStatusBadge(item)}</td>
+                        <td className="px-4 py-4 text-xs">{renderLoanerPeriod(item)}</td>
                         <td className="px-4 py-4 text-center font-semibold text-slate-600">{item.sortOrder}</td>
                         <td className="max-w-56 px-4 py-4"><p className="line-clamp-2 whitespace-pre-wrap text-slate-600">{item.memo || "—"}</p></td>
                         <td className="px-4 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => openEditModal(item)} className="cursor-pointer rounded-md border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50">編集</button><button type="button" onClick={() => setPendingAction({ type: item.isActive ? "deactivate" : "activate", item })} className="cursor-pointer rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">{item.isActive ? "使用停止" : "使用再開"}</button><button type="button" onClick={() => setPendingAction({ type: "delete", item })} className="cursor-pointer rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">削除</button></div></td>
@@ -406,8 +454,8 @@ export function LoanersDashboard() {
               <div className="grid gap-3 p-4 md:hidden">
                 {displayedItems.map((item) => (
                   <article key={item.id} className="rounded-md border border-slate-200 p-4">
-                    <div className="flex items-start justify-between gap-3"><div><LoanerCategoryBadge category={item.category} /><h2 className="mt-2 font-bold">{item.displayName}</h2></div>{renderFleetStatusBadge(item)}</div>
-                    <dl className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><dt className="font-semibold text-slate-500">車種</dt><dd className="mt-1 text-slate-800">{item.vehicleName}</dd></div><div><dt className="font-semibold text-slate-500">ナンバー</dt><dd className="mt-1 text-slate-800">{item.plateNumber}</dd></div><div><dt className="font-semibold text-slate-500">表示順</dt><dd className="mt-1 text-slate-800">{item.sortOrder}</dd></div><div className="col-span-2"><dt className="font-semibold text-slate-500">メモ</dt><dd className="mt-1 whitespace-pre-wrap text-slate-800">{item.memo || "—"}</dd></div></dl>
+                    <div className="flex items-start justify-between gap-3"><div><LoanerCategoryBadge category={item.category} /><h2 className="mt-2 font-bold">{item.vehicleName}</h2><p className="mt-1 text-sm font-semibold text-slate-600">{item.plateNumber}</p></div>{renderFleetStatusBadge(item)}</div>
+                    <dl className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><dt className="font-semibold text-slate-500">貸出期間</dt><dd className="mt-1 text-slate-800">{renderLoanerPeriod(item)}</dd></div><div><dt className="font-semibold text-slate-500">表示順</dt><dd className="mt-1 text-slate-800">{item.sortOrder}</dd></div><div className="col-span-2"><dt className="font-semibold text-slate-500">メモ</dt><dd className="mt-1 whitespace-pre-wrap text-slate-800">{item.memo || "—"}</dd></div></dl>
                     <div className="mt-4 grid grid-cols-3 gap-2"><button type="button" onClick={() => openEditModal(item)} className="h-9 rounded-md border border-blue-200 text-xs font-semibold text-blue-700">編集</button><button type="button" onClick={() => setPendingAction({ type: item.isActive ? "deactivate" : "activate", item })} className="h-9 rounded-md border border-slate-300 text-xs font-semibold text-slate-700">{item.isActive ? "使用停止" : "使用再開"}</button><button type="button" onClick={() => setPendingAction({ type: "delete", item })} className="h-9 rounded-md border border-red-200 text-xs font-semibold text-red-700">削除</button></div>
                   </article>
                 ))}
@@ -423,7 +471,7 @@ export function LoanersDashboard() {
           <div className="w-full max-w-md rounded-md border border-slate-200 bg-white p-6 shadow-xl">
             <h2 id="loaner-action-title" className="text-lg font-bold">{actionCopy(pendingAction).title}</h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">{actionCopy(pendingAction).body}</p>
-            <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800">{pendingAction.item.displayName}</p>
+            <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800">{pendingAction.item.vehicleName}（{pendingAction.item.plateNumber}）</p>
             <div className="mt-6 grid grid-cols-2 gap-3"><button type="button" disabled={actionSubmitting} onClick={() => setPendingAction(null)} className="h-11 rounded-md border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50">キャンセル</button><button type="button" disabled={actionSubmitting} onClick={() => void runPendingAction()} className={`h-11 rounded-md text-sm font-bold text-white ${pendingAction.type === "delete" ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"}`}>{actionSubmitting ? "処理中..." : actionCopy(pendingAction).button}</button></div>
           </div>
         </div>

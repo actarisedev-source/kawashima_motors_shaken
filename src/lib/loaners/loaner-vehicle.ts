@@ -54,6 +54,17 @@ export const normalizeLoanerPlateKey = (value: unknown) =>
 export const normalizeLoanerDisplayNameKey = (value: unknown) =>
   normalizeLoanerText(value).toLocaleLowerCase("ja");
 
+export const createLoanerDisplayName = (
+  vehicleName: unknown,
+  plateNumber: unknown,
+) => {
+  const normalizedVehicleName = normalizeLoanerText(vehicleName);
+  const normalizedPlateNumber = normalizeLoanerText(plateNumber);
+  return [normalizedVehicleName, normalizedPlateNumber]
+    .filter(Boolean)
+    .join(" ");
+};
+
 const normalizeMemo = (value: unknown) => {
   if (typeof value !== "string") return null;
   const normalized = value.normalize("NFKC").trim();
@@ -70,13 +81,12 @@ export const validateLoanerVehicleInput = (input: {
   memo?: unknown;
 }): { ok: true; value: LoanerVehicleInput } | { ok: false; message: string } => {
   const vehicleName = normalizeLoanerText(input.vehicleName);
-  const displayName = normalizeLoanerText(input.displayName);
   const plateNumber = normalizeLoanerText(input.plateNumber);
+  const displayName = createLoanerDisplayName(vehicleName, plateNumber);
   const sortOrder = Number(input.sortOrder);
   const memo = normalizeMemo(input.memo);
 
   if (!vehicleName) return { ok: false, message: "車名を入力してください。" };
-  if (!displayName) return { ok: false, message: "表示名を入力してください。" };
   if (!plateNumber) return { ok: false, message: "ナンバーを入力してください。" };
   if (!isLoanerCategory(input.category)) {
     return { ok: false, message: "分類が正しくありません。" };
@@ -90,8 +100,8 @@ export const validateLoanerVehicleInput = (input: {
       message: "表示順は0から99999までの整数で入力してください。",
     };
   }
-  if (vehicleName.length > 100 || displayName.length > 100) {
-    return { ok: false, message: "車名と表示名は100文字以内で入力してください。" };
+  if (vehicleName.length > 100) {
+    return { ok: false, message: "車名は100文字以内で入力してください。" };
   }
   if (plateNumber.length > 50) {
     return { ok: false, message: "ナンバーは50文字以内で入力してください。" };

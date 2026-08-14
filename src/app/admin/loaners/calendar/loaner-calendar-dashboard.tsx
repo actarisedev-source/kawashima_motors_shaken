@@ -192,7 +192,7 @@ function AssignmentDetailModal({
 
           <section className="rounded-md border border-slate-200 p-4">
             <p className="font-bold text-slate-950">
-              {assignment.vehicle.displayName}
+              {assignment.vehicle.vehicleName}
             </p>
             <p className="mt-1 text-sm text-slate-600">
               {assignment.vehicle.plateNumber || "—"}
@@ -289,7 +289,7 @@ function VehicleCell({ vehicle }: { vehicle: LoanerCalendarVehicle }) {
       <div className="min-w-0">
         <p className="flex items-center gap-2 font-bold text-slate-950">
           <LoanerCategoryDot category={vehicle.category} />
-          <span className="truncate">{vehicle.displayName}</span>
+          <span className="truncate">{vehicle.vehicleName}</span>
         </p>
         <p className="mt-1 truncate text-xs text-slate-500">
           {vehicle.plateNumber || "—"}
@@ -451,7 +451,7 @@ function MobileCalendar({
               <div className="min-w-0">
                 <p className="flex items-center gap-2 font-bold text-slate-950">
                   <LoanerCategoryDot category={vehicle.category} />
-                  <span className="truncate">{vehicle.displayName}</span>
+                  <span className="truncate">{vehicle.vehicleName}</span>
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
                   {vehicle.plateNumber || "—"}
@@ -695,7 +695,7 @@ export function LoanerCalendarDashboard({
               <input
                 value={keyword}
                 onChange={(event) => setKeyword(event.target.value)}
-                placeholder="車名・表示名・ナンバー"
+                placeholder="車名・ナンバー"
                 className="mt-1.5 h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </label>

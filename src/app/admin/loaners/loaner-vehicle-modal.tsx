@@ -26,7 +26,6 @@ export function LoanerVehicleModal({
   onSaved,
 }: LoanerVehicleModalProps) {
   const [vehicleName, setVehicleName] = useState(item?.vehicleName ?? "");
-  const [displayName, setDisplayName] = useState(item?.displayName ?? "");
   const [plateNumber, setPlateNumber] = useState(item?.plateNumber ?? "");
   const [category, setCategory] = useState<LoanerCategory>(
     item?.category ?? "owned",
@@ -54,7 +53,6 @@ export function LoanerVehicleModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vehicleName,
-          displayName,
           plateNumber,
           category,
           isActive,
@@ -142,15 +140,6 @@ export function LoanerVehicleModal({
               onChange={(event) => setVehicleName(event.target.value)}
               className={inputClassName}
               autoFocus
-              maxLength={100}
-            />
-          </label>
-          <label className="text-sm font-semibold text-slate-700">
-            表示名 <span className="text-red-600">（必須）</span>
-            <input
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              className={inputClassName}
               maxLength={100}
             />
           </label>

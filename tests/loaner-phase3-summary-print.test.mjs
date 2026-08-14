@@ -44,6 +44,7 @@ test("代車一覧は総台数・貸出中・空車・使用停止を集計す�
     summary.loaned + summary.available + summary.inactive,
   );
   assert.match(loanersDashboard, /status=checked_out&page_size=100/);
+  assert.match(loanersDashboard, /checkedOutAssignments/);
   assert.match(loanersDashboard, /label: "貸出中"/);
   assert.match(loanersDashboard, /label: "空車"/);
 });
@@ -109,13 +110,25 @@ test("印刷一覧は代車情報を割当済み2行・未割当または希望�
   assert.match(adminDashboard, /未割当/);
   assert.match(adminDashboard, /font-semibold">代車：/);
   assert.match(adminDashboard, /font-semibold">貸出期間：/);
-  assert.match(adminDashboard, /loanerAssignment\.vehicle\.displayName/);
+  assert.match(adminDashboard, /loanerAssignment\.vehicle\.vehicleName/);
   assert.match(adminDashboard, /loanerAssignment\.vehicle\.plateNumber/);
   assert.match(adminDashboard, /getLoanerReturnDateKey/);
   assert.match(adminDashboard, /whitespace-nowrap/);
   assert.match(adminDashboard, /<span> ～ <\/span>/);
   assert.doesNotMatch(adminDashboard, /<br \/>～<br \/>/);
   assert.match(adminDashboard, /px-3 py-2 align-middle/);
+});
+
+test("代車一覧は車名とナンバーを主表示し貸出期間を表示する", () => {
+  assert.match(loanersDashboard, /placeholder="車名・ナンバー・メモ"/);
+  assert.doesNotMatch(loanersDashboard, /<th className="px-4 py-3">表示名<\/th>/);
+  assert.match(loanersDashboard, /<th className="px-4 py-3">車種<\/th>/);
+  assert.match(loanersDashboard, /<th className="px-4 py-3">ナンバー<\/th>/);
+  assert.match(loanersDashboard, /<th className="px-4 py-3">貸出期間<\/th>/);
+  assert.match(loanersDashboard, /renderLoanerPeriod\(item\)/);
+  assert.match(loanersDashboard, /getLoanerReturnDateKey/);
+  assert.match(loanersDashboard, /item\.vehicleName/);
+  assert.match(loanersDashboard, /item\.plateNumber/);
 });
 
 test("予約一覧の代車列は割当済みをカテゴリ色の丸印で優先表示する", () => {

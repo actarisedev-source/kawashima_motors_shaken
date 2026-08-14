@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  createLoanerDisplayName,
   filterAndSortLoanerVehicles,
   findLoanerDuplicate,
   isLoanerCategory,
@@ -52,10 +53,6 @@ test("必須項目と不正な分類を拒否する", () => {
     ok: false,
     message: "車名を入力してください。",
   });
-  assert.deepEqual(validateLoanerVehicleInput({ ...base, displayName: "" }), {
-    ok: false,
-    message: "表示名を入力してください。",
-  });
   assert.deepEqual(validateLoanerVehicleInput({ ...base, plateNumber: "" }), {
     ok: false,
     message: "ナンバーを入力してください。",
@@ -69,7 +66,7 @@ test("必須項目と不正な分類を拒否する", () => {
 test("正しい入力を登録・編集用の正規化済み値へ変換する", () => {
   const result = validateLoanerVehicleInput({
     vehicleName: "  プリウス  ",
-    displayName: " プリウス  1 ",
+    displayName: " 手入力は使わない ",
     plateNumber: "長野 500 あ 12-34",
     category: "owned",
     isActive: false,
@@ -81,7 +78,7 @@ test("正しい入力を登録・編集用の正規化済み値へ変換する",
     ok: true,
     value: {
       vehicleName: "プリウス",
-      displayName: "プリウス 1",
+      displayName: "プリウス 長野 500 あ 12-34",
       plateNumber: "長野 500 あ 12-34",
       category: "owned",
       isActive: false,
@@ -89,6 +86,15 @@ test("正しい入力を登録・編集用の正規化済み値へ変換する",
       memo: "左リア傷あり",
     },
   });
+});
+
+test("表示名は車名とナンバーから内部生成しフォームには表示しない", () => {
+  assert.equal(
+    createLoanerDisplayName(" ワゴンR ", "長野 500 あ 1234"),
+    "ワゴンR 長野 500 あ 1234",
+  );
+  assert.doesNotMatch(loanerVehicleModal, /表示名/);
+  assert.doesNotMatch(loanerVehicleModal, /setDisplayName/);
 });
 
 test("空白・全角半角・ダッシュ差を吸収してナンバー重複を検出する", () => {
@@ -105,7 +111,7 @@ test("空白・全角半角・ダッシュ差を吸収してナンバー重複�
   );
 });
 
-test("大文字小文字と余分な空白を吸収して表示名重複を検出する", () => {
+test("内部生成された表示名の重複を検出する", () => {
   assert.equal(
     findLoanerDuplicate(
       [createVehicle({ displayName: "AQUA 1" })],

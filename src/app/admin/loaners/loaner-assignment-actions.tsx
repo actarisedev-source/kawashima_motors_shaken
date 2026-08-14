@@ -287,12 +287,13 @@ export function LoanerAssignmentActions({
           <div className="mt-5 rounded-md bg-slate-50 p-4 text-sm text-slate-700">
             {confirmation.type === "change" ? (
               <dl className="grid gap-3">
-                <div><dt className="font-semibold text-slate-500">現在</dt><dd className="mt-1 font-bold">{assignment.vehicle.displayName}</dd></div>
-                <div><dt className="font-semibold text-slate-500">変更後</dt><dd className="mt-1 font-bold">{confirmation.vehicle.displayName}</dd></div>
+                <div><dt className="font-semibold text-slate-500">現在</dt><dd className="mt-1 font-bold">{assignment.vehicle.vehicleName}（{assignment.vehicle.plateNumber}）</dd></div>
+                <div><dt className="font-semibold text-slate-500">変更後</dt><dd className="mt-1 font-bold">{confirmation.vehicle.vehicleName}（{confirmation.vehicle.plateNumber}）</dd></div>
               </dl>
             ) : (
               <>
-                <p className="font-bold text-slate-950">{assignment.vehicle.displayName}</p>
+                <p className="font-bold text-slate-950">{assignment.vehicle.vehicleName}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-600">{assignment.vehicle.plateNumber}</p>
                 <label className="mt-3 grid gap-1.5 font-semibold text-slate-700">
                   返却日時
                   <input
@@ -435,7 +436,7 @@ export function LoanerRequestControl({
           </div>
           {!nextRequested && assignment ? (
             <p className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">
-              {assignment.vehicle.displayName}の割り当ても解除されます。
+              {assignment.vehicle.vehicleName}（{assignment.vehicle.plateNumber}）の割り当ても解除されます。
             </p>
           ) : null}
           {error ? <p className="mt-4 text-sm font-semibold text-red-600">{error}</p> : null}
