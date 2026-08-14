@@ -169,3 +169,27 @@ export const filterAndSortLoanerVehicles = (
         left.displayName.localeCompare(right.displayName, "ja"),
     );
 };
+
+export const moveLoanerVehicleById = <T extends { id: string }>(
+  items: T[],
+  activeId: string,
+  overId: string,
+) => {
+  const activeIndex = items.findIndex((item) => item.id === activeId);
+  const overIndex = items.findIndex((item) => item.id === overId);
+
+  if (activeIndex < 0 || overIndex < 0 || activeIndex === overIndex) {
+    return items;
+  }
+
+  const nextItems = [...items];
+  const [activeItem] = nextItems.splice(activeIndex, 1);
+  nextItems.splice(overIndex, 0, activeItem);
+  return nextItems;
+};
+
+export const buildLoanerSortOrderUpdates = (orderedIds: string[]) =>
+  orderedIds.map((id, index) => ({
+    id,
+    sortOrder: index + 1,
+  }));

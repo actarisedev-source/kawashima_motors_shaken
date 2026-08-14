@@ -2,17 +2,30 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  buildLoanerSortOrderUpdates,
   createLoanerDisplayName,
   filterAndSortLoanerVehicles,
   findLoanerDuplicate,
   isLoanerCategory,
   loanerCategories,
+  moveLoanerVehicleById,
   normalizeLoanerPlateKey,
   validateLoanerVehicleInput,
 } from "../src/lib/loaners/loaner-vehicle.ts";
 
+const loanersDashboard = readFileSync(
+  new URL("../src/app/admin/loaners/loaners-dashboard.tsx", import.meta.url),
+  "utf8",
+);
 const loanerVehicleModal = readFileSync(
   new URL("../src/app/admin/loaners/loaner-vehicle-modal.tsx", import.meta.url),
+  "utf8",
+);
+const loanerReorderRoute = readFileSync(
+  new URL(
+    "../src/app/api/admin/loaners/reorder/route.ts",
+    import.meta.url,
+  ),
   "utf8",
 );
 
@@ -97,6 +110,15 @@ test("表示名は車名とナンバーから内部生成しフォームには�
   assert.doesNotMatch(loanerVehicleModal, /setDisplayName/);
 });
 
+test("表示順は入力欄と一覧列には表示せず内部管理にする", () => {
+  assert.doesNotMatch(loanerVehicleModal, /表示順/);
+  assert.doesNotMatch(loanerVehicleModal, /setSortOrder/);
+  assert.doesNotMatch(loanerVehicleModal, /sortOrder,/);
+  assert.doesNotMatch(loanersDashboard, />表示順</);
+  assert.doesNotMatch(loanersDashboard, /item\.sortOrder/);
+  assert.match(loanersDashboard, /並び替え/);
+});
+
 test("空白・全角半角・ダッシュ差を吸収してナンバー重複を検出する", () => {
   assert.equal(
     normalizeLoanerPlateKey("長野 ５００ あ １２ー３４"),
@@ -164,6 +186,48 @@ test("検索・分類・状態絞り込みと表示順を適用する", () => {
     }).map((item) => item.id),
     ["1"],
   );
+});
+
+test("代車のドラッグ並び替えはID順を移動しsort_orderを1から正規化する", () => {
+  const items = [
+    createVehicle({ id: "a", sortOrder: 10 }),
+    createVehicle({ id: "b", sortOrder: 20 }),
+    createVehicle({ id: "c", sortOrder: 30 }),
+    createVehicle({ id: "d", sortOrder: 40 }),
+  ];
+
+  assert.deepEqual(
+    moveLoanerVehicleById(items, "c", "a").map((item) => item.id),
+    ["c", "a", "b", "d"],
+  );
+  assert.deepEqual(
+    moveLoanerVehicleById(items, "a", "d").map((item) => item.id),
+    ["b", "c", "d", "a"],
+  );
+  assert.equal(moveLoanerVehicleById(items, "missing", "a"), items);
+  assert.deepEqual(buildLoanerSortOrderUpdates(["c", "a", "b", "d"]), [
+    { id: "c", sortOrder: 1 },
+    { id: "a", sortOrder: 2 },
+    { id: "b", sortOrder: 3 },
+    { id: "d", sortOrder: 4 },
+  ]);
+});
+
+test("代車並び替えAPIは全件IDを受け取り一括でsort_orderを保存する", () => {
+  assert.match(loanerReorderRoute, /orderedIds/);
+  assert.match(loanerReorderRoute, /buildLoanerSortOrderUpdates/);
+  assert.match(loanerReorderRoute, /\.upsert\(/);
+  assert.match(loanerReorderRoute, /onConflict: "id"/);
+  assert.match(loanerReorderRoute, /全件表示の最新状態/);
+});
+
+test("代車並び替えUIはフィルター中と保存中にドラッグを無効化する", () => {
+  assert.match(loanersDashboard, /canReorderLoaners/);
+  assert.match(loanersDashboard, /hasActiveFilters/);
+  assert.match(loanersDashboard, /sortSaving/);
+  assert.match(loanersDashboard, /並び替えは全件表示時のみ可能です/);
+  assert.match(loanersDashboard, /\/api\/admin\/loaners\/reorder/);
+  assert.match(loanersDashboard, /setItems\(previousItems\)/);
 });
 
 test("代車追加・編集フォームはIME変換中のEnterを横取りしない", () => {
