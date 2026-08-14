@@ -1,9 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type DragEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   loanerCategories,
   loanerCategoryLabels,
+  moveLoanerVehicleById,
   type LoanerCategory,
   type LoanerVehicle,
 } from "@/lib/loaners/loaner-vehicle";
@@ -87,7 +95,6 @@ export function LoanersDashboard() {
   const [summary, setSummary] = useState<LoanerFleetSummary>(
     emptyLoanerFleetSummary,
   );
-  const [suggestedSortOrder, setSuggestedSortOrder] = useState(10);
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
   const [isQueryComposing, setIsQueryComposing] = useState(false);
@@ -102,6 +109,13 @@ export function LoanersDashboard() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [actionSubmitting, setActionSubmitting] = useState(false);
   const [notice, setNotice] = useState("");
+  const [sortError, setSortError] = useState("");
+  const [sortSaving, setSortSaving] = useState(false);
+  const [draggedLoanerId, setDraggedLoanerId] = useState<string | null>(null);
+  const [dragOverLoanerId, setDragOverLoanerId] = useState<string | null>(null);
+  const itemsRef = useRef<LoanerVehicle[]>([]);
+  const dragSnapshotRef = useRef<LoanerVehicle[] | null>(null);
+  const dropHandledRef = useRef(false);
   const assignmentsByVehicleId = useMemo(() => {
     const map = new Map<string, LoanerFleetAssignment[]>();
     for (const assignment of checkedOutAssignments) {
@@ -164,7 +178,6 @@ export function LoanersDashboard() {
           items?: LoanerVehicle[];
           checkedOutAssignments?: LoanerFleetAssignment[];
           referenceNow?: string;
-          suggestedNextSortOrder?: number;
           message?: string;
         };
         const allVehiclesResult = allVehiclesResponse
@@ -210,7 +223,6 @@ export function LoanersDashboard() {
               .map((item) => item.loanerVehicleId),
           ),
         );
-        setSuggestedSortOrder(result.suggestedNextSortOrder ?? 10);
         setLoadState({ status: "ready", message: "" });
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
@@ -225,6 +237,10 @@ export function LoanersDashboard() {
     void loadLoaners(controller.signal);
     return () => controller.abort();
   }, [loadLoaners]);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   function clearFilters() {
     setQueryInput("");
@@ -248,6 +264,103 @@ export function LoanersDashboard() {
     setEditingItem(null);
     setNotice(message);
     await loadLoaners();
+  }
+
+  function resetDragState() {
+    setDraggedLoanerId(null);
+    setDragOverLoanerId(null);
+    dragSnapshotRef.current = null;
+    dropHandledRef.current = false;
+  }
+
+  function handleLoanerDragStart(
+    event: DragEvent<HTMLButtonElement>,
+    item: LoanerVehicle,
+  ) {
+    if (!canReorderLoaners) {
+      event.preventDefault();
+      return;
+    }
+
+    dragSnapshotRef.current = itemsRef.current;
+    dropHandledRef.current = false;
+    setSortError("");
+    setDraggedLoanerId(item.id);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", item.id);
+  }
+
+  function handleLoanerDragOver(event: DragEvent<HTMLElement>, overId: string) {
+    if (!draggedLoanerId || !canReorderLoaners) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDragOverLoanerId(overId);
+    setItems((currentItems) => {
+      const nextItems = moveLoanerVehicleById(
+        currentItems,
+        draggedLoanerId,
+        overId,
+      );
+      itemsRef.current = nextItems;
+      return nextItems;
+    });
+  }
+
+  async function saveLoanerOrder() {
+    const previousItems = dragSnapshotRef.current ?? itemsRef.current;
+    const orderedIds = itemsRef.current.map((item) => item.id);
+    const previousOrder = previousItems.map((item) => item.id);
+
+    if (orderedIds.join(",") === previousOrder.join(",")) {
+      resetDragState();
+      return;
+    }
+
+    setSortSaving(true);
+    setSortError("");
+    try {
+      const response = await fetch("/api/admin/loaners/reorder", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderedIds }),
+      });
+      const result = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+      };
+
+      if (!response.ok || !result.ok) {
+        setItems(previousItems);
+        itemsRef.current = previousItems;
+        setSortError(result.message ?? "並び順の保存に失敗しました。");
+        return;
+      }
+
+      setNotice("並び順を更新しました。");
+      await loadLoaners();
+    } catch {
+      setItems(previousItems);
+      itemsRef.current = previousItems;
+      setSortError("並び順の保存に失敗しました。");
+    } finally {
+      setSortSaving(false);
+      resetDragState();
+    }
+  }
+
+  function handleLoanerDrop(event: DragEvent<HTMLElement>) {
+    if (!draggedLoanerId || !canReorderLoaners) return;
+    event.preventDefault();
+    dropHandledRef.current = true;
+    void saveLoanerOrder();
+  }
+
+  function handleLoanerDragEnd() {
+    if (draggedLoanerId && !dropHandledRef.current && dragSnapshotRef.current) {
+      setItems(dragSnapshotRef.current);
+      itemsRef.current = dragSnapshotRef.current;
+      resetDragState();
+    }
   }
 
   async function runPendingAction() {
@@ -310,9 +423,42 @@ export function LoanersDashboard() {
   }
 
   const hasActiveFilters =
-    queryInput.trim() !== "" || category !== "all" || status !== "all";
+    queryInput.trim() !== "" ||
+    query.trim() !== "" ||
+    category !== "all" ||
+    status !== "all";
+  const canReorderLoaners =
+    !hasActiveFilters &&
+    !sortSaving &&
+    loadState.status === "ready" &&
+    displayedItems.length > 1;
   const noRegisteredVehicles =
     summary.total === 0 && !hasActiveFilters;
+  const reorderHelpText = hasActiveFilters
+    ? "並び替えは全件表示時のみ可能です。"
+    : sortSaving
+      ? "並び順を保存中です。"
+      : "左端のハンドルをドラッグして並び替えできます。";
+  const dragHandleTitle = canReorderLoaners
+    ? "ドラッグで並び替え"
+    : "並び替えは全件表示時のみ可能です";
+
+  function renderDragHandle(item: LoanerVehicle) {
+    return (
+      <button
+        type="button"
+        draggable={canReorderLoaners}
+        disabled={!canReorderLoaners}
+        aria-label={`${item.vehicleName}（${item.plateNumber}）を並び替え`}
+        title={dragHandleTitle}
+        onDragStart={(event) => handleLoanerDragStart(event, item)}
+        onDragEnd={handleLoanerDragEnd}
+        className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-base font-bold leading-none text-slate-500 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300 disabled:shadow-none"
+      >
+        <span aria-hidden="true">⋮⋮</span>
+      </button>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
@@ -421,6 +567,14 @@ export function LoanersDashboard() {
               </button>
             </div>
           </div>
+          <div className="border-b border-slate-100 px-4 py-2 text-xs font-semibold text-slate-500">
+            {reorderHelpText}
+          </div>
+          {sortError ? (
+            <p className="border-b border-red-100 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700">
+              {sortError}
+            </p>
+          ) : null}
 
           {loadState.status === "loading" ? (
             <p className="px-5 py-12 text-center text-sm text-slate-500">代車一覧を読み込んでいます。</p>
@@ -431,43 +585,65 @@ export function LoanersDashboard() {
           ) : (
             <>
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[960px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[920px] border-collapse text-left text-sm">
                   <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
                     <tr>
-                      <th className="px-4 py-3">分類</th><th className="px-4 py-3">車種</th><th className="px-4 py-3">ナンバー</th><th className="px-4 py-3">状態</th><th className="px-4 py-3">貸出期間</th><th className="px-4 py-3 text-center">表示順</th><th className="px-4 py-3">メモ</th><th className="px-4 py-3 text-right">操作</th>
+                      <th className="w-14 px-4 py-3"><span className="sr-only">並び替え</span></th><th className="px-4 py-3">車種</th><th className="px-4 py-3">ナンバー</th><th className="px-4 py-3">分類</th><th className="px-4 py-3">状態</th><th className="px-4 py-3">貸出期間</th><th className="px-4 py-3">メモ</th><th className="px-4 py-3 text-right">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {displayedItems.map((item) => (
-                      <tr key={item.id} className={item.isActive ? "" : "bg-slate-50/70"}>
-                        <td className="px-4 py-4"><LoanerCategoryBadge category={item.category} /></td>
+                    {displayedItems.map((item) => {
+                      const isDragging = draggedLoanerId === item.id;
+                      const isDropTarget =
+                        dragOverLoanerId === item.id && draggedLoanerId !== item.id;
+
+                      return (
+                      <tr
+                        key={item.id}
+                        onDragOver={(event) => handleLoanerDragOver(event, item.id)}
+                        onDrop={handleLoanerDrop}
+                        className={`transition ${item.isActive ? "" : "bg-slate-50/70"} ${isDragging ? "opacity-70 shadow-lg" : ""} ${isDropTarget ? "bg-blue-50/70 ring-2 ring-inset ring-blue-200" : ""}`}
+                      >
+                        <td className="px-4 py-4">{renderDragHandle(item)}</td>
                         <td className="px-4 py-4 font-bold text-slate-950">{item.vehicleName}</td>
                         <td className="whitespace-nowrap px-4 py-4 text-slate-700">{item.plateNumber}</td>
+                        <td className="px-4 py-4"><LoanerCategoryBadge category={item.category} /></td>
                         <td className="px-4 py-4">{renderFleetStatusBadge(item)}</td>
                         <td className="px-4 py-4 text-xs">{renderLoanerPeriod(item)}</td>
-                        <td className="px-4 py-4 text-center font-semibold text-slate-600">{item.sortOrder}</td>
                         <td className="max-w-56 px-4 py-4"><p className="line-clamp-2 whitespace-pre-wrap text-slate-600">{item.memo || "—"}</p></td>
                         <td className="px-4 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => openEditModal(item)} className="cursor-pointer rounded-md border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50">編集</button><button type="button" onClick={() => setPendingAction({ type: item.isActive ? "deactivate" : "activate", item })} className="cursor-pointer rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">{item.isActive ? "使用停止" : "使用再開"}</button><button type="button" onClick={() => setPendingAction({ type: "delete", item })} className="cursor-pointer rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">削除</button></div></td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
               <div className="grid gap-3 p-4 md:hidden">
-                {displayedItems.map((item) => (
-                  <article key={item.id} className="rounded-md border border-slate-200 p-4">
-                    <div className="flex items-start justify-between gap-3"><div><LoanerCategoryBadge category={item.category} /><h2 className="mt-2 font-bold">{item.vehicleName}</h2><p className="mt-1 text-sm font-semibold text-slate-600">{item.plateNumber}</p></div>{renderFleetStatusBadge(item)}</div>
-                    <dl className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><dt className="font-semibold text-slate-500">貸出期間</dt><dd className="mt-1 text-slate-800">{renderLoanerPeriod(item)}</dd></div><div><dt className="font-semibold text-slate-500">表示順</dt><dd className="mt-1 text-slate-800">{item.sortOrder}</dd></div><div className="col-span-2"><dt className="font-semibold text-slate-500">メモ</dt><dd className="mt-1 whitespace-pre-wrap text-slate-800">{item.memo || "—"}</dd></div></dl>
+                {displayedItems.map((item) => {
+                  const isDragging = draggedLoanerId === item.id;
+                  const isDropTarget =
+                    dragOverLoanerId === item.id && draggedLoanerId !== item.id;
+
+                  return (
+                  <article
+                    key={item.id}
+                    onDragOver={(event) => handleLoanerDragOver(event, item.id)}
+                    onDrop={handleLoanerDrop}
+                    className={`rounded-md border border-slate-200 p-4 transition ${isDragging ? "opacity-70 shadow-lg" : ""} ${isDropTarget ? "border-blue-200 bg-blue-50/70" : ""}`}
+                  >
+                    <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-2">{renderDragHandle(item)}<LoanerCategoryBadge category={item.category} /></div><h2 className="mt-2 font-bold">{item.vehicleName}</h2><p className="mt-1 text-sm font-semibold text-slate-600">{item.plateNumber}</p></div>{renderFleetStatusBadge(item)}</div>
+                    <dl className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><dt className="font-semibold text-slate-500">貸出期間</dt><dd className="mt-1 text-slate-800">{renderLoanerPeriod(item)}</dd></div><div className="col-span-2"><dt className="font-semibold text-slate-500">メモ</dt><dd className="mt-1 whitespace-pre-wrap text-slate-800">{item.memo || "—"}</dd></div></dl>
                     <div className="mt-4 grid grid-cols-3 gap-2"><button type="button" onClick={() => openEditModal(item)} className="h-9 rounded-md border border-blue-200 text-xs font-semibold text-blue-700">編集</button><button type="button" onClick={() => setPendingAction({ type: item.isActive ? "deactivate" : "activate", item })} className="h-9 rounded-md border border-slate-300 text-xs font-semibold text-slate-700">{item.isActive ? "使用停止" : "使用再開"}</button><button type="button" onClick={() => setPendingAction({ type: "delete", item })} className="h-9 rounded-md border border-red-200 text-xs font-semibold text-red-700">削除</button></div>
                   </article>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}
         </section>
       </main>
 
-      {modalOpen ? <LoanerVehicleModal item={editingItem} suggestedSortOrder={suggestedSortOrder} onClose={() => setModalOpen(false)} onSaved={handleSaved} /> : null}
+      {modalOpen ? <LoanerVehicleModal item={editingItem} onClose={() => setModalOpen(false)} onSaved={handleSaved} /> : null}
       {pendingAction ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-5" role="dialog" aria-modal="true" aria-labelledby="loaner-action-title">
           <div className="w-full max-w-md rounded-md border border-slate-200 bg-white p-6 shadow-xl">

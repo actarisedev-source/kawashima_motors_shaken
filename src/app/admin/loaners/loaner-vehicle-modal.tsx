@@ -11,7 +11,6 @@ import { isImeCompositionActive } from "@/lib/forms/ime";
 
 type LoanerVehicleModalProps = {
   item: LoanerVehicle | null;
-  suggestedSortOrder: number;
   onClose: () => void;
   onSaved: (message: string) => void | Promise<void>;
 };
@@ -21,7 +20,6 @@ const inputClassName =
 
 export function LoanerVehicleModal({
   item,
-  suggestedSortOrder,
   onClose,
   onSaved,
 }: LoanerVehicleModalProps) {
@@ -31,9 +29,6 @@ export function LoanerVehicleModal({
     item?.category ?? "owned",
   );
   const [isActive, setIsActive] = useState(item?.isActive ?? true);
-  const [sortOrder, setSortOrder] = useState(
-    String(item?.sortOrder ?? suggestedSortOrder),
-  );
   const [memo, setMemo] = useState(item?.memo ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -56,7 +51,6 @@ export function LoanerVehicleModal({
           plateNumber,
           category,
           isActive,
-          sortOrder,
           memo,
         }),
       },
@@ -178,18 +172,6 @@ export function LoanerVehicleModal({
               <option value="active">使用可能</option>
               <option value="inactive">使用停止</option>
             </select>
-          </label>
-          <label className="text-sm font-semibold text-slate-700">
-            表示順
-            <input
-              type="number"
-              min={0}
-              max={99999}
-              step={1}
-              value={sortOrder}
-              onChange={(event) => setSortOrder(event.target.value)}
-              className={inputClassName}
-            />
           </label>
           <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
             メモ <span className="text-slate-400">（任意）</span>
