@@ -16,6 +16,7 @@ const eslintConfig = [
       "node_modules/**",
       "out/**",
       "build/**",
+      "tools/kawashima-backup/**",
       "next-env.d.ts",
     ],
   },

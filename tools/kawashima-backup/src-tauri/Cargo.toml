@@ -1,0 +1,26 @@
+[package]
+name = "kawashima-backup-tool"
+version = "0.1.0"
+description = "Kawashima Motors backup tool"
+authors = ["ACTARISE"]
+edition = "2021"
+
+[lib]
+name = "kawashima_backup_tool_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+dirs = "6.0.0"
+keyring = "3.6.3"
+native-tls = "0.2.12"
+postgres-native-tls = "0.5.1"
+reqwest = { version = "0.12.23", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.143"
+tauri = { version = "2.11.5", features = [] }
+tauri-plugin-dialog = "2.4.0"
+tauri-plugin-opener = "2.5.0"
+tokio-postgres = "0.7.13"

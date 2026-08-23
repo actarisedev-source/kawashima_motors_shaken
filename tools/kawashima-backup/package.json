@@ -1,0 +1,23 @@
+{
+  "name": "kawashima-backup-tool",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:web": "vite build",
+    "check": "tsc --noEmit",
+    "preview": "vite --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-dialog": "^2.4.0",
+    "@tauri-apps/plugin-opener": "^2.5.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "typescript": "^5.8.3",
+    "vite": "^7.1.3"
+  }
+}
