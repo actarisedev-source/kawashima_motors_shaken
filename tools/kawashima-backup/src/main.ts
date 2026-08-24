@@ -12,6 +12,10 @@ import {
 import "./styles.css";
 
 type SecretStatus = Record<SecretFieldName, boolean>;
+type SecretStatusResponse = Partial<SecretStatus> & {
+  db_password?: boolean;
+  service_role_key?: boolean;
+};
 
 type DbCheckResult = {
   ok: boolean;
@@ -75,6 +79,11 @@ const setBusy = (busy: boolean, message = "") => {
   render();
 };
 
+const normalizeSecretStatus = (status: SecretStatusResponse): SecretStatus => ({
+  dbPassword: Boolean(status.dbPassword ?? status.db_password),
+  serviceRoleKey: Boolean(status.serviceRoleKey ?? status.service_role_key),
+});
+
 const updateSettingsFromForm = () => {
   const form = app.querySelector<HTMLFormElement>("#settings-form");
   if (!form) return;
@@ -111,10 +120,18 @@ const saveSettings = async () => {
 const saveSecrets = async () => {
   const dbPassword = (app.querySelector<HTMLInputElement>("#dbPassword")?.value ?? "").trim();
   const serviceRoleKey = (app.querySelector<HTMLInputElement>("#serviceRoleKey")?.value ?? "").trim();
-  await runCommand("save_secret_values", { dbPassword, serviceRoleKey });
-  await loadInitialState();
-  state = { ...state, message: "秘密情報をOS資格情報ストアへ保存しました。" };
-  render();
+  try {
+    const secretStatus = await runCommand<SecretStatusResponse>("save_secret_values", { dbPassword, serviceRoleKey });
+    state = {
+      ...state,
+      secretStatus: normalizeSecretStatus(secretStatus),
+      message: "秘密情報をOS資格情報ストアへ保存しました。",
+    };
+    render();
+  } catch (error) {
+    state = { ...state, message: redactSensitiveText(error) };
+    render();
+  }
 };
 
 const checkFolders = async () => {
@@ -260,9 +277,9 @@ const render = () => {
 async function loadInitialState() {
   const [settings, secretStatus] = await Promise.all([
     runCommand<BackupToolSettings>("load_settings"),
-    runCommand<SecretStatus>("get_secret_status"),
+    runCommand<SecretStatusResponse>("get_secret_status"),
   ]);
-  state = { ...state, settings: { ...emptySettings, ...settings }, secretStatus };
+  state = { ...state, settings: { ...emptySettings, ...settings }, secretStatus: normalizeSecretStatus(secretStatus) };
 }
 
 loadInitialState()

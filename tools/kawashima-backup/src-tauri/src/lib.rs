@@ -15,9 +15,9 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 use tokio_postgres::config::SslMode;
 
-const KEYRING_SERVICE: &str = "jp.actarise.kawashima.backup";
-const DB_PASSWORD_KEY: &str = "db-password";
-const SERVICE_ROLE_KEY: &str = "supabase-service-role-key";
+const KEYRING_SERVICE_NAME: &str = "jp.actarise.kawashima.backup";
+const ACCOUNT_DB_PASSWORD: &str = "db-password";
+const ACCOUNT_SERVICE_ROLE_KEY: &str = "supabase-service-role-key";
 const SETTINGS_FILE_NAME: &str = "settings.json";
 const MAX_STORAGE_OBJECTS_TO_SCAN: usize = 10_000;
 
@@ -133,27 +133,38 @@ fn save_settings(app: AppHandle, settings: BackupToolSettings) -> Result<(), Str
 
 #[tauri::command]
 fn get_secret_status() -> SecretStatus {
-    SecretStatus {
-        db_password: read_secret(DB_PASSWORD_KEY).is_ok_and(|value| !value.is_empty()),
-        service_role_key: read_secret(SERVICE_ROLE_KEY).is_ok_and(|value| !value.is_empty()),
-    }
+    get_secret_status_from_keyring()
 }
 
 #[tauri::command]
-fn save_secret_values(db_password: String, service_role_key: String) -> Result<(), String> {
+fn save_secret_values(db_password: String, service_role_key: String) -> Result<SecretStatus, String> {
+    let should_save_db_password = !db_password.trim().is_empty();
+    let should_save_service_role_key = !service_role_key.trim().is_empty();
+    if !should_save_db_password && !should_save_service_role_key {
+        return Err("保存する秘密情報を入力してください。".to_string());
+    }
+
     if !db_password.trim().is_empty() {
-        write_secret(DB_PASSWORD_KEY, db_password.trim())?;
+        write_secret(ACCOUNT_DB_PASSWORD, db_password.trim())?;
     }
     if !service_role_key.trim().is_empty() {
-        write_secret(SERVICE_ROLE_KEY, service_role_key.trim())?;
+        write_secret(ACCOUNT_SERVICE_ROLE_KEY, service_role_key.trim())?;
     }
-    Ok(())
+
+    let status = get_secret_status_from_keyring();
+    if should_save_db_password && !status.db_password {
+        return Err("DBパスワードをOS資格情報ストアへ保存後に確認できませんでした。".to_string());
+    }
+    if should_save_service_role_key && !status.service_role_key {
+        return Err("Service Role KeyをOS資格情報ストアへ保存後に確認できませんでした。".to_string());
+    }
+    Ok(status)
 }
 
 #[tauri::command]
 async fn check_database(settings: BackupToolSettings) -> Result<DbCheckResult, String> {
     validate_settings(&settings)?;
-    let password = read_secret(DB_PASSWORD_KEY)
+    let password = read_secret(ACCOUNT_DB_PASSWORD)
         .map_err(|_| "DBパスワードが未設定です。OS資格情報ストアへ保存してください。".to_string())?;
     let db_config = build_db_config(&settings, &password)?;
     let connector = TlsConnector::builder()
@@ -200,7 +211,7 @@ async fn check_storage(project_url: String, bucket_name: String) -> Result<Stora
         return Err("確認対象bucketが正しくありません。".to_string());
     }
     let project_url = normalize_project_url(&project_url)?;
-    let service_role_key = read_secret(SERVICE_ROLE_KEY).map_err(|_| {
+    let service_role_key = read_secret(ACCOUNT_SERVICE_ROLE_KEY).map_err(|_| {
         "Service Role Keyが未設定です。OS資格情報ストアへ保存してください。".to_string()
     })?;
     let client = reqwest::Client::new();
@@ -394,17 +405,24 @@ fn build_db_config(
 }
 
 fn write_secret(key: &str, value: &str) -> Result<(), String> {
-    Entry::new(KEYRING_SERVICE, key)
+    Entry::new(KEYRING_SERVICE_NAME, key)
         .map_err(|_| "OS資格情報ストアを開けませんでした。".to_string())?
         .set_password(value)
         .map_err(|_| "秘密情報の保存に失敗しました。".to_string())
 }
 
 fn read_secret(key: &str) -> Result<String, String> {
-    Entry::new(KEYRING_SERVICE, key)
+    Entry::new(KEYRING_SERVICE_NAME, key)
         .map_err(|_| "OS資格情報ストアを開けませんでした。".to_string())?
         .get_password()
         .map_err(|_| "秘密情報が未設定です。".to_string())
+}
+
+fn get_secret_status_from_keyring() -> SecretStatus {
+    SecretStatus {
+        db_password: read_secret(ACCOUNT_DB_PASSWORD).is_ok_and(|value| !value.is_empty()),
+        service_role_key: read_secret(ACCOUNT_SERVICE_ROLE_KEY).is_ok_and(|value| !value.is_empty()),
+    }
 }
 
 fn storage_headers(service_role_key: &str) -> Result<HeaderMap, String> {

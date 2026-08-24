@@ -84,9 +84,33 @@ test("Phase 1はpg_dumpやバックアップ生成を実行しない", () => {
 
 test("secretはRust側でOS資格情報ストアへ保存する", () => {
   const rust = readSource("tools/kawashima-backup/src-tauri/src/lib.rs");
+  const cargo = readSource("tools/kawashima-backup/src-tauri/Cargo.toml");
   assert.match(rust, /keyring::Entry/);
-  assert.match(rust, /DB_PASSWORD_KEY/);
-  assert.match(rust, /SERVICE_ROLE_KEY/);
+  assert.match(cargo, /features = \["apple-native", "windows-native"\]/);
+  assert.match(rust, /KEYRING_SERVICE_NAME: &str = "jp\.actarise\.kawashima\.backup"/);
+  assert.match(rust, /ACCOUNT_DB_PASSWORD: &str = "db-password"/);
+  assert.match(rust, /ACCOUNT_SERVICE_ROLE_KEY: &str = "supabase-service-role-key"/);
   assert.match(rust, /SETTINGS_FILE_NAME/);
   assert.doesNotMatch(rust, /db_password.*serde_json::to_string/);
+});
+
+test("secret保存は保存後にKeychainから再読込してstatusだけ返す", () => {
+  const rust = readSource("tools/kawashima-backup/src-tauri/src/lib.rs");
+  const frontend = readSource("tools/kawashima-backup/src/main.ts");
+
+  assert.match(rust, /fn save_secret_values\(db_password: String, service_role_key: String\) -> Result<SecretStatus, String>/);
+  assert.match(rust, /let status = get_secret_status_from_keyring\(\);/);
+  assert.match(rust, /should_save_db_password && !status\.db_password/);
+  assert.match(rust, /should_save_service_role_key && !status\.service_role_key/);
+  assert.match(frontend, /runCommand<SecretStatusResponse>\("save_secret_values"/);
+  assert.match(frontend, /normalizeSecretStatus\(secretStatus\)/);
+  assert.doesNotMatch(frontend, /state = \{ \.\.\.state, .*dbPassword/);
+});
+
+test("保存時と読込時のKeychain識別子は同じ定数を使う", () => {
+  const rust = readSource("tools/kawashima-backup/src-tauri/src/lib.rs");
+  assert.match(rust, /write_secret\(ACCOUNT_DB_PASSWORD, db_password\.trim\(\)\)/);
+  assert.match(rust, /write_secret\(ACCOUNT_SERVICE_ROLE_KEY, service_role_key\.trim\(\)\)/);
+  assert.match(rust, /read_secret\(ACCOUNT_DB_PASSWORD\)/);
+  assert.match(rust, /read_secret\(ACCOUNT_SERVICE_ROLE_KEY\)/);
 });
