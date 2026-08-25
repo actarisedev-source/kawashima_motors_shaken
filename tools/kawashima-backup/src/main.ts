@@ -84,6 +84,23 @@ const normalizeSecretStatus = (status: SecretStatusResponse): SecretStatus => ({
   serviceRoleKey: Boolean(status.serviceRoleKey ?? status.service_role_key),
 });
 
+const failedDbCheck = (error: unknown): DbCheckResult => ({
+  ok: false,
+  connectionMode: state.settings.connectionMode,
+  ssl: false,
+  postgresVersion: null,
+  publicSchemaReadable: false,
+  message: redactSensitiveText(error),
+});
+
+const failedStorageCheck = (error: unknown): StorageCheckResult => ({
+  ok: false,
+  bucketExists: false,
+  bucketPublic: null,
+  objectCountEstimate: null,
+  message: redactSensitiveText(error),
+});
+
 const updateSettingsFromForm = () => {
   const form = app.querySelector<HTMLFormElement>("#settings-form");
   if (!form) return;
@@ -156,7 +173,7 @@ const runChecks = async () => {
   setBusy(true, "接続と設定を確認しています...");
   try {
     await runCommand("save_settings", { settings: state.settings });
-    const [dbCheck, storageCheck, localFolderCheck, googleDriveFolderCheck] = await Promise.all([
+    const [dbResult, storageResult, localFolderResult, googleDriveFolderResult] = await Promise.allSettled([
       runCommand<DbCheckResult>("check_database", { settings: state.settings }),
       runCommand<StorageCheckResult>("check_storage", {
         projectUrl: state.settings.supabaseProjectUrl,
@@ -169,6 +186,14 @@ const runChecks = async () => {
         ? runCommand<FolderCheckResult>("check_folder", { path: state.settings.googleDrivePath })
         : Promise.resolve(null),
     ]);
+    const dbCheck = dbResult.status === "fulfilled" ? dbResult.value : failedDbCheck(dbResult.reason);
+    const storageCheck = storageResult.status === "fulfilled"
+      ? storageResult.value
+      : failedStorageCheck(storageResult.reason);
+    const localFolderCheck = localFolderResult.status === "fulfilled" ? localFolderResult.value : null;
+    const googleDriveFolderCheck = googleDriveFolderResult.status === "fulfilled"
+      ? googleDriveFolderResult.value
+      : null;
     state = {
       ...state,
       dbCheck,
@@ -176,7 +201,9 @@ const runChecks = async () => {
       localFolderCheck,
       googleDriveFolderCheck,
       busy: false,
-      message: "読み取り専用の確認が完了しました。",
+      message: dbCheck.ok && storageCheck.ok
+        ? "読み取り専用の確認が完了しました。"
+        : "接続確認が完了しました。要確認の項目があります。",
     };
   } catch (error) {
     state = { ...state, busy: false, message: redactSensitiveText(error) };

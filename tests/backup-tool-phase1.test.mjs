@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { X509Certificate } from "node:crypto";
 import test from "node:test";
 import {
   allowedConnectionModes,
@@ -113,4 +114,34 @@ test("保存時と読込時のKeychain識別子は同じ定数を使う", () => 
   assert.match(rust, /write_secret\(ACCOUNT_SERVICE_ROLE_KEY, service_role_key\.trim\(\)\)/);
   assert.match(rust, /read_secret\(ACCOUNT_DB_PASSWORD\)/);
   assert.match(rust, /read_secret\(ACCOUNT_SERVICE_ROLE_KEY\)/);
+});
+
+test("Supabase公式CAを追加し証明書検証を維持する", () => {
+  const rust = readSource("tools/kawashima-backup/src-tauri/src/lib.rs");
+  const tauri = readSource("tools/kawashima-backup/src-tauri/tauri.conf.json");
+  const pem = readSource("tools/kawashima-backup/src-tauri/resources/prod-ca-2021.crt");
+  const certificate = new X509Certificate(pem);
+
+  assert.match(certificate.subject, /CN=Supabase Root 2021 CA/);
+  assert.equal(certificate.fingerprint256, "80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA");
+  assert.match(rust, /rustls_native_certs::load_native_certs\(\)/);
+  assert.match(rust, /rustls_pemfile::certs\(&mut Cursor::new\(SUPABASE_ROOT_CA_PEM\)\)/);
+  assert.match(rust, /roots\s*\.add\(certificate\)/);
+  assert.match(rust, /ClientConfig::builder\(\)/);
+  assert.match(rust, /with_root_certificates\(roots\)/);
+  assert.match(tauri, /resources\/prod-ca-2021\.crt/);
+  assert.doesNotMatch(rust, /danger_accept_invalid_certs/);
+  assert.doesNotMatch(rust, /danger_accept_invalid_hostnames/);
+  assert.doesNotMatch(rust, /config_no_verify/);
+  assert.doesNotMatch(rust, /\.dangerous\(\)/);
+});
+
+test("DBとStorageの接続確認結果を独立して反映する", () => {
+  const frontend = readSource("tools/kawashima-backup/src/main.ts");
+
+  assert.match(frontend, /Promise\.allSettled/);
+  assert.match(frontend, /dbResult\.status === "fulfilled"/);
+  assert.match(frontend, /storageResult\.status === "fulfilled"/);
+  assert.match(frontend, /failedDbCheck\(dbResult\.reason\)/);
+  assert.match(frontend, /failedStorageCheck\(storageResult\.reason\)/);
 });

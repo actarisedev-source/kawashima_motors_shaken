@@ -1,25 +1,27 @@
 use std::{
     fs,
     fs::OpenOptions,
-    io::Write,
+    io::{Cursor, Write},
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use keyring::Entry;
-use native_tls::TlsConnector;
-use postgres_native_tls::MakeTlsConnector;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
+use rustls::{ClientConfig, RootCertStore};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 use tokio_postgres::config::SslMode;
+use tokio_postgres_rustls::MakeRustlsConnect;
 
 const KEYRING_SERVICE_NAME: &str = "jp.actarise.kawashima.backup";
 const ACCOUNT_DB_PASSWORD: &str = "db-password";
 const ACCOUNT_SERVICE_ROLE_KEY: &str = "supabase-service-role-key";
 const SETTINGS_FILE_NAME: &str = "settings.json";
 const MAX_STORAGE_OBJECTS_TO_SCAN: usize = 10_000;
+// Supabase official distribution: https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt
+const SUPABASE_ROOT_CA_PEM: &[u8] = include_bytes!("../resources/prod-ca-2021.crt");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -167,10 +169,7 @@ async fn check_database(settings: BackupToolSettings) -> Result<DbCheckResult, S
     let password = read_secret(ACCOUNT_DB_PASSWORD)
         .map_err(|_| "DBパスワードが未設定です。OS資格情報ストアへ保存してください。".to_string())?;
     let db_config = build_db_config(&settings, &password)?;
-    let connector = TlsConnector::builder()
-        .build()
-        .map_err(|_| "SSL設定を初期化できませんでした。".to_string())?;
-    let tls = MakeTlsConnector::new(connector);
+    let tls = build_database_tls_connector()?;
     let (client, connection_task) = db_config
         .connect(tls)
         .await
@@ -404,6 +403,29 @@ fn build_db_config(
     Ok(config)
 }
 
+fn build_database_tls_connector() -> Result<MakeRustlsConnect, String> {
+    let native_certificates = rustls_native_certs::load_native_certs();
+    let mut roots = RootCertStore::empty();
+    roots.add_parsable_certificates(native_certificates.certs);
+
+    let bundled_certificates = rustls_pemfile::certs(&mut Cursor::new(SUPABASE_ROOT_CA_PEM))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| "Supabase CA証明書を読み込めませんでした。".to_string())?;
+    if bundled_certificates.is_empty() {
+        return Err("Supabase CA証明書を読み込めませんでした。".to_string());
+    }
+    for certificate in bundled_certificates {
+        roots
+            .add(certificate)
+            .map_err(|_| "Supabase CA証明書を読み込めませんでした。".to_string())?;
+    }
+
+    let config = ClientConfig::builder()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    Ok(MakeRustlsConnect::new(config))
+}
+
 fn write_secret(key: &str, value: &str) -> Result<(), String> {
     Entry::new(KEYRING_SERVICE_NAME, key)
         .map_err(|_| "OS資格情報ストアを開けませんでした。".to_string())?
@@ -504,4 +526,21 @@ fn sanitized_error(error: impl ToString) -> String {
         }
     }
     text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_supabase_ca_builds_a_tls_connector() {
+        assert!(build_database_tls_connector().is_ok());
+    }
+
+    #[test]
+    fn invalid_ca_is_rejected() {
+        let result = rustls_pemfile::certs(&mut Cursor::new(b"not a certificate"))
+            .collect::<Result<Vec<_>, _>>();
+        assert!(result.is_ok_and(|certificates| certificates.is_empty()));
+    }
 }
