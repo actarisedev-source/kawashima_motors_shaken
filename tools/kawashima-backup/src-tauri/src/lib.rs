@@ -15,30 +15,38 @@ use tauri::{AppHandle, Manager};
 use tokio_postgres::config::SslMode;
 use tokio_postgres_rustls::MakeRustlsConnect;
 
+mod backup;
+
 const KEYRING_SERVICE_NAME: &str = "jp.actarise.kawashima.backup";
-const ACCOUNT_DB_PASSWORD: &str = "db-password";
-const ACCOUNT_SERVICE_ROLE_KEY: &str = "supabase-service-role-key";
+pub(crate) const ACCOUNT_DB_PASSWORD: &str = "db-password";
+pub(crate) const ACCOUNT_SERVICE_ROLE_KEY: &str = "supabase-service-role-key";
 const SETTINGS_FILE_NAME: &str = "settings.json";
 const MAX_STORAGE_OBJECTS_TO_SCAN: usize = 10_000;
 // Supabase official distribution: https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt
-const SUPABASE_ROOT_CA_PEM: &[u8] = include_bytes!("../resources/prod-ca-2021.crt");
+pub(crate) const SUPABASE_ROOT_CA_PEM: &[u8] = include_bytes!("../resources/prod-ca-2021.crt");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct BackupToolSettings {
-    supabase_project_url: String,
-    db_host: String,
-    db_port: String,
-    db_name: String,
-    db_user: String,
-    connection_mode: ConnectionMode,
-    local_backup_path: String,
-    google_drive_path: String,
+pub(crate) struct BackupToolSettings {
+    pub(crate) supabase_project_url: String,
+    pub(crate) db_host: String,
+    pub(crate) db_port: String,
+    pub(crate) db_name: String,
+    pub(crate) db_user: String,
+    pub(crate) connection_mode: ConnectionMode,
+    pub(crate) local_backup_path: String,
+    pub(crate) google_drive_path: String,
+    #[serde(default)]
+    pub(crate) encryption_recovery_exported: bool,
+    #[serde(default)]
+    pub(crate) recovery_key_fingerprint: Option<String>,
+    #[serde(default)]
+    pub(crate) recovery_key_exported_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum ConnectionMode {
+pub(crate) enum ConnectionMode {
     Direct,
     Session,
 }
@@ -91,12 +99,16 @@ impl Default for BackupToolSettings {
             connection_mode: ConnectionMode::Direct,
             local_backup_path: String::new(),
             google_drive_path: String::new(),
+            encryption_recovery_exported: false,
+            recovery_key_fingerprint: None,
+            recovery_key_exported_at: None,
         }
     }
 }
 
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
+        .manage(backup::RecoveryKeyState::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
@@ -107,13 +119,33 @@ pub fn run() {
             check_database,
             check_storage,
             check_folder,
+            backup::backup_is_running,
+            backup::get_encryption_status,
+            backup::generate_encryption_identity,
+            backup::export_recovery_key,
+            backup::import_recovery_key,
+            backup::register_imported_recovery_key,
+            backup::verify_backup_file,
+            backup::load_backup_history,
+            backup::run_backup,
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("error while running Kawashima backup tool");
+    app.run(|_, event| {
+        if let tauri::RunEvent::ExitRequested { api, .. } = event {
+            if backup::backup_is_running() {
+                api.prevent_exit();
+            }
+        }
+    });
 }
 
 #[tauri::command]
 fn load_settings(app: AppHandle) -> Result<BackupToolSettings, String> {
+    load_settings_from_disk(&app)
+}
+
+pub(crate) fn load_settings_from_disk(app: &AppHandle) -> Result<BackupToolSettings, String> {
     let path = settings_path(&app)?;
     if !path.exists() {
         return Ok(BackupToolSettings::default());
@@ -125,11 +157,18 @@ fn load_settings(app: AppHandle) -> Result<BackupToolSettings, String> {
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: BackupToolSettings) -> Result<(), String> {
     validate_settings(&settings)?;
+    save_settings_to_disk(&app, &settings)
+}
+
+pub(crate) fn save_settings_to_disk(
+    app: &AppHandle,
+    settings: &BackupToolSettings,
+) -> Result<(), String> {
     let path = settings_path(&app)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| sanitized_error(error))?;
     }
-    let content = serde_json::to_string_pretty(&settings).map_err(|error| sanitized_error(error))?;
+    let content = serde_json::to_string_pretty(settings).map_err(|error| sanitized_error(error))?;
     fs::write(path, content).map_err(|error| sanitized_error(error))
 }
 
@@ -139,7 +178,10 @@ fn get_secret_status() -> SecretStatus {
 }
 
 #[tauri::command]
-fn save_secret_values(db_password: String, service_role_key: String) -> Result<SecretStatus, String> {
+fn save_secret_values(
+    db_password: String,
+    service_role_key: String,
+) -> Result<SecretStatus, String> {
     let should_save_db_password = !db_password.trim().is_empty();
     let should_save_service_role_key = !service_role_key.trim().is_empty();
     if !should_save_db_password && !should_save_service_role_key {
@@ -158,7 +200,9 @@ fn save_secret_values(db_password: String, service_role_key: String) -> Result<S
         return Err("DBパスワードをOS資格情報ストアへ保存後に確認できませんでした。".to_string());
     }
     if should_save_service_role_key && !status.service_role_key {
-        return Err("Service Role KeyをOS資格情報ストアへ保存後に確認できませんでした。".to_string());
+        return Err(
+            "Service Role KeyをOS資格情報ストアへ保存後に確認できませんでした。".to_string(),
+        );
     }
     Ok(status)
 }
@@ -166,8 +210,9 @@ fn save_secret_values(db_password: String, service_role_key: String) -> Result<S
 #[tauri::command]
 async fn check_database(settings: BackupToolSettings) -> Result<DbCheckResult, String> {
     validate_settings(&settings)?;
-    let password = read_secret(ACCOUNT_DB_PASSWORD)
-        .map_err(|_| "DBパスワードが未設定です。OS資格情報ストアへ保存してください。".to_string())?;
+    let password = read_secret(ACCOUNT_DB_PASSWORD).map_err(|_| {
+        "DBパスワードが未設定です。OS資格情報ストアへ保存してください。".to_string()
+    })?;
     let db_config = build_db_config(&settings, &password)?;
     let tls = build_database_tls_connector()?;
     let (client, connection_task) = db_config
@@ -205,7 +250,10 @@ async fn check_database(settings: BackupToolSettings) -> Result<DbCheckResult, S
 }
 
 #[tauri::command]
-async fn check_storage(project_url: String, bucket_name: String) -> Result<StorageCheckResult, String> {
+async fn check_storage(
+    project_url: String,
+    bucket_name: String,
+) -> Result<StorageCheckResult, String> {
     if bucket_name != "line-message-images" {
         return Err("確認対象bucketが正しくありません。".to_string());
     }
@@ -245,7 +293,8 @@ async fn check_storage(project_url: String, bucket_name: String) -> Result<Stora
         .map_err(|error| storage_error_message(&error.to_string()))?;
     let bucket_public = bucket_json.get("public").and_then(Value::as_bool);
 
-    let object_count = count_storage_objects(&client, &headers, &project_url, &bucket_name, "").await?;
+    let object_count =
+        count_storage_objects(&client, &headers, &project_url, &bucket_name, "").await?;
     Ok(StorageCheckResult {
         ok: true,
         bucket_exists: true,
@@ -365,7 +414,7 @@ fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|error| sanitized_error(error))
 }
 
-fn validate_settings(settings: &BackupToolSettings) -> Result<(), String> {
+pub(crate) fn validate_settings(settings: &BackupToolSettings) -> Result<(), String> {
     match settings.connection_mode {
         ConnectionMode::Direct | ConnectionMode::Session => {}
     }
@@ -375,7 +424,7 @@ fn validate_settings(settings: &BackupToolSettings) -> Result<(), String> {
     Ok(())
 }
 
-fn build_db_config(
+pub(crate) fn build_db_config(
     settings: &BackupToolSettings,
     password: &str,
 ) -> Result<tokio_postgres::Config, String> {
@@ -403,7 +452,7 @@ fn build_db_config(
     Ok(config)
 }
 
-fn build_database_tls_connector() -> Result<MakeRustlsConnect, String> {
+pub(crate) fn build_database_tls_connector() -> Result<MakeRustlsConnect, String> {
     let native_certificates = rustls_native_certs::load_native_certs();
     let mut roots = RootCertStore::empty();
     roots.add_parsable_certificates(native_certificates.certs);
@@ -426,14 +475,14 @@ fn build_database_tls_connector() -> Result<MakeRustlsConnect, String> {
     Ok(MakeRustlsConnect::new(config))
 }
 
-fn write_secret(key: &str, value: &str) -> Result<(), String> {
+pub(crate) fn write_secret(key: &str, value: &str) -> Result<(), String> {
     Entry::new(KEYRING_SERVICE_NAME, key)
         .map_err(|_| "OS資格情報ストアを開けませんでした。".to_string())?
         .set_password(value)
         .map_err(|_| "秘密情報の保存に失敗しました。".to_string())
 }
 
-fn read_secret(key: &str) -> Result<String, String> {
+pub(crate) fn read_secret(key: &str) -> Result<String, String> {
     Entry::new(KEYRING_SERVICE_NAME, key)
         .map_err(|_| "OS資格情報ストアを開けませんでした。".to_string())?
         .get_password()
@@ -443,15 +492,17 @@ fn read_secret(key: &str) -> Result<String, String> {
 fn get_secret_status_from_keyring() -> SecretStatus {
     SecretStatus {
         db_password: read_secret(ACCOUNT_DB_PASSWORD).is_ok_and(|value| !value.is_empty()),
-        service_role_key: read_secret(ACCOUNT_SERVICE_ROLE_KEY).is_ok_and(|value| !value.is_empty()),
+        service_role_key: read_secret(ACCOUNT_SERVICE_ROLE_KEY)
+            .is_ok_and(|value| !value.is_empty()),
     }
 }
 
-fn storage_headers(service_role_key: &str) -> Result<HeaderMap, String> {
+pub(crate) fn storage_headers(service_role_key: &str) -> Result<HeaderMap, String> {
     let mut headers = HeaderMap::new();
     headers.insert(
         "apikey",
-        HeaderValue::from_str(service_role_key).map_err(|_| "Service Role Keyの形式を確認してください。".to_string())?,
+        HeaderValue::from_str(service_role_key)
+            .map_err(|_| "Service Role Keyの形式を確認してください。".to_string())?,
     );
     headers.insert(
         AUTHORIZATION,
@@ -461,7 +512,7 @@ fn storage_headers(service_role_key: &str) -> Result<HeaderMap, String> {
     Ok(headers)
 }
 
-fn normalize_project_url(project_url: &str) -> Result<String, String> {
+pub(crate) fn normalize_project_url(project_url: &str) -> Result<String, String> {
     let trimmed = project_url.trim().trim_end_matches('/');
     if !(trimmed.starts_with("https://") || trimmed.starts_with("http://localhost")) {
         return Err("Supabase Project URLを確認してください。".to_string());
@@ -494,7 +545,7 @@ fn summarize_postgres_version(version: &str) -> String {
         .join(" ")
 }
 
-fn connection_mode_label(mode: &ConnectionMode) -> &'static str {
+pub(crate) fn connection_mode_label(mode: &ConnectionMode) -> &'static str {
     match mode {
         ConnectionMode::Direct => "Direct connection",
         ConnectionMode::Session => "Session pooler",
@@ -514,10 +565,13 @@ fn db_error_message(error: &str, mode: &ConnectionMode) -> String {
 }
 
 fn storage_error_message(error: &str) -> String {
-    format!("Storage接続を確認できません。Project URLとService Role Keyを確認してください。 {}", sanitized_error(error))
+    format!(
+        "Storage接続を確認できません。Project URLとService Role Keyを確認してください。 {}",
+        sanitized_error(error)
+    )
 }
 
-fn sanitized_error(error: impl ToString) -> String {
+pub(crate) fn sanitized_error(error: impl ToString) -> String {
     let mut text = error.to_string();
     for marker in ["password=", "apikey=", "authorization=", "Bearer "] {
         if let Some(index) = text.to_lowercase().find(&marker.to_lowercase()) {

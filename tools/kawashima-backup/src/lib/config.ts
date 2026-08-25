@@ -12,6 +12,9 @@ export type BackupToolSettings = {
   connectionMode: ConnectionMode;
   localBackupPath: string;
   googleDrivePath: string;
+  encryptionRecoveryExported: boolean;
+  recoveryKeyFingerprint: string | null;
+  recoveryKeyExportedAt: string | null;
 };
 
 export const emptySettings: BackupToolSettings = {
@@ -23,6 +26,9 @@ export const emptySettings: BackupToolSettings = {
   connectionMode: "direct",
   localBackupPath: "",
   googleDrivePath: "",
+  encryptionRecoveryExported: false,
+  recoveryKeyFingerprint: null,
+  recoveryKeyExportedAt: null,
 };
 
 export const secretFieldNames = ["dbPassword", "serviceRoleKey"] as const;
@@ -57,6 +63,9 @@ export function sanitizeSettings(input: BackupToolSettings): BackupToolSettings 
     connectionMode: validateConnectionMode(input.connectionMode),
     localBackupPath: input.localBackupPath.trim(),
     googleDrivePath: input.googleDrivePath.trim(),
+    encryptionRecoveryExported: Boolean(input.encryptionRecoveryExported),
+    recoveryKeyFingerprint: input.recoveryKeyFingerprint?.trim() || null,
+    recoveryKeyExportedAt: input.recoveryKeyExportedAt?.trim() || null,
   };
 }
 
@@ -81,5 +90,6 @@ export function redactSensitiveText(value: unknown): string {
 }
 
 export function hasSecretLikeValue(settings: Record<string, unknown>): boolean {
-  return secretFieldNames.some((name) => Object.prototype.hasOwnProperty.call(settings, name));
+  return [...secretFieldNames, "backupAgeIdentity", "recoveryKey", "privateKey", "secretKey"]
+    .some((name) => Object.prototype.hasOwnProperty.call(settings, name));
 }

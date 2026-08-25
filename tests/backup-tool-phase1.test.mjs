@@ -33,6 +33,9 @@ test("通常設定にはsecret項目を含めない", () => {
     connectionMode: "direct",
     localBackupPath: " /tmp/backup ",
     googleDrivePath: " /tmp/drive ",
+    encryptionRecoveryExported: false,
+    recoveryKeyFingerprint: null,
+    recoveryKeyExportedAt: null,
   });
 
   assert.equal(sanitized.dbPort, "5432");
@@ -40,6 +43,7 @@ test("通常設定にはsecret項目を含めない", () => {
   assert.equal(hasSecretLikeValue(sanitized), false);
   assert.equal(hasSecretLikeValue({ dbPassword: "secret" }), true);
   assert.equal(hasSecretLikeValue({ serviceRoleKey: "secret" }), true);
+  assert.equal(hasSecretLikeValue({ recoveryKey: "secret" }), true);
 });
 
 test("secretマスキングとエラー文言のredactionを行う", () => {
@@ -74,13 +78,14 @@ test("Storage bucket名はline-message-imagesに固定する", () => {
   assert.doesNotMatch(rust, /move\(/);
 });
 
-test("Phase 1はpg_dumpやバックアップ生成を実行しない", () => {
+test("Phase 1の接続確認とPhase 2のバックアップ処理を分離する", () => {
   const rust = readSource("tools/kawashima-backup/src-tauri/src/lib.rs");
+  const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
   const frontend = readSource("tools/kawashima-backup/src/main.ts");
 
-  assert.doesNotMatch(rust, /pg_dump|pg_restore|Command::new/);
-  assert.doesNotMatch(frontend, /バックアップ開始[^<]*<\/button>/);
-  assert.match(frontend, /バックアップ機能は次の実装段階/);
+  assert.doesNotMatch(rust, /pg_restore/);
+  assert.match(backup, /run_pg_dump_process/);
+  assert.match(frontend, /バックアップ開始/);
 });
 
 test("secretはRust側でOS資格情報ストアへ保存する", () => {
@@ -99,7 +104,7 @@ test("secret保存は保存後にKeychainから再読込してstatusだけ返す
   const rust = readSource("tools/kawashima-backup/src-tauri/src/lib.rs");
   const frontend = readSource("tools/kawashima-backup/src/main.ts");
 
-  assert.match(rust, /fn save_secret_values\(db_password: String, service_role_key: String\) -> Result<SecretStatus, String>/);
+  assert.match(rust, /fn save_secret_values\(\s*db_password: String,\s*service_role_key: String,?\s*\) -> Result<SecretStatus, String>/);
   assert.match(rust, /let status = get_secret_status_from_keyring\(\);/);
   assert.match(rust, /should_save_db_password && !status\.db_password/);
   assert.match(rust, /should_save_service_role_key && !status\.service_role_key/);
