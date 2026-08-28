@@ -10,6 +10,9 @@ use std::{
     },
 };
 
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+
 use age::{secrecy::ExposeSecret, x25519, Decryptor, Encryptor};
 use chrono::{Local, SecondsFormat, Utc};
 use reqwest::header::HeaderMap;
@@ -251,6 +254,8 @@ pub(crate) fn export_recovery_key(
 
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
     let mut file = options
         .open(&destination)
         .map_err(|_| "復旧鍵の保存先には新しいファイルを指定してください。".to_string())?;
@@ -322,15 +327,11 @@ pub(crate) fn register_imported_recovery_key(
         .as_ref()
         .cloned()
         .ok_or_else(|| "有効な復旧鍵を先に読み込んでください。".to_string())?;
-    let expected_fingerprint = identity_fingerprint(&identity);
-    super::write_secret(
-        ACCOUNT_ENCRYPTION_IDENTITY,
-        identity.to_string().expose_secret(),
+    persist_and_verify_identity(
+        &identity,
+        |encoded| super::write_secret(ACCOUNT_ENCRYPTION_IDENTITY, encoded),
+        read_encryption_identity,
     )?;
-    let stored = read_encryption_identity()?;
-    if identity_fingerprint(&stored) != expected_fingerprint {
-        return Err("復旧鍵をKeychainへ保存後に確認できませんでした。".to_string());
-    }
     Ok(encryption_status(&app))
 }
 
@@ -698,6 +699,25 @@ fn read_encryption_identity() -> Result<x25519::Identity, String> {
 
 fn identity_fingerprint(identity: &x25519::Identity) -> String {
     sha256_bytes(identity.to_public().to_string().as_bytes())
+}
+
+fn persist_and_verify_identity<W, R>(
+    identity: &x25519::Identity,
+    write: W,
+    read: R,
+) -> Result<(), String>
+where
+    W: FnOnce(&str) -> Result<(), String>,
+    R: FnOnce() -> Result<x25519::Identity, String>,
+{
+    let expected_fingerprint = identity_fingerprint(identity);
+    let encoded = identity.to_string();
+    write(encoded.expose_secret())?;
+    let stored = read()?;
+    if identity_fingerprint(&stored) != expected_fingerprint {
+        return Err("復旧鍵をKeychainへ保存後に確認できませんでした。".to_string());
+    }
+    Ok(())
 }
 
 fn read_recovery_identity_file(path: &Path) -> Result<x25519::Identity, String> {
@@ -1498,6 +1518,30 @@ mod tests {
         let other = x25519::Identity::generate();
         assert_eq!(identity_fingerprint(&first), identity_fingerprint(&same));
         assert_ne!(identity_fingerprint(&first), identity_fingerprint(&other));
+    }
+
+    #[test]
+    fn recovery_key_registration_writes_and_reads_back_the_same_identity() {
+        use std::cell::RefCell;
+
+        let identity = x25519::Identity::generate();
+        let stored = RefCell::new(None::<String>);
+        persist_and_verify_identity(
+            &identity,
+            |encoded| {
+                stored.replace(Some(encoded.to_string()));
+                Ok(())
+            },
+            || {
+                let encoded = stored.borrow();
+                x25519::Identity::from_str(encoded.as_deref().unwrap())
+                    .map_err(|_| "test credential could not be parsed".to_string())
+            },
+        )
+        .unwrap();
+
+        let other = x25519::Identity::generate();
+        assert!(persist_and_verify_identity(&identity, |_| Ok(()), || Ok(other)).is_err());
     }
 
     #[test]

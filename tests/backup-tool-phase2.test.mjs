@@ -110,8 +110,14 @@ test("復旧鍵のKeychain再登録は明示確認し、保存後に再読込検
   assert.match(frontend, /confirm\(/);
   assert.match(frontend, /register_imported_recovery_key/);
   assert.match(backup, /write_secret\(/);
-  assert.match(backup, /let stored = read_encryption_identity\(\)\?/);
+  assert.match(backup, /persist_and_verify_identity/);
   assert.match(backup, /identity_fingerprint\(&stored\) != expected_fingerprint/);
+});
+
+test("復旧鍵ファイルはUnixで作成時点から0600にする", () => {
+  const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
+  assert.match(backup, /OpenOptionsExt/);
+  assert.match(backup, /options\.mode\(0o600\)/);
 });
 
 test("Keychain鍵と復旧鍵の一致は公開鍵fingerprintだけで比較する", () => {
