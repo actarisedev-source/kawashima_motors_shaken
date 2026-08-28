@@ -33,6 +33,12 @@ test("通常設定にはsecret項目を含めない", () => {
     connectionMode: "direct",
     localBackupPath: " /tmp/backup ",
     googleDrivePath: " /tmp/drive ",
+    encryptionRecipient: null,
+    encryptionRecipientFingerprint: null,
+    encryptionRecipientRegisteredAt: null,
+    encryptionRecipientRegisteredByAppVersion: null,
+    endpointId: null,
+    encryptionAlgorithm: null,
     encryptionRecoveryExported: false,
     recoveryKeyFingerprint: null,
     recoveryKeyExportedAt: null,
@@ -81,21 +87,24 @@ test("Storage bucket名はline-message-imagesに固定する", () => {
 test("Phase 1の接続確認とPhase 2のバックアップ処理を分離する", () => {
   const rust = readSource("tools/kawashima-backup/src-tauri/src/lib.rs");
   const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
+  const runtime = readSource("tools/kawashima-backup/src-tauri/src/postgres_runtime.rs");
   const frontend = readSource("tools/kawashima-backup/src/main.ts");
 
   assert.doesNotMatch(rust, /pg_restore/);
-  assert.match(backup, /run_pg_dump_process/);
+  assert.match(backup, /postgres_runtime::run_pg_dump/);
+  assert.match(runtime, /inspect_custom_dump/);
   assert.match(frontend, /バックアップ開始/);
 });
 
 test("secretはRust側でOS資格情報ストアへ保存する", () => {
   const rust = readSource("tools/kawashima-backup/src-tauri/src/lib.rs");
+  const credentials = readSource("tools/kawashima-backup/src-tauri/src/credential_store.rs");
   const cargo = readSource("tools/kawashima-backup/src-tauri/Cargo.toml");
-  assert.match(rust, /keyring::Entry/);
+  assert.match(credentials, /use keyring::\{Entry/);
   assert.match(cargo, /features = \["apple-native", "windows-native"\]/);
-  assert.match(rust, /KEYRING_SERVICE_NAME: &str = "jp\.actarise\.kawashima\.backup"/);
-  assert.match(rust, /ACCOUNT_DB_PASSWORD: &str = "db-password"/);
-  assert.match(rust, /ACCOUNT_SERVICE_ROLE_KEY: &str = "supabase-service-role-key"/);
+  assert.match(credentials, /SERVICE_NAME: &str = "jp\.actarise\.kawashima\.backup"/);
+  assert.match(credentials, /ACCOUNT_DB_PASSWORD: &str = "db-password"/);
+  assert.match(credentials, /ACCOUNT_SERVICE_ROLE_KEY: &str = "supabase-service-role-key"/);
   assert.match(rust, /SETTINGS_FILE_NAME/);
   assert.doesNotMatch(rust, /db_password.*serde_json::to_string/);
 });
@@ -115,10 +124,10 @@ test("secret保存は保存後にKeychainから再読込してstatusだけ返す
 
 test("保存時と読込時のKeychain識別子は同じ定数を使う", () => {
   const rust = readSource("tools/kawashima-backup/src-tauri/src/lib.rs");
-  assert.match(rust, /write_secret\(ACCOUNT_DB_PASSWORD, db_password\.trim\(\)\)/);
-  assert.match(rust, /write_secret\(ACCOUNT_SERVICE_ROLE_KEY, service_role_key\.trim\(\)\)/);
-  assert.match(rust, /read_secret\(ACCOUNT_DB_PASSWORD\)/);
-  assert.match(rust, /read_secret\(ACCOUNT_SERVICE_ROLE_KEY\)/);
+  assert.match(rust, /write_secret_explicit\(ACCOUNT_DB_PASSWORD, db_password\.trim\(\)\)/);
+  assert.match(rust, /ACCOUNT_SERVICE_ROLE_KEY,/);
+  assert.match(rust, /read_secret\(ACCOUNT_DB_PASSWORD, "DBパスワード"\)/);
+  assert.match(rust, /read_secret\(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key"\)/);
 });
 
 test("Supabase公式CAを追加し証明書検証を維持する", () => {

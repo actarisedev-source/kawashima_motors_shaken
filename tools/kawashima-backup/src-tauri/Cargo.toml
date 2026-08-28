@@ -1,6 +1,6 @@
 [package]
 name = "kawashima-backup-tool"
-version = "0.2.0"
+version = "0.3.0"
 description = "Kawashima Motors backup tool"
 authors = ["ACTARISE"]
 edition = "2021"

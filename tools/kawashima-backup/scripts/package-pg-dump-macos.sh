@@ -2,19 +2,21 @@
 set -euo pipefail
 
 if [[ "$(uname -s)" != "Darwin" || "$(uname -m)" != "arm64" ]]; then
-  echo "This script packages pg_dump only for macOS arm64." >&2
+  echo "This script packages PostgreSQL backup tools only for macOS arm64." >&2
   exit 1
 fi
 
 pg_root="$(brew --prefix postgresql@17)"
-source_binary="$pg_root/bin/pg_dump"
 destination="$(cd "$(dirname "$0")/.." && pwd)/src-tauri/resources/bin/macos-aarch64"
+source_binaries=("$pg_root/bin/pg_dump" "$pg_root/bin/pg_restore")
 
 rm -rf "$destination"
 mkdir -p "$destination/licenses"
-cp "$source_binary" "$destination/pg_dump"
+for source_binary in "${source_binaries[@]}"; do
+  cp "$source_binary" "$destination/$(basename "$source_binary")"
+done
 
-queue=("$source_binary")
+queue=("${source_binaries[@]}")
 seen=()
 while [[ ${#queue[@]} -gt 0 ]]; do
   current="${queue[0]}"
@@ -38,7 +40,7 @@ while [[ ${#queue[@]} -gt 0 ]]; do
   done < <(otool -L "$current" | tail -n +2 | awk '{print $1}')
 done
 
-for binary in "$destination"/pg_dump "$destination"/*.dylib; do
+for binary in "$destination"/pg_dump "$destination"/pg_restore "$destination"/*.dylib; do
   while IFS= read -r dependency; do
     [[ -z "$dependency" ]] && continue
     case "$dependency" in
@@ -61,4 +63,5 @@ cp "$(brew --prefix lz4)/LICENSE" "$destination/licenses/lz4-LICENSE.txt"
 cp "$(brew --prefix krb5)/NOTICE" "$destination/licenses/krb5-NOTICE.txt"
 
 "$destination/pg_dump" --version
-echo "Packaged pg_dump and runtime libraries in $destination"
+"$destination/pg_restore" --version
+echo "Packaged pg_dump, pg_restore, and runtime libraries in $destination"

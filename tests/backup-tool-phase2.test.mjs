@@ -4,22 +4,24 @@ import test from "node:test";
 
 const readSource = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("pg_dump 17をpublic schema専用のcustom形式で実行する", () => {
-  const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
-  assert.match(backup, /REQUIRED_PG_DUMP_MAJOR: u32 = 17/);
-  assert.match(backup, /"--format=custom"/);
-  assert.match(backup, /"--schema=public"/);
-  assert.match(backup, /"--no-owner"/);
-  assert.match(backup, /"--no-acl"/);
-  assert.match(backup, /"PGSSLMODE", "verify-full"/);
-  assert.match(backup, /"PGSSLROOTCERT"/);
-  assert.doesNotMatch(backup, /pg_restore/);
+test("PostgreSQL 17をpublic schema専用custom形式で取得して構造検査する", () => {
+  const runtime = readSource("tools/kawashima-backup/src-tauri/src/postgres_runtime.rs");
+  assert.match(runtime, /REQUIRED_POSTGRES_TOOL_MAJOR: u32 = 17/);
+  assert.match(runtime, /"--format=custom"/);
+  assert.match(runtime, /"--schema=public"/);
+  assert.match(runtime, /"--no-owner"/);
+  assert.match(runtime, /"--no-acl"/);
+  assert.match(runtime, /"PGSSLMODE", "verify-full"/);
+  assert.match(runtime, /"PGSSLROOTCERT"/);
+  assert.match(runtime, /\.arg\("--list"\)/);
 });
 
-test("macOS arm64向けpg_dumpと実行ライブラリを同梱する", () => {
-  const executable = new URL("../tools/kawashima-backup/src-tauri/resources/bin/macos-aarch64/pg_dump", import.meta.url);
-  assert.equal(existsSync(executable), true);
-  assert.equal((statSync(executable).mode & 0o111) !== 0, true);
+test("macOS arm64向けpg_dumpとpg_restoreを実行可能な状態で同梱する", () => {
+  for (const tool of ["pg_dump", "pg_restore"]) {
+    const executable = new URL(`../tools/kawashima-backup/src-tauri/resources/bin/macos-aarch64/${tool}`, import.meta.url);
+    assert.equal(existsSync(executable), true);
+    assert.equal((statSync(executable).mode & 0o111) !== 0, true);
+  }
   const tauri = readSource("tools/kawashima-backup/src-tauri/tauri.conf.json");
   assert.match(tauri, /resources\/bin\/macos-aarch64\/\*\*\/\*/);
 });
@@ -33,36 +35,48 @@ test("Storage全件一覧・認証済みdownload・3回retryを実装する", ()
   assert.doesNotMatch(backup, /storage\/v1\/object\/(?:move|copy)/);
 });
 
-test("age X25519暗号化と復号検証を必須にする", () => {
+test("age X25519公開Recipientだけで暗号化し秘密鍵生成に依存しない", () => {
   const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
   const cargo = readSource("tools/kawashima-backup/src-tauri/Cargo.toml");
   assert.match(cargo, /age = "0\.12\.1"/);
-  assert.match(backup, /x25519::Identity::generate/);
+  assert.match(backup, /recipient: &x25519::Recipient/);
   assert.match(backup, /Encryptor::with_recipients/);
-  assert.match(backup, /verify_encrypted_backup/);
-  assert.match(backup, /verify_checksum_manifest/);
-  assert.match(backup, /backup-report\.json/);
-  assert.match(backup, /status: "success"\.to_string\(\)/);
+  assert.match(backup, /parse_encryption_recipient/);
+  assert.doesNotMatch(backup, /generate_encryption_identity|ACCOUNT_ENCRYPTION_IDENTITY/);
   assert.doesNotMatch(backup, /danger_accept_invalid/);
 });
 
-test("暗号化秘密鍵をUIへ返さずKeychain識別子を固定する", () => {
+test("公開鍵fingerprintとendpoint metadataを設定とmanifestへ記録する", () => {
   const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
-  const frontend = readSource("tools/kawashima-backup/src/main.ts");
-  assert.match(backup, /ACCOUNT_ENCRYPTION_IDENTITY: &str = "backup-age-identity"/);
-  assert.match(backup, /struct EncryptionStatus/);
-  assert.doesNotMatch(frontend, /AGE-SECRET-KEY-/);
-  assert.doesNotMatch(frontend, /privateKey|secretKey/);
-  assert.match(frontend, /fingerprint/);
+  const config = readSource("tools/kawashima-backup/src/lib/config.ts");
+  for (const field of ["recipient_fingerprint", "endpoint_id", "application_version", "encryption_algorithm"]) {
+    assert.match(backup, new RegExp(field));
+  }
+  assert.match(config, /encryptionRecipientFingerprint/);
+  assert.match(config, /encryptionRecipientRegisteredAt/);
+  assert.match(config, /encryptionRecipientRegisteredByAppVersion/);
+  assert.match(config, /endpointId/);
 });
 
-test("2保存先はpartialコピー・hash検証・renameで公開する", () => {
+test("異なる公開鍵の通常上書きを拒否し保守変更を分離する", () => {
   const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
+  const frontend = readSource("tools/kawashima-backup/src/main.ts");
+  assert.match(backup, /異なる公開鍵またはendpointIdは通常登録では上書きできません/);
+  assert.match(backup, /replace_encryption_recipient/);
+  assert.match(backup, /expected_current_fingerprint/);
+  assert.match(backup, /RECIPIENT_REPLACEMENT_CONFIRMATION/);
+  assert.match(frontend, /保守担当者向け: 暗号化公開鍵を変更/);
+  assert.match(frontend, /confirm\(/);
+});
+
+test("2保存先はpartialコピー・hash検証・非上書きpublishで公開する", () => {
+  const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
+  const fileSecurity = readSource("tools/kawashima-backup/src-tauri/src/file_security.rs");
   assert.match(backup, /copy_atomic_verified/);
   assert.match(backup, /with_extension\("age\.partial"\)/);
   assert.match(backup, /sha256_file\(&partial\)/);
-  assert.match(backup, /fs::rename\(&partial, destination\)/);
-  assert.match(backup, /fs::remove_file\(path\)/);
+  assert.match(backup, /file_security::publish_new_file/);
+  assert.match(fileSecurity, /destination\.exists\(\)/);
 });
 
 test("二重実行と実行中終了を防止する", () => {
@@ -89,63 +103,49 @@ test("進捗・確認ダイアログ・履歴を画面に表示する", () => {
   assert.match(frontend, /backup-progress/);
   assert.match(frontend, /role="dialog"/);
   assert.match(frontend, /バックアップ履歴/);
-  assert.match(frontend, /復号検証/);
+  assert.match(frontend, /整合性確認/);
   assert.match(frontend, /Google Drive同期フォルダ/);
 });
 
-test("復旧鍵はRust側だけで読み込み、形式検証後も実値をUIへ返さない", () => {
+test("復旧鍵はRustメモリだけへ読み込み実値をUIへ返さない", () => {
   const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
   const frontend = readSource("tools/kawashima-backup/src/main.ts");
   assert.match(backup, /fn import_recovery_key/);
   assert.match(backup, /x25519::Identity::from_str/);
   assert.match(backup, /RecoveryKeyState\(Mutex<Option<x25519::Identity>>\)/);
-  assert.match(backup, /\*loaded = None/);
-  assert.match(backup, /struct RecoveryKeyImportStatus/);
+  assert.match(backup, /clear_imported_recovery_key/);
   assert.doesNotMatch(frontend, /readTextFile|AGE-SECRET-KEY-/);
 });
 
-test("復旧鍵のKeychain再登録は明示確認し、保存後に再読込検証する", () => {
+test("復旧鍵を資格情報ストアへ再登録せず公開鍵とfingerprint比較する", () => {
   const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
   const frontend = readSource("tools/kawashima-backup/src/main.ts");
-  assert.match(frontend, /confirm\(/);
-  assert.match(frontend, /register_imported_recovery_key/);
-  assert.match(backup, /write_secret\(/);
-  assert.match(backup, /persist_and_verify_identity/);
-  assert.match(backup, /identity_fingerprint\(&stored\) != expected_fingerprint/);
+  assert.match(backup, /matches_recipient/);
+  assert.match(backup, /identity_fingerprint/);
+  assert.doesNotMatch(backup, /register_imported_recovery_key/);
+  assert.doesNotMatch(frontend, /Keychainへ再登録/);
 });
 
-test("復旧鍵ファイルはUnixで作成時点から0600にする", () => {
+test("復号確認はTempDirを全経路で解放し平文SHAとdump構造結果を返す", () => {
   const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
-  assert.match(backup, /OpenOptionsExt/);
-  assert.match(backup, /options\.mode\(0o600\)/);
-});
-
-test("Keychain鍵と復旧鍵の一致は公開鍵fingerprintだけで比較する", () => {
-  const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
-  assert.match(backup, /fn identity_fingerprint/);
-  assert.match(backup, /identity\.to_public\(\)\.to_string\(\)/);
-  assert.match(backup, /matches_keychain/);
-  assert.match(backup, /recovery_key_fingerprint/);
-  assert.match(backup, /recovery_key_exported_at/);
-});
-
-test("Keychainまたは読み込んだ復旧鍵で一時領域へ復号検証してcleanupする", () => {
-  const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
-  assert.match(backup, /enum VerificationKeySource/);
-  assert.match(backup, /VerificationKeySource::Keychain/);
-  assert.match(backup, /VerificationKeySource::Recovery/);
-  assert.match(backup, /TempDir::new/);
+  assert.match(backup, /tempfile::Builder::new\(\)/);
   assert.match(backup, /drop\(temp\)/);
   assert.match(backup, /temporary_files_removed/);
-  assert.doesNotMatch(backup, /pg_restore/);
+  assert.match(backup, /plaintext_archive_sha256/);
+  assert.match(backup, /database_structure_valid/);
+  assert.match(backup, /inspect_custom_dump/);
 });
 
-test("復旧鍵書き出し状態は現在鍵のfingerprintと日時で判定する", () => {
-  const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
-  const config = readSource("tools/kawashima-backup/src/lib/config.ts");
-  assert.match(backup, /fn recovery_metadata_matches/);
-  assert.match(backup, /recovery_key_fingerprint/);
-  assert.match(backup, /recovery_key_exported_at/);
-  assert.match(config, /recoveryKeyFingerprint/);
-  assert.match(config, /recoveryKeyExportedAt/);
+test("通常バックアップ端末の資格情報ストア対象はDBとStorage secretだけ", () => {
+  const credentials = readSource("tools/kawashima-backup/src-tauri/src/credential_store.rs");
+  assert.match(credentials, /ACCOUNT_DB_PASSWORD/);
+  assert.match(credentials, /ACCOUNT_SERVICE_ROLE_KEY/);
+  assert.doesNotMatch(credentials, /backup-age-identity/);
+});
+
+test("公開鍵設定と秘密鍵らしい値を区別し秘密鍵をフロントへ露出しない", () => {
+  const frontend = readSource("tools/kawashima-backup/src/main.ts");
+  assert.match(frontend, /age公開鍵/);
+  assert.match(frontend, /fingerprint/);
+  assert.doesNotMatch(frontend, /AGE-SECRET-KEY-|privateKey|secretKey/);
 });

@@ -1,8 +1,7 @@
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::{BufRead, BufReader, BufWriter, Read, Write},
     path::{Component, Path, PathBuf},
-    process::Command,
     str::FromStr,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -10,10 +9,7 @@ use std::{
     },
 };
 
-#[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
-
-use age::{secrecy::ExposeSecret, x25519, Decryptor, Encryptor};
+use age::{x25519, Decryptor, Encryptor};
 use chrono::{Local, SecondsFormat, Utc};
 use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
@@ -26,8 +22,8 @@ use super::{
     read_secret, sanitized_error, save_settings_to_disk, storage_headers, BackupToolSettings,
     ACCOUNT_DB_PASSWORD, ACCOUNT_SERVICE_ROLE_KEY, SUPABASE_ROOT_CA_PEM,
 };
+use super::{file_security, postgres_runtime};
 
-const ACCOUNT_ENCRYPTION_IDENTITY: &str = "backup-age-identity";
 const HISTORY_FILE_NAME: &str = "backup-history.json";
 const STORAGE_BUCKET: &str = "line-message-images";
 const STORAGE_PAGE_SIZE: usize = 100;
@@ -35,8 +31,9 @@ const STORAGE_DOWNLOAD_ATTEMPTS: usize = 3;
 const PROGRESS_EVENT: &str = "backup-progress";
 const ARCHIVE_ROOT: &str = "kawashima-backup";
 const DUMP_FILE_NAME: &str = "public.dump";
-const REQUIRED_PG_DUMP_MAJOR: u32 = 17;
 const MAX_RECOVERY_KEY_FILE_SIZE: u64 = 16 * 1024;
+const ENCRYPTION_ALGORITHM: &str = "age X25519";
+const RECIPIENT_REPLACEMENT_CONFIRMATION: &str = "公開鍵を変更する";
 
 static BACKUP_RUNNING: AtomicBool = AtomicBool::new(false);
 
@@ -45,13 +42,15 @@ pub(crate) struct RecoveryKeyState(Mutex<Option<x25519::Identity>>);
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct EncryptionStatus {
-    stored: bool,
-    recovery_exported: bool,
+pub(crate) struct EncryptionRecipientStatus {
+    configured: bool,
+    state: String,
     recipient: Option<String>,
-    key_fingerprint: Option<String>,
-    recovery_key_fingerprint: Option<String>,
-    recovery_key_exported_at: Option<String>,
+    fingerprint: Option<String>,
+    registered_at: Option<String>,
+    registered_by_app_version: Option<String>,
+    endpoint_id: Option<String>,
+    algorithm: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -60,14 +59,7 @@ pub(crate) struct RecoveryKeyImportStatus {
     loaded: bool,
     valid: bool,
     fingerprint: String,
-    matches_keychain: Option<bool>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) enum VerificationKeySource {
-    Keychain,
-    Recovery,
+    matches_recipient: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -80,6 +72,8 @@ pub(crate) struct BackupVerificationResult {
     manifests_present: bool,
     storage_present: bool,
     verification_present: bool,
+    database_structure_valid: bool,
+    plaintext_archive_sha256: String,
     temporary_files_removed: bool,
 }
 
@@ -89,6 +83,8 @@ struct VerifiedBackupStructure {
     manifests_present: bool,
     storage_present: bool,
     verification_present: bool,
+    database_structure_valid: bool,
+    plaintext_archive_sha256: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,6 +105,14 @@ pub(crate) struct BackupHistoryEntry {
     google_drive_copy_ok: bool,
     storage_object_count: usize,
     public_table_count: i64,
+    #[serde(default)]
+    endpoint_id: String,
+    #[serde(default)]
+    recipient_fingerprint: String,
+    #[serde(default)]
+    plaintext_archive_sha256: String,
+    #[serde(default)]
+    application_version: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -142,6 +146,7 @@ struct DatabaseManifest {
     dump_sha256: String,
     public_table_count: i64,
     pg_dump_version: String,
+    pg_restore_version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,10 +174,13 @@ struct BackupManifest {
     backup_id: String,
     created_at: String,
     application: String,
+    application_version: String,
+    endpoint_id: String,
     database_manifest: String,
     storage_manifest: String,
     checksum_manifest: String,
     encryption: String,
+    encryption_recipient_fingerprint: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -216,77 +224,61 @@ pub(crate) fn backup_is_running() -> bool {
 }
 
 #[tauri::command]
-pub(crate) fn get_encryption_status(app: AppHandle) -> EncryptionStatus {
-    encryption_status(&app)
+pub(crate) fn get_encryption_recipient_status(app: AppHandle) -> EncryptionRecipientStatus {
+    encryption_recipient_status(&app)
 }
 
 #[tauri::command]
-pub(crate) fn generate_encryption_identity(app: AppHandle) -> Result<EncryptionStatus, String> {
-    if read_encryption_identity().is_ok() {
-        return Err("暗号化鍵はすでに作成済みです。既存鍵を維持します。".to_string());
-    }
-
-    let identity = x25519::Identity::generate();
-    super::write_secret(
-        ACCOUNT_ENCRYPTION_IDENTITY,
-        identity.to_string().expose_secret(),
-    )?;
-    let stored = read_encryption_identity()?;
-    let status = encryption_status(&app);
-    if !status.stored || stored.to_public().to_string().is_empty() {
-        return Err("暗号化鍵をOS資格情報ストアへ保存後に確認できませんでした。".to_string());
-    }
-    Ok(status)
-}
-
-#[tauri::command]
-pub(crate) fn export_recovery_key(
+pub(crate) fn register_encryption_recipient(
     app: AppHandle,
-    path: String,
-    mut settings: BackupToolSettings,
-) -> Result<EncryptionStatus, String> {
-    let identity = read_encryption_identity()?;
-    let destination = PathBuf::from(path.trim());
-    validate_recovery_destination(&destination, &settings)?;
-    if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent).map_err(|error| sanitized_error(error))?;
+    recipient: String,
+    endpoint_id: String,
+) -> Result<EncryptionRecipientStatus, String> {
+    let recipient = parse_encryption_recipient(&recipient)?;
+    let endpoint_id = validate_endpoint_id(&endpoint_id)?;
+    let mut settings = super::load_settings_from_disk(&app)?;
+    if recipient_registration_exists_and_matches(&settings, &recipient, &endpoint_id)? {
+        return Ok(encryption_recipient_status(&app));
     }
+    apply_recipient_registration(&mut settings, &recipient, endpoint_id);
+    save_settings_to_disk(&app, &settings)?;
+    Ok(encryption_recipient_status(&app))
+}
 
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    options.mode(0o600);
-    let mut file = options
-        .open(&destination)
-        .map_err(|_| "復旧鍵の保存先には新しいファイルを指定してください。".to_string())?;
-    writeln!(file, "# created by Kawashima Motors Backup Tool")
-        .map_err(|error| sanitized_error(error))?;
-    writeln!(file, "# public key: {}", identity.to_public())
-        .map_err(|error| sanitized_error(error))?;
-    writeln!(file, "{}", identity.to_string().expose_secret())
-        .map_err(|error| sanitized_error(error))?;
-    file.sync_all().map_err(|error| sanitized_error(error))?;
-    set_private_file_permissions(&destination)?;
-
-    let exported_identity = read_recovery_identity_file(&destination)?;
-    let fingerprint = identity_fingerprint(&identity);
-    if identity_fingerprint(&exported_identity) != fingerprint {
-        let _ = fs::remove_file(&destination);
-        return Err("書き出した復旧鍵を検証できませんでした。".to_string());
+#[tauri::command]
+pub(crate) fn replace_encryption_recipient(
+    app: AppHandle,
+    recipient: String,
+    endpoint_id: String,
+    expected_current_fingerprint: String,
+    confirmation: String,
+) -> Result<EncryptionRecipientStatus, String> {
+    if confirmation != RECIPIENT_REPLACEMENT_CONFIRMATION {
+        return Err("公開鍵変更には明示的な保守確認が必要です。".to_string());
     }
-
-    settings.encryption_recovery_exported = true;
-    settings.recovery_key_fingerprint = Some(fingerprint);
-    settings.recovery_key_exported_at = Some(Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true));
-    if let Err(error) = save_settings_to_disk(&app, &settings) {
-        let _ = fs::remove_file(&destination);
-        return Err(error);
+    let recipient = parse_encryption_recipient(&recipient)?;
+    let endpoint_id = validate_endpoint_id(&endpoint_id)?;
+    let mut settings = super::load_settings_from_disk(&app)?;
+    let existing = settings
+        .encryption_recipient
+        .as_deref()
+        .ok_or_else(|| "登録済み公開鍵がありません。通常登録を使用してください。".to_string())?;
+    let existing = parse_encryption_recipient(existing)
+        .map_err(|_| "登録済み公開鍵が破損しています。自動上書きしません。".to_string())?;
+    if recipient_fingerprint(&existing) != expected_current_fingerprint {
+        return Err("現在の公開鍵fingerprintが一致しないため変更を中止しました。".to_string());
     }
-    Ok(encryption_status(&app))
+    if existing == recipient && settings.endpoint_id.as_deref() == Some(endpoint_id.as_str()) {
+        return Ok(encryption_recipient_status(&app));
+    }
+    apply_recipient_registration(&mut settings, &recipient, endpoint_id);
+    save_settings_to_disk(&app, &settings)?;
+    Ok(encryption_recipient_status(&app))
 }
 
 #[tauri::command]
 pub(crate) fn import_recovery_key(
+    app: AppHandle,
     path: String,
     state: State<'_, RecoveryKeyState>,
 ) -> Result<RecoveryKeyImportStatus, String> {
@@ -299,9 +291,12 @@ pub(crate) fn import_recovery_key(
     }
     let identity = read_recovery_identity_file(Path::new(path.trim()))?;
     let fingerprint = identity_fingerprint(&identity);
-    let matches_keychain = read_encryption_identity()
-        .ok()
-        .map(|stored| identity_fingerprint(&stored) == fingerprint);
+    let settings = super::load_settings_from_disk(&app)?;
+    let matches_recipient = settings
+        .encryption_recipient
+        .as_deref()
+        .and_then(|value| parse_encryption_recipient(value).ok())
+        .map(|recipient| recipient_fingerprint(&recipient) == fingerprint);
     let mut loaded = state
         .0
         .lock()
@@ -311,15 +306,28 @@ pub(crate) fn import_recovery_key(
         loaded: true,
         valid: true,
         fingerprint,
-        matches_keychain,
+        matches_recipient,
     })
 }
 
 #[tauri::command]
-pub(crate) fn register_imported_recovery_key(
-    app: AppHandle,
+pub(crate) fn clear_imported_recovery_key(
     state: State<'_, RecoveryKeyState>,
-) -> Result<EncryptionStatus, String> {
+) -> Result<(), String> {
+    let mut identity = state
+        .0
+        .lock()
+        .map_err(|_| "復旧鍵の状態を更新できませんでした。".to_string())?;
+    *identity = None;
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn verify_backup_file(
+    app: AppHandle,
+    path: String,
+    state: State<'_, RecoveryKeyState>,
+) -> Result<BackupVerificationResult, String> {
     let identity = state
         .0
         .lock()
@@ -327,34 +335,13 @@ pub(crate) fn register_imported_recovery_key(
         .as_ref()
         .cloned()
         .ok_or_else(|| "有効な復旧鍵を先に読み込んでください。".to_string())?;
-    persist_and_verify_identity(
+    let runtime = postgres_runtime::PostgresRuntime::resolve(&app)?;
+    verify_backup_file_with_identity(
+        Path::new(path.trim()),
         &identity,
-        |encoded| super::write_secret(ACCOUNT_ENCRYPTION_IDENTITY, encoded),
-        read_encryption_identity,
-    )?;
-    Ok(encryption_status(&app))
-}
-
-#[tauri::command]
-pub(crate) fn verify_backup_file(
-    path: String,
-    key_source: VerificationKeySource,
-    state: State<'_, RecoveryKeyState>,
-) -> Result<BackupVerificationResult, String> {
-    let (identity, source_label) = match key_source {
-        VerificationKeySource::Keychain => (read_encryption_identity()?, "Keychain"),
-        VerificationKeySource::Recovery => {
-            let identity = state
-                .0
-                .lock()
-                .map_err(|_| "復旧鍵の状態を読み込めませんでした。".to_string())?
-                .as_ref()
-                .cloned()
-                .ok_or_else(|| "有効な復旧鍵を先に読み込んでください。".to_string())?;
-            (identity, "復旧鍵")
-        }
-    };
-    verify_backup_file_with_identity(Path::new(path.trim()), &identity, source_label)
+        "復旧鍵",
+        &runtime.pg_restore,
+    )
 }
 
 #[tauri::command]
@@ -369,7 +356,7 @@ pub(crate) async fn run_backup(
 ) -> Result<BackupResult, String> {
     let _guard = BackupRunGuard::acquire()?;
     let failed_started_at = Utc::now();
-    let result = execute_backup(app.clone(), settings).await;
+    let result = execute_backup(app.clone(), settings.clone()).await;
     if let Err(error) = &result {
         let now = Utc::now();
         let failed_entry = BackupHistoryEntry {
@@ -388,6 +375,13 @@ pub(crate) async fn run_backup(
             google_drive_copy_ok: false,
             storage_object_count: 0,
             public_table_count: 0,
+            endpoint_id: settings.endpoint_id.clone().unwrap_or_default(),
+            recipient_fingerprint: settings
+                .encryption_recipient_fingerprint
+                .clone()
+                .unwrap_or_default(),
+            plaintext_archive_sha256: String::new(),
+            application_version: env!("CARGO_PKG_VERSION").to_string(),
         };
         let _ = append_history(&app, failed_entry);
         emit_progress(
@@ -406,7 +400,12 @@ async fn execute_backup(
     app: AppHandle,
     settings: BackupToolSettings,
 ) -> Result<BackupResult, String> {
-    validate_backup_prerequisites(&app, &settings)?;
+    let recipient = validate_backup_prerequisites(&app, &settings)?;
+    let recipient_fingerprint = recipient_fingerprint(&recipient);
+    let endpoint_id = settings
+        .endpoint_id
+        .clone()
+        .ok_or_else(|| "endpointIdが未設定です。".to_string())?;
     emit_progress(
         &app,
         "preflight",
@@ -438,15 +437,11 @@ async fn execute_backup(
         fs::create_dir_all(directory).map_err(|error| sanitized_error(error))?;
     }
 
-    let db_password =
-        read_secret(ACCOUNT_DB_PASSWORD).map_err(|_| "DBパスワードが未設定です。".to_string())?;
-    let service_role_key = read_secret(ACCOUNT_SERVICE_ROLE_KEY)
-        .map_err(|_| "Service Role Keyが未設定です。".to_string())?;
-    let identity = read_encryption_identity()?;
+    let db_password = read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?;
+    let service_role_key = read_secret(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key")?;
 
     let db_info = query_database_metadata(&settings, &db_password).await?;
-    let pg_dump_path = resolve_pg_dump_path(&app)?;
-    let pg_dump_version = validate_pg_dump(&pg_dump_path)?;
+    let postgres_runtime = postgres_runtime::PostgresRuntime::resolve(&app)?;
     emit_progress(
         &app,
         "database",
@@ -458,7 +453,14 @@ async fn execute_backup(
     let dump_path = database_dir.join(DUMP_FILE_NAME);
     let ca_path = temp.path().join("supabase-root-2021.crt");
     fs::write(&ca_path, SUPABASE_ROOT_CA_PEM).map_err(|error| sanitized_error(error))?;
-    run_pg_dump_process(&pg_dump_path, &settings, &db_password, &ca_path, &dump_path)?;
+    postgres_runtime::run_pg_dump(
+        &postgres_runtime.pg_dump,
+        &settings,
+        &db_password,
+        &ca_path,
+        &dump_path,
+    )?;
+    postgres_runtime::inspect_custom_dump(&postgres_runtime.pg_restore, &dump_path)?;
     let dump_size = file_size(&dump_path)?;
     let dump_sha256 = sha256_file(&dump_path)?;
     emit_progress(
@@ -517,7 +519,8 @@ async fn execute_backup(
         dump_size,
         dump_sha256,
         public_table_count: db_info.1,
-        pg_dump_version,
+        pg_dump_version: postgres_runtime.pg_dump_version,
+        pg_restore_version: postgres_runtime.pg_restore_version,
     };
     let storage_manifest = StorageManifest {
         created_at: created_at.clone(),
@@ -530,10 +533,13 @@ async fn execute_backup(
         backup_id: backup_id.clone(),
         created_at: created_at.clone(),
         application: "Kawashima Motors Backup Tool".to_string(),
+        application_version: env!("CARGO_PKG_VERSION").to_string(),
+        endpoint_id: endpoint_id.clone(),
         database_manifest: "manifests/database.json".to_string(),
         storage_manifest: "manifests/storage.json".to_string(),
         checksum_manifest: "verification/sha256sums.txt".to_string(),
-        encryption: "age X25519".to_string(),
+        encryption: ENCRYPTION_ALGORITHM.to_string(),
+        encryption_recipient_fingerprint: recipient_fingerprint.clone(),
     };
     let backup_report = BackupReport {
         status: "success".to_string(),
@@ -568,6 +574,7 @@ async fn execute_backup(
     );
     let tar_path = temp.path().join(format!("{backup_id}.tar"));
     create_tar_archive(&source_root, &tar_path)?;
+    let plaintext_archive_sha256 = sha256_file(&tar_path)?;
     emit_progress(
         &app,
         "archive",
@@ -586,7 +593,7 @@ async fn execute_backup(
         None,
     );
     let encrypted_path = temp.path().join(&archive_name);
-    encrypt_file(&tar_path, &encrypted_path, &identity)?;
+    encrypt_file(&tar_path, &encrypted_path, &recipient)?;
     let encrypted_size = file_size(&encrypted_path)?;
     let encrypted_sha256 = sha256_file(&encrypted_path)?;
     emit_progress(
@@ -602,16 +609,17 @@ async fn execute_backup(
         &app,
         "verify",
         "running",
-        "復号と整合性を検証しています。",
+        "暗号化形式と事前整合性を検証しています。",
         None,
         None,
     );
-    verify_encrypted_backup(&encrypted_path, &identity, temp.path())?;
+    validate_encrypted_envelope(&encrypted_path)?;
+    verify_checksum_manifest(&source_root, &verification_dir.join("sha256sums.txt"))?;
     emit_progress(
         &app,
         "verify",
         "complete",
-        "復号と整合性を確認しました。",
+        "公開鍵暗号化と事前整合性を確認しました。",
         None,
         None,
     );
@@ -652,6 +660,10 @@ async fn execute_backup(
         google_drive_copy_ok: true,
         storage_object_count: storage_manifest.object_count,
         public_table_count: database_manifest.public_table_count,
+        endpoint_id,
+        recipient_fingerprint,
+        plaintext_archive_sha256,
+        application_version: env!("CARGO_PKG_VERSION").to_string(),
     };
     append_history(&app, history.clone())?;
     emit_progress(
@@ -670,54 +682,116 @@ async fn execute_backup(
     })
 }
 
-fn encryption_status(app: &AppHandle) -> EncryptionStatus {
-    let identity = read_encryption_identity().ok();
+fn encryption_recipient_status(app: &AppHandle) -> EncryptionRecipientStatus {
     let settings = super::load_settings_from_disk(app).unwrap_or_default();
-    let key_fingerprint = identity.as_ref().map(identity_fingerprint);
-    let recovery_exported = recovery_metadata_matches(&settings, key_fingerprint.as_deref());
-    EncryptionStatus {
-        stored: identity.is_some(),
-        recovery_exported,
-        recipient: identity.map(|value| value.to_public().to_string()),
-        key_fingerprint,
-        recovery_key_fingerprint: settings.recovery_key_fingerprint,
-        recovery_key_exported_at: settings.recovery_key_exported_at,
+    let parsed = settings
+        .encryption_recipient
+        .as_deref()
+        .map(parse_encryption_recipient);
+    let (recipient, fingerprint, state) = match parsed {
+        Some(Ok(recipient)) => {
+            let fingerprint = recipient_fingerprint(&recipient);
+            if settings.encryption_recipient_fingerprint.as_deref() == Some(fingerprint.as_str()) {
+                (Some(recipient.to_string()), Some(fingerprint), "configured")
+            } else {
+                (None, None, "metadataMismatch")
+            }
+        }
+        Some(Err(_)) => (None, None, "invalid"),
+        None => (None, None, "missing"),
+    };
+    EncryptionRecipientStatus {
+        configured: state == "configured",
+        state: state.to_string(),
+        recipient,
+        fingerprint,
+        registered_at: settings.encryption_recipient_registered_at,
+        registered_by_app_version: settings.encryption_recipient_registered_by_app_version,
+        endpoint_id: settings.endpoint_id,
+        algorithm: settings
+            .encryption_algorithm
+            .unwrap_or_else(|| ENCRYPTION_ALGORITHM.to_string()),
     }
 }
 
-fn recovery_metadata_matches(settings: &BackupToolSettings, key_fingerprint: Option<&str>) -> bool {
-    settings.encryption_recovery_exported
-        && settings.recovery_key_exported_at.is_some()
-        && settings.recovery_key_fingerprint.as_deref() == key_fingerprint
+fn parse_encryption_recipient(value: &str) -> Result<x25519::Recipient, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty()
+        || trimmed.lines().count() != 1
+        || trimmed.split_whitespace().count() != 1
+        || !trimmed.starts_with("age1")
+    {
+        return Err("有効なage X25519公開鍵を入力してください。".to_string());
+    }
+    x25519::Recipient::from_str(trimmed)
+        .map_err(|_| "有効なage X25519公開鍵を入力してください。".to_string())
 }
 
-fn read_encryption_identity() -> Result<x25519::Identity, String> {
-    let encoded = read_secret(ACCOUNT_ENCRYPTION_IDENTITY)
-        .map_err(|_| "暗号化鍵が未設定です。".to_string())?;
-    x25519::Identity::from_str(&encoded).map_err(|_| "暗号化鍵を読み込めませんでした。".to_string())
+fn validate_endpoint_id(value: &str) -> Result<String, String> {
+    let value = value.trim();
+    let valid = (3..=64).contains(&value.len())
+        && value.chars().all(|character| {
+            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
+        })
+        && value
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_lowercase())
+        && value
+            .chars()
+            .last()
+            .is_some_and(|character| character.is_ascii_alphanumeric());
+    if !valid {
+        return Err(
+            "endpointIdは英小文字で始まる3〜64文字の英小文字・数字・ハイフンで指定してください。"
+                .to_string(),
+        );
+    }
+    Ok(value.to_string())
 }
 
 fn identity_fingerprint(identity: &x25519::Identity) -> String {
-    sha256_bytes(identity.to_public().to_string().as_bytes())
+    recipient_fingerprint(&identity.to_public())
 }
 
-fn persist_and_verify_identity<W, R>(
-    identity: &x25519::Identity,
-    write: W,
-    read: R,
-) -> Result<(), String>
-where
-    W: FnOnce(&str) -> Result<(), String>,
-    R: FnOnce() -> Result<x25519::Identity, String>,
-{
-    let expected_fingerprint = identity_fingerprint(identity);
-    let encoded = identity.to_string();
-    write(encoded.expose_secret())?;
-    let stored = read()?;
-    if identity_fingerprint(&stored) != expected_fingerprint {
-        return Err("復旧鍵をKeychainへ保存後に確認できませんでした。".to_string());
+fn recipient_fingerprint(recipient: &x25519::Recipient) -> String {
+    sha256_bytes(recipient.to_string().as_bytes())
+}
+
+fn apply_recipient_registration(
+    settings: &mut BackupToolSettings,
+    recipient: &x25519::Recipient,
+    endpoint_id: String,
+) {
+    let fingerprint = recipient_fingerprint(recipient);
+    settings.encryption_recipient = Some(recipient.to_string());
+    settings.encryption_recipient_fingerprint = Some(fingerprint);
+    settings.encryption_recipient_registered_at =
+        Some(Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true));
+    settings.encryption_recipient_registered_by_app_version =
+        Some(env!("CARGO_PKG_VERSION").to_string());
+    settings.endpoint_id = Some(endpoint_id);
+    settings.encryption_algorithm = Some(ENCRYPTION_ALGORITHM.to_string());
+    settings.encryption_recovery_exported = false;
+    settings.recovery_key_fingerprint = None;
+    settings.recovery_key_exported_at = None;
+}
+
+fn recipient_registration_exists_and_matches(
+    settings: &BackupToolSettings,
+    recipient: &x25519::Recipient,
+    endpoint_id: &str,
+) -> Result<bool, String> {
+    let Some(existing) = settings.encryption_recipient.as_deref() else {
+        return Ok(false);
+    };
+    let existing = parse_encryption_recipient(existing).map_err(|_| {
+        "登録済み公開鍵が破損しています。自動上書きせず保守担当へ連絡してください。".to_string()
+    })?;
+    if existing != *recipient || settings.endpoint_id.as_deref() != Some(endpoint_id) {
+        return Err("異なる公開鍵またはendpointIdは通常登録では上書きできません。保守操作を使用してください。".to_string());
     }
-    Ok(())
+    Ok(true)
 }
 
 fn read_recovery_identity_file(path: &Path) -> Result<x25519::Identity, String> {
@@ -749,55 +823,30 @@ fn parse_recovery_identity(content: &str) -> Result<x25519::Identity, String> {
         .map_err(|_| "有効なage X25519復旧鍵ではありません。".to_string())
 }
 
-fn validate_recovery_destination(path: &Path, settings: &BackupToolSettings) -> Result<(), String> {
-    if path.as_os_str().is_empty() || path.file_name().is_none() {
-        return Err("復旧鍵の保存先ファイルを指定してください。".to_string());
-    }
-    let parent = path
-        .parent()
-        .ok_or_else(|| "復旧鍵の保存先を確認してください。".to_string())?;
-    let parent = parent
-        .canonicalize()
-        .map_err(|_| "復旧鍵の保存先フォルダを確認してください。".to_string())?;
-    for backup_path in [&settings.local_backup_path, &settings.google_drive_path] {
-        if backup_path.trim().is_empty() {
-            continue;
-        }
-        if let Ok(root) = Path::new(backup_path).canonicalize() {
-            if parent.starts_with(root) {
-                return Err(
-                    "復旧鍵はバックアップ保存先とは別の安全な場所へ保存してください。".to_string(),
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-fn set_private_file_permissions(path: &Path) -> Result<(), String> {
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o600))
-        .map_err(|error| sanitized_error(error))
-}
-
-#[cfg(not(unix))]
-fn set_private_file_permissions(_path: &Path) -> Result<(), String> {
-    Ok(())
-}
-
 fn validate_backup_prerequisites(
     app: &AppHandle,
     settings: &BackupToolSettings,
-) -> Result<(), String> {
+) -> Result<x25519::Recipient, String> {
     super::validate_settings(settings)?;
-    if !settings.encryption_recovery_exported {
-        return Err("暗号化の復旧鍵を先に書き出してください。".to_string());
+    read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?;
+    read_secret(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key")?;
+    let recipient = parse_encryption_recipient(
+        settings
+            .encryption_recipient
+            .as_deref()
+            .ok_or_else(|| "age公開鍵が未設定です。".to_string())?,
+    )?;
+    let fingerprint = recipient_fingerprint(&recipient);
+    if settings.encryption_recipient_fingerprint.as_deref() != Some(fingerprint.as_str()) {
+        return Err(
+            "age公開鍵fingerprintが設定と一致しません。自動修復せず保守担当へ連絡してください。"
+                .to_string(),
+        );
     }
-    read_secret(ACCOUNT_DB_PASSWORD).map_err(|_| "DBパスワードが未設定です。".to_string())?;
-    read_secret(ACCOUNT_SERVICE_ROLE_KEY)
-        .map_err(|_| "Service Role Keyが未設定です。".to_string())?;
-    read_encryption_identity()?;
+    validate_endpoint_id(settings.endpoint_id.as_deref().unwrap_or_default())?;
+    if settings.encryption_algorithm.as_deref() != Some(ENCRYPTION_ALGORITHM) {
+        return Err("暗号化方式の設定が一致しません。".to_string());
+    }
     let local = Path::new(settings.local_backup_path.trim());
     let drive = Path::new(settings.google_drive_path.trim());
     if !local.is_dir() || !drive.is_dir() {
@@ -812,8 +861,8 @@ fn validate_backup_prerequisites(
     if local == drive {
         return Err("PC保存先とGoogle Drive保存先は別のフォルダを指定してください。".to_string());
     }
-    resolve_pg_dump_path(app)?;
-    Ok(())
+    postgres_runtime::PostgresRuntime::resolve(app)?;
+    Ok(recipient)
 }
 
 async fn query_database_metadata(
@@ -849,91 +898,6 @@ async fn query_database_metadata(
             .join(" "),
         table_count,
     ))
-}
-
-fn resolve_pg_dump_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let relative = if cfg!(target_os = "windows") {
-        PathBuf::from("resources/bin/windows-x86_64/pg_dump.exe")
-    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        PathBuf::from("resources/bin/macos-aarch64/pg_dump")
-    } else {
-        return Err("このOS向けのpg_dump 17はまだ同梱されていません。".to_string());
-    };
-    let bundled = app
-        .path()
-        .resource_dir()
-        .map_err(|error| sanitized_error(error))?
-        .join(&relative);
-    if bundled.is_file() {
-        return Ok(bundled);
-    }
-    let development = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
-    if development.is_file() {
-        return Ok(development);
-    }
-    Err("同梱されたpg_dump 17が見つかりません。".to_string())
-}
-
-fn validate_pg_dump(path: &Path) -> Result<String, String> {
-    let output = Command::new(path)
-        .arg("--version")
-        .output()
-        .map_err(|_| "pg_dumpを起動できませんでした。".to_string())?;
-    if !output.status.success() {
-        return Err("pg_dumpのバージョンを確認できませんでした。".to_string());
-    }
-    let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let major = version
-        .split_whitespace()
-        .find_map(|part| part.split('.').next()?.parse::<u32>().ok())
-        .ok_or_else(|| "pg_dumpのバージョン形式を確認できませんでした。".to_string())?;
-    if major != REQUIRED_PG_DUMP_MAJOR {
-        return Err(format!("pg_dump {REQUIRED_PG_DUMP_MAJOR}が必要です。"));
-    }
-    Ok(version)
-}
-
-fn run_pg_dump_process(
-    executable: &Path,
-    settings: &BackupToolSettings,
-    password: &str,
-    ca_path: &Path,
-    output_path: &Path,
-) -> Result<(), String> {
-    let output = Command::new(executable)
-        .args([
-            "--format=custom",
-            "--schema=public",
-            "--no-owner",
-            "--no-acl",
-        ])
-        .arg("--file")
-        .arg(output_path)
-        .env("PGHOST", settings.db_host.trim())
-        .env("PGPORT", settings.db_port.trim())
-        .env("PGDATABASE", settings.db_name.trim())
-        .env("PGUSER", settings.db_user.trim())
-        .env("PGPASSWORD", password)
-        .env("PGSSLMODE", "verify-full")
-        .env("PGSSLROOTCERT", ca_path)
-        .env("PGAPPNAME", "kawashima_backup_tool_phase2")
-        .env_remove("PGSERVICE")
-        .env_remove("PGPASSFILE")
-        .output()
-        .map_err(|_| "pg_dumpを起動できませんでした。".to_string())?;
-    if !output.status.success() {
-        if output_path.exists() {
-            let _ = fs::remove_file(output_path);
-        }
-        return Err(format!(
-            "データベース取得に失敗しました。 {}",
-            sanitized_error(String::from_utf8_lossy(&output.stderr))
-        ));
-    }
-    if !output_path.is_file() || file_size(output_path)? == 0 {
-        return Err("データベースファイルが生成されませんでした。".to_string());
-    }
-    Ok(())
 }
 
 async fn list_storage_objects(
@@ -1166,9 +1130,8 @@ fn create_tar_archive(source_root: &Path, destination: &Path) -> Result<(), Stri
     builder.finish().map_err(|error| sanitized_error(error))
 }
 
-fn encrypt_file(input: &Path, output: &Path, identity: &x25519::Identity) -> Result<(), String> {
-    let recipient = identity.to_public();
-    let encryptor = Encryptor::with_recipients(std::iter::once(&recipient as &dyn age::Recipient))
+fn encrypt_file(input: &Path, output: &Path, recipient: &x25519::Recipient) -> Result<(), String> {
+    let encryptor = Encryptor::with_recipients(std::iter::once(recipient as &dyn age::Recipient))
         .map_err(|error| sanitized_error(error))?;
     let source = File::open(input).map_err(|error| sanitized_error(error))?;
     let destination = BufWriter::new(File::create(output).map_err(|error| sanitized_error(error))?);
@@ -1181,22 +1144,34 @@ fn encrypt_file(input: &Path, output: &Path, identity: &x25519::Identity) -> Res
     Ok(())
 }
 
+fn validate_encrypted_envelope(encrypted: &Path) -> Result<(), String> {
+    let reader = BufReader::new(File::open(encrypted).map_err(|error| sanitized_error(error))?);
+    Decryptor::new_buffered(reader)
+        .map(|_| ())
+        .map_err(|_| "age暗号化ファイルの形式を確認できませんでした。".to_string())
+}
+
 fn verify_backup_file_with_identity(
     encrypted: &Path,
     identity: &x25519::Identity,
     source_label: &str,
+    pg_restore: &Path,
 ) -> Result<BackupVerificationResult, String> {
     if !encrypted.is_file() {
         return Err("暗号化バックアップファイルを読み込めませんでした。".to_string());
     }
-    let temp = tempfile::tempdir().map_err(|error| sanitized_error(error))?;
+    let temp = tempfile::Builder::new()
+        .prefix("kawashima-backup-verify-")
+        .tempdir()
+        .map_err(|error| sanitized_error(error))?;
     let temp_path = temp.path().to_path_buf();
-    let structure = verify_encrypted_backup(encrypted, identity, temp.path())?;
+    let verification = verify_encrypted_backup(encrypted, identity, temp.path(), pg_restore);
     let fingerprint = identity_fingerprint(identity);
     drop(temp);
     if temp_path.exists() {
         return Err("復号確認用の一時ファイルを削除できませんでした。".to_string());
     }
+    let structure = verification?;
     Ok(BackupVerificationResult {
         ok: true,
         key_source: source_label.to_string(),
@@ -1205,6 +1180,8 @@ fn verify_backup_file_with_identity(
         manifests_present: structure.manifests_present,
         storage_present: structure.storage_present,
         verification_present: structure.verification_present,
+        database_structure_valid: structure.database_structure_valid,
+        plaintext_archive_sha256: structure.plaintext_archive_sha256,
         temporary_files_removed: true,
     })
 }
@@ -1213,6 +1190,7 @@ fn verify_encrypted_backup(
     encrypted: &Path,
     identity: &x25519::Identity,
     temp_root: &Path,
+    pg_restore: &Path,
 ) -> Result<VerifiedBackupStructure, String> {
     let decrypted_tar = temp_root.join("verification.tar");
     let encrypted_reader =
@@ -1226,6 +1204,8 @@ fn verify_encrypted_backup(
         BufWriter::new(File::create(&decrypted_tar).map_err(|error| sanitized_error(error))?);
     std::io::copy(&mut reader, &mut output).map_err(|error| sanitized_error(error))?;
     output.flush().map_err(|error| sanitized_error(error))?;
+    drop(output);
+    let plaintext_archive_sha256 = sha256_file(&decrypted_tar)?;
 
     let extract_dir = temp_root.join("verification-extracted");
     fs::create_dir_all(&extract_dir).map_err(|error| sanitized_error(error))?;
@@ -1259,11 +1239,14 @@ fn verify_encrypted_backup(
         return Err("復号後の必須ファイルが不足しています。".to_string());
     }
     verify_checksum_manifest(&root, &root.join("verification/sha256sums.txt"))?;
+    postgres_runtime::inspect_custom_dump(pg_restore, &root.join("database").join(DUMP_FILE_NAME))?;
     Ok(VerifiedBackupStructure {
         database_dump_present,
         manifests_present,
         storage_present,
         verification_present,
+        database_structure_valid: true,
+        plaintext_archive_sha256,
     })
 }
 
@@ -1343,7 +1326,10 @@ fn copy_atomic_verified(
         if file_size(source)? != file_size(&partial)? || sha256_file(&partial)? != expected_hash {
             return Err("保存先コピーの整合性確認に失敗しました。".to_string());
         }
-        fs::rename(&partial, destination).map_err(|error| sanitized_error(error))?;
+        File::open(&partial)
+            .and_then(|file| file.sync_all())
+            .map_err(|error| sanitized_error(error))?;
+        file_security::publish_new_file(&partial, destination).map_err(sanitized_error)?;
         Ok(())
     })();
     if result.is_err() {
@@ -1377,7 +1363,7 @@ fn append_history(app: &AppHandle, entry: BackupHistoryEntry) -> Result<(), Stri
     }
     let temp = path.with_extension("json.tmp");
     write_json(&temp, &history)?;
-    fs::rename(temp, path).map_err(|error| sanitized_error(error))
+    file_security::replace_file(&temp, &path).map_err(sanitized_error)
 }
 
 fn emit_progress(
@@ -1445,9 +1431,11 @@ fn safe_backup_error_summary(error: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use age::secrecy::ExposeSecret;
     use tempfile::TempDir;
 
     fn test_settings(root: &Path) -> BackupToolSettings {
+        let recipient = x25519::Identity::generate().to_public();
         BackupToolSettings {
             supabase_project_url: "https://example.supabase.co".to_string(),
             db_host: "example.pooler.supabase.com".to_string(),
@@ -1457,13 +1445,19 @@ mod tests {
             connection_mode: super::super::ConnectionMode::Session,
             local_backup_path: root.join("local").to_string_lossy().to_string(),
             google_drive_path: root.join("drive").to_string_lossy().to_string(),
+            encryption_recipient: Some(recipient.to_string()),
+            encryption_recipient_fingerprint: Some(recipient_fingerprint(&recipient)),
+            encryption_recipient_registered_at: Some("2026-08-28T00:00:00Z".to_string()),
+            encryption_recipient_registered_by_app_version: Some("0.3.0".to_string()),
+            endpoint_id: Some("test-endpoint".to_string()),
+            encryption_algorithm: Some(ENCRYPTION_ALGORITHM.to_string()),
             encryption_recovery_exported: true,
             recovery_key_fingerprint: None,
             recovery_key_exported_at: None,
         }
     }
 
-    fn create_test_backup(root: &Path, identity: &x25519::Identity) -> PathBuf {
+    fn create_test_backup(root: &Path, recipient: &x25519::Recipient) -> PathBuf {
         let source = root.join("source").join(ARCHIVE_ROOT);
         fs::create_dir_all(source.join("database")).unwrap();
         fs::create_dir_all(source.join("manifests")).unwrap();
@@ -1478,8 +1472,17 @@ mod tests {
         let archive = root.join("test.tar");
         create_tar_archive(&source, &archive).unwrap();
         let encrypted = root.join("test.tar.age");
-        encrypt_file(&archive, &encrypted, identity).unwrap();
+        encrypt_file(&archive, &encrypted, recipient).unwrap();
         encrypted
+    }
+
+    #[cfg(unix)]
+    fn fake_pg_restore(root: &Path) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let path = root.join("pg_restore");
+        fs::write(&path, "#!/bin/sh\nprintf 'archive list\\n'\n").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        path
     }
 
     #[test]
@@ -1489,7 +1492,7 @@ mod tests {
         let encrypted = temp.path().join("input.tar.age");
         fs::write(&input, b"backup contents").unwrap();
         let identity = x25519::Identity::generate();
-        encrypt_file(&input, &encrypted, &identity).unwrap();
+        encrypt_file(&input, &encrypted, &identity.to_public()).unwrap();
         let ciphertext = fs::read(&encrypted).unwrap();
         assert_eq!(
             age::decrypt(&identity, &ciphertext).unwrap(),
@@ -1521,73 +1524,88 @@ mod tests {
     }
 
     #[test]
-    fn recovery_key_registration_writes_and_reads_back_the_same_identity() {
-        use std::cell::RefCell;
-
-        let identity = x25519::Identity::generate();
-        let stored = RefCell::new(None::<String>);
-        persist_and_verify_identity(
-            &identity,
-            |encoded| {
-                stored.replace(Some(encoded.to_string()));
-                Ok(())
-            },
-            || {
-                let encoded = stored.borrow();
-                x25519::Identity::from_str(encoded.as_deref().unwrap())
-                    .map_err(|_| "test credential could not be parsed".to_string())
-            },
-        )
-        .unwrap();
-
-        let other = x25519::Identity::generate();
-        assert!(persist_and_verify_identity(&identity, |_| Ok(()), || Ok(other)).is_err());
+    fn recipient_parser_accepts_one_x25519_public_key_only() {
+        let recipient = x25519::Identity::generate().to_public().to_string();
+        assert!(parse_encryption_recipient(&recipient).is_ok());
+        assert!(parse_encryption_recipient(&format!("{recipient}\n{recipient}")).is_err());
+        assert!(parse_encryption_recipient("AGE-SECRET-KEY-INVALID").is_err());
+        assert!(parse_encryption_recipient("not-an-age-recipient").is_err());
     }
 
     #[test]
-    fn recovery_export_metadata_must_match_the_current_key() {
+    fn recipient_registration_metadata_tracks_fingerprint_endpoint_and_version() {
         let temp = TempDir::new().unwrap();
         let mut settings = test_settings(temp.path());
-        settings.recovery_key_fingerprint = Some("current-fingerprint".to_string());
-        settings.recovery_key_exported_at = Some("2026-08-25T12:00:00Z".to_string());
-        assert!(recovery_metadata_matches(
-            &settings,
-            Some("current-fingerprint")
-        ));
-        assert!(!recovery_metadata_matches(
-            &settings,
-            Some("other-fingerprint")
-        ));
-        settings.recovery_key_exported_at = None;
-        assert!(!recovery_metadata_matches(
-            &settings,
-            Some("current-fingerprint")
-        ));
+        let recipient = x25519::Identity::generate().to_public();
+        apply_recipient_registration(&mut settings, &recipient, "mac-secondary".to_string());
+        assert_eq!(
+            settings.encryption_recipient.as_deref(),
+            Some(recipient.to_string().as_str())
+        );
+        assert_eq!(
+            settings.encryption_recipient_fingerprint.as_deref(),
+            Some(recipient_fingerprint(&recipient).as_str())
+        );
+        assert_eq!(settings.endpoint_id.as_deref(), Some("mac-secondary"));
+        assert_eq!(
+            settings.encryption_algorithm.as_deref(),
+            Some(ENCRYPTION_ALGORITHM)
+        );
+        assert_eq!(
+            settings
+                .encryption_recipient_registered_by_app_version
+                .as_deref(),
+            Some(env!("CARGO_PKG_VERSION"))
+        );
+        assert!(settings.encryption_recipient_registered_at.is_some());
     }
 
     #[test]
-    fn keychain_or_recovery_identity_can_verify_backup_and_wrong_key_fails() {
+    fn normal_registration_refuses_a_different_recipient_or_endpoint() {
+        let temp = TempDir::new().unwrap();
+        let settings = test_settings(temp.path());
+        let existing =
+            parse_encryption_recipient(settings.encryption_recipient.as_deref().unwrap()).unwrap();
+        assert!(
+            recipient_registration_exists_and_matches(&settings, &existing, "test-endpoint")
+                .unwrap()
+        );
+        assert!(recipient_registration_exists_and_matches(
+            &settings,
+            &x25519::Identity::generate().to_public(),
+            "test-endpoint",
+        )
+        .is_err());
+        assert!(
+            recipient_registration_exists_and_matches(&settings, &existing, "other-endpoint")
+                .is_err()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn public_recipient_encrypts_and_matching_recovery_key_verifies_backup() {
         let temp = TempDir::new().unwrap();
         let identity = x25519::Identity::generate();
         let recovery = x25519::Identity::from_str(identity.to_string().expose_secret()).unwrap();
-        let encrypted = create_test_backup(temp.path(), &identity);
-
-        let keychain_result =
-            verify_backup_file_with_identity(&encrypted, &identity, "Keychain").unwrap();
-        assert!(keychain_result.ok);
-        assert!(keychain_result.temporary_files_removed);
-        assert!(keychain_result.database_dump_present);
-        assert!(keychain_result.manifests_present);
-        assert!(keychain_result.storage_present);
-        assert!(keychain_result.verification_present);
+        let encrypted = create_test_backup(temp.path(), &identity.to_public());
+        let pg_restore = fake_pg_restore(temp.path());
 
         let recovery_result =
-            verify_backup_file_with_identity(&encrypted, &recovery, "復旧鍵").unwrap();
+            verify_backup_file_with_identity(&encrypted, &recovery, "復旧鍵", &pg_restore).unwrap();
         assert!(recovery_result.ok);
+        assert!(recovery_result.temporary_files_removed);
+        assert!(recovery_result.database_dump_present);
+        assert!(recovery_result.manifests_present);
+        assert!(recovery_result.storage_present);
+        assert!(recovery_result.verification_present);
+        assert!(recovery_result.database_structure_valid);
+        assert_eq!(recovery_result.plaintext_archive_sha256.len(), 64);
         assert!(verify_backup_file_with_identity(
             &encrypted,
             &x25519::Identity::generate(),
             "復旧鍵",
+            &pg_restore,
         )
         .is_err());
     }
@@ -1736,20 +1754,6 @@ mod tests {
     }
 
     #[test]
-    fn recovery_key_cannot_be_written_into_backup_destinations() {
-        let temp = TempDir::new().unwrap();
-        fs::create_dir_all(temp.path().join("local")).unwrap();
-        fs::create_dir_all(temp.path().join("drive")).unwrap();
-        let settings = test_settings(temp.path());
-        assert!(
-            validate_recovery_destination(&temp.path().join("local/key.txt"), &settings).is_err()
-        );
-        assert!(
-            validate_recovery_destination(&temp.path().join("recovery.txt"), &settings).is_ok()
-        );
-    }
-
-    #[test]
     fn manifest_serialization_contains_no_database_credentials() {
         let manifest = DatabaseManifest {
             created_at: "2026-08-25T00:00:00Z".to_string(),
@@ -1762,6 +1766,7 @@ mod tests {
             dump_sha256: "abc".to_string(),
             public_table_count: 10,
             pg_dump_version: "pg_dump 17".to_string(),
+            pg_restore_version: "pg_restore 17".to_string(),
         };
         let serialized = serde_json::to_string(&manifest).unwrap();
         assert!(!serialized.contains("password"));
@@ -1769,33 +1774,20 @@ mod tests {
         assert!(!serialized.contains("db_user"));
     }
 
-    #[cfg(unix)]
     #[test]
-    fn fake_pg_dump_success_and_failure_are_handled() {
-        use std::os::unix::fs::PermissionsExt;
-        let temp = TempDir::new().unwrap();
-        fs::create_dir_all(temp.path().join("local")).unwrap();
-        fs::create_dir_all(temp.path().join("drive")).unwrap();
-        let settings = test_settings(temp.path());
-        let ca = temp.path().join("ca.crt");
-        fs::write(&ca, b"ca").unwrap();
-
-        let success = temp.path().join("pg_dump-success");
-        fs::write(&success, "#!/bin/sh\nwhile [ $# -gt 0 ]; do if [ \"$1\" = \"--file\" ]; then shift; printf dump > \"$1\"; fi; shift; done\n").unwrap();
-        fs::set_permissions(&success, fs::Permissions::from_mode(0o755)).unwrap();
-        let dump = temp.path().join("success.dump");
-        assert!(run_pg_dump_process(&success, &settings, "secret", &ca, &dump).is_ok());
-
-        let failure = temp.path().join("pg_dump-failure");
-        fs::write(&failure, "#!/bin/sh\nexit 1\n").unwrap();
-        fs::set_permissions(&failure, fs::Permissions::from_mode(0o755)).unwrap();
-        assert!(run_pg_dump_process(
-            &failure,
-            &settings,
-            "secret",
-            &ca,
-            &temp.path().join("fail.dump")
-        )
-        .is_err());
+    fn phase_two_history_deserializes_with_empty_phase_three_metadata() {
+        let legacy = r#"{
+            "backupId":"legacy","startedAt":"2026-08-01T00:00:00Z",
+            "completedAt":"2026-08-01T00:01:00Z","fileName":"legacy.tar.age",
+            "success":true,"errorSummary":null,"encryptedSize":1,
+            "encryptedSha256":"abc","databaseOk":true,"storageOk":true,
+            "verificationOk":true,"localCopyOk":true,"googleDriveCopyOk":true,
+            "storageObjectCount":0,"publicTableCount":1
+        }"#;
+        let entry: BackupHistoryEntry = serde_json::from_str(legacy).unwrap();
+        assert!(entry.endpoint_id.is_empty());
+        assert!(entry.recipient_fingerprint.is_empty());
+        assert!(entry.plaintext_archive_sha256.is_empty());
+        assert!(entry.application_version.is_empty());
     }
 }

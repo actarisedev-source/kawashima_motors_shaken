@@ -6,7 +6,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use keyring::Entry;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use rustls::{ClientConfig, RootCertStore};
 use serde::{Deserialize, Serialize};
@@ -16,10 +15,11 @@ use tokio_postgres::config::SslMode;
 use tokio_postgres_rustls::MakeRustlsConnect;
 
 mod backup;
+mod credential_store;
+mod file_security;
+mod postgres_runtime;
 
-const KEYRING_SERVICE_NAME: &str = "jp.actarise.kawashima.backup";
-pub(crate) const ACCOUNT_DB_PASSWORD: &str = "db-password";
-pub(crate) const ACCOUNT_SERVICE_ROLE_KEY: &str = "supabase-service-role-key";
+pub(crate) use credential_store::{ACCOUNT_DB_PASSWORD, ACCOUNT_SERVICE_ROLE_KEY};
 const SETTINGS_FILE_NAME: &str = "settings.json";
 const MAX_STORAGE_OBJECTS_TO_SCAN: usize = 10_000;
 // Supabase official distribution: https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt
@@ -36,6 +36,18 @@ pub(crate) struct BackupToolSettings {
     pub(crate) connection_mode: ConnectionMode,
     pub(crate) local_backup_path: String,
     pub(crate) google_drive_path: String,
+    #[serde(default)]
+    pub(crate) encryption_recipient: Option<String>,
+    #[serde(default)]
+    pub(crate) encryption_recipient_fingerprint: Option<String>,
+    #[serde(default)]
+    pub(crate) encryption_recipient_registered_at: Option<String>,
+    #[serde(default)]
+    pub(crate) encryption_recipient_registered_by_app_version: Option<String>,
+    #[serde(default)]
+    pub(crate) endpoint_id: Option<String>,
+    #[serde(default)]
+    pub(crate) encryption_algorithm: Option<String>,
     #[serde(default)]
     pub(crate) encryption_recovery_exported: bool,
     #[serde(default)]
@@ -56,6 +68,8 @@ pub(crate) enum ConnectionMode {
 struct SecretStatus {
     db_password: bool,
     service_role_key: bool,
+    db_password_state: String,
+    service_role_key_state: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -99,6 +113,12 @@ impl Default for BackupToolSettings {
             connection_mode: ConnectionMode::Direct,
             local_backup_path: String::new(),
             google_drive_path: String::new(),
+            encryption_recipient: None,
+            encryption_recipient_fingerprint: None,
+            encryption_recipient_registered_at: None,
+            encryption_recipient_registered_by_app_version: None,
+            endpoint_id: None,
+            encryption_algorithm: None,
             encryption_recovery_exported: false,
             recovery_key_fingerprint: None,
             recovery_key_exported_at: None,
@@ -120,11 +140,11 @@ pub fn run() {
             check_storage,
             check_folder,
             backup::backup_is_running,
-            backup::get_encryption_status,
-            backup::generate_encryption_identity,
-            backup::export_recovery_key,
+            backup::get_encryption_recipient_status,
+            backup::register_encryption_recipient,
+            backup::replace_encryption_recipient,
             backup::import_recovery_key,
-            backup::register_imported_recovery_key,
+            backup::clear_imported_recovery_key,
             backup::verify_backup_file,
             backup::load_backup_history,
             backup::run_backup,
@@ -157,7 +177,23 @@ pub(crate) fn load_settings_from_disk(app: &AppHandle) -> Result<BackupToolSetti
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: BackupToolSettings) -> Result<(), String> {
     validate_settings(&settings)?;
+    let existing = load_settings_from_disk(&app)?;
+    let settings = preserve_encryption_registration(existing, settings);
     save_settings_to_disk(&app, &settings)
+}
+
+fn preserve_encryption_registration(
+    existing: BackupToolSettings,
+    mut incoming: BackupToolSettings,
+) -> BackupToolSettings {
+    incoming.encryption_recipient = existing.encryption_recipient;
+    incoming.encryption_recipient_fingerprint = existing.encryption_recipient_fingerprint;
+    incoming.encryption_recipient_registered_at = existing.encryption_recipient_registered_at;
+    incoming.encryption_recipient_registered_by_app_version =
+        existing.encryption_recipient_registered_by_app_version;
+    incoming.endpoint_id = existing.endpoint_id;
+    incoming.encryption_algorithm = existing.encryption_algorithm;
+    incoming
 }
 
 pub(crate) fn save_settings_to_disk(
@@ -189,10 +225,12 @@ fn save_secret_values(
     }
 
     if !db_password.trim().is_empty() {
-        write_secret(ACCOUNT_DB_PASSWORD, db_password.trim())?;
+        credential_store::write_secret_explicit(ACCOUNT_DB_PASSWORD, db_password.trim())
+            .map_err(|error| error.user_message("DBパスワード"))?;
     }
     if !service_role_key.trim().is_empty() {
-        write_secret(ACCOUNT_SERVICE_ROLE_KEY, service_role_key.trim())?;
+        credential_store::write_secret_explicit(ACCOUNT_SERVICE_ROLE_KEY, service_role_key.trim())
+            .map_err(|error| error.user_message("Service Role Key"))?;
     }
 
     let status = get_secret_status_from_keyring();
@@ -210,9 +248,7 @@ fn save_secret_values(
 #[tauri::command]
 async fn check_database(settings: BackupToolSettings) -> Result<DbCheckResult, String> {
     validate_settings(&settings)?;
-    let password = read_secret(ACCOUNT_DB_PASSWORD).map_err(|_| {
-        "DBパスワードが未設定です。OS資格情報ストアへ保存してください。".to_string()
-    })?;
+    let password = read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?;
     let db_config = build_db_config(&settings, &password)?;
     let tls = build_database_tls_connector()?;
     let (client, connection_task) = db_config
@@ -258,9 +294,7 @@ async fn check_storage(
         return Err("確認対象bucketが正しくありません。".to_string());
     }
     let project_url = normalize_project_url(&project_url)?;
-    let service_role_key = read_secret(ACCOUNT_SERVICE_ROLE_KEY).map_err(|_| {
-        "Service Role Keyが未設定です。OS資格情報ストアへ保存してください。".to_string()
-    })?;
+    let service_role_key = read_secret(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key")?;
     let client = reqwest::Client::new();
     let headers = storage_headers(&service_role_key)?;
 
@@ -475,25 +509,18 @@ pub(crate) fn build_database_tls_connector() -> Result<MakeRustlsConnect, String
     Ok(MakeRustlsConnect::new(config))
 }
 
-pub(crate) fn write_secret(key: &str, value: &str) -> Result<(), String> {
-    Entry::new(KEYRING_SERVICE_NAME, key)
-        .map_err(|_| "OS資格情報ストアを開けませんでした。".to_string())?
-        .set_password(value)
-        .map_err(|_| "秘密情報の保存に失敗しました。".to_string())
-}
-
-pub(crate) fn read_secret(key: &str) -> Result<String, String> {
-    Entry::new(KEYRING_SERVICE_NAME, key)
-        .map_err(|_| "OS資格情報ストアを開けませんでした。".to_string())?
-        .get_password()
-        .map_err(|_| "秘密情報が未設定です。".to_string())
+pub(crate) fn read_secret(key: &str, label: &str) -> Result<String, String> {
+    credential_store::read_secret(key).map_err(|error| error.user_message(label))
 }
 
 fn get_secret_status_from_keyring() -> SecretStatus {
+    let db_password_state = credential_store::credential_state(ACCOUNT_DB_PASSWORD);
+    let service_role_key_state = credential_store::credential_state(ACCOUNT_SERVICE_ROLE_KEY);
     SecretStatus {
-        db_password: read_secret(ACCOUNT_DB_PASSWORD).is_ok_and(|value| !value.is_empty()),
-        service_role_key: read_secret(ACCOUNT_SERVICE_ROLE_KEY)
-            .is_ok_and(|value| !value.is_empty()),
+        db_password: db_password_state == credential_store::CredentialState::Stored,
+        service_role_key: service_role_key_state == credential_store::CredentialState::Stored,
+        db_password_state: db_password_state.label().to_string(),
+        service_role_key_state: service_role_key_state.label().to_string(),
     }
 }
 

@@ -12,6 +12,12 @@ export type BackupToolSettings = {
   connectionMode: ConnectionMode;
   localBackupPath: string;
   googleDrivePath: string;
+  encryptionRecipient: string | null;
+  encryptionRecipientFingerprint: string | null;
+  encryptionRecipientRegisteredAt: string | null;
+  encryptionRecipientRegisteredByAppVersion: string | null;
+  endpointId: string | null;
+  encryptionAlgorithm: string | null;
   encryptionRecoveryExported: boolean;
   recoveryKeyFingerprint: string | null;
   recoveryKeyExportedAt: string | null;
@@ -26,6 +32,12 @@ export const emptySettings: BackupToolSettings = {
   connectionMode: "direct",
   localBackupPath: "",
   googleDrivePath: "",
+  encryptionRecipient: null,
+  encryptionRecipientFingerprint: null,
+  encryptionRecipientRegisteredAt: null,
+  encryptionRecipientRegisteredByAppVersion: null,
+  endpointId: null,
+  encryptionAlgorithm: null,
   encryptionRecoveryExported: false,
   recoveryKeyFingerprint: null,
   recoveryKeyExportedAt: null,
@@ -63,6 +75,13 @@ export function sanitizeSettings(input: BackupToolSettings): BackupToolSettings 
     connectionMode: validateConnectionMode(input.connectionMode),
     localBackupPath: input.localBackupPath.trim(),
     googleDrivePath: input.googleDrivePath.trim(),
+    encryptionRecipient: input.encryptionRecipient?.trim() || null,
+    encryptionRecipientFingerprint: input.encryptionRecipientFingerprint?.trim() || null,
+    encryptionRecipientRegisteredAt: input.encryptionRecipientRegisteredAt?.trim() || null,
+    encryptionRecipientRegisteredByAppVersion:
+      input.encryptionRecipientRegisteredByAppVersion?.trim() || null,
+    endpointId: input.endpointId?.trim() || null,
+    encryptionAlgorithm: input.encryptionAlgorithm?.trim() || null,
     encryptionRecoveryExported: Boolean(input.encryptionRecoveryExported),
     recoveryKeyFingerprint: input.recoveryKeyFingerprint?.trim() || null,
     recoveryKeyExportedAt: input.recoveryKeyExportedAt?.trim() || null,
