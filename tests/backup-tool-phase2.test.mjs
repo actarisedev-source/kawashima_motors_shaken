@@ -20,7 +20,9 @@ test("macOS arm64向けpg_dumpとpg_restoreを実行可能な状態で同梱す�
   for (const tool of ["pg_dump", "pg_restore"]) {
     const executable = new URL(`../tools/kawashima-backup/src-tauri/resources/bin/macos-aarch64/${tool}`, import.meta.url);
     assert.equal(existsSync(executable), true);
-    assert.equal((statSync(executable).mode & 0o111) !== 0, true);
+    if (process.platform !== "win32") {
+      assert.equal((statSync(executable).mode & 0o111) !== 0, true);
+    }
   }
   const tauri = readSource("tools/kawashima-backup/src-tauri/tauri.macos.conf.json");
   assert.match(tauri, /resources\/bin\/macos-aarch64\/\*\*\/\*/);
