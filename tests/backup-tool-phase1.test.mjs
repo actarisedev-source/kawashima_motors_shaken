@@ -78,7 +78,7 @@ test("保存先validationは空とNUL文字を拒否する", () => {
 test("Storage bucket名はline-message-imagesに固定する", () => {
   assert.equal(storageBucketName, "line-message-images");
   const rust = readSource("tools/kawashima-backup/src-tauri/src/lib.rs");
-  assert.match(rust, /bucket_name != "line-message-images"/);
+  assert.match(rust, /STORAGE_BUCKET_NAME: &str = "line-message-images"/);
   assert.doesNotMatch(rust, /upload\(/);
   assert.doesNotMatch(rust, /delete\(/);
   assert.doesNotMatch(rust, /move\(/);
@@ -101,7 +101,11 @@ test("secretはRust側でOS資格情報ストアへ保存する", () => {
   const credentials = readSource("tools/kawashima-backup/src-tauri/src/credential_store.rs");
   const cargo = readSource("tools/kawashima-backup/src-tauri/Cargo.toml");
   assert.match(credentials, /use keyring::\{Entry/);
-  assert.match(cargo, /features = \["apple-native", "windows-native"\]/);
+  assert.match(cargo, /features = \["apple-native"\]/);
+  assert.match(cargo, /windows-sys/);
+  assert.match(credentials, /CredReadW/);
+  assert.match(credentials, /CredWriteW/);
+  assert.match(credentials, /CRED_PERSIST_LOCAL_MACHINE/);
   assert.match(credentials, /SERVICE_NAME: &str = "jp\.actarise\.kawashima\.backup"/);
   assert.match(credentials, /ACCOUNT_DB_PASSWORD: &str = "db-password"/);
   assert.match(credentials, /ACCOUNT_SERVICE_ROLE_KEY: &str = "supabase-service-role-key"/);
@@ -111,12 +115,13 @@ test("secretはRust側でOS資格情報ストアへ保存する", () => {
 
 test("secret保存は保存後にKeychainから再読込してstatusだけ返す", () => {
   const rust = readSource("tools/kawashima-backup/src-tauri/src/lib.rs");
+  const credentials = readSource("tools/kawashima-backup/src-tauri/src/credential_store.rs");
   const frontend = readSource("tools/kawashima-backup/src/main.ts");
 
-  assert.match(rust, /fn save_secret_values\(\s*db_password: String,\s*service_role_key: String,?\s*\) -> Result<SecretStatus, String>/);
+  assert.match(rust, /fn save_secret_values\(/);
+  assert.match(rust, /credential_store::write_secret_explicit/);
   assert.match(rust, /let status = get_secret_status_from_keyring\(\);/);
-  assert.match(rust, /should_save_db_password && !status\.db_password/);
-  assert.match(rust, /should_save_service_role_key && !status\.service_role_key/);
+  assert.match(credentials, /let mut verified = backend\.read\(account\)/);
   assert.match(frontend, /runCommand<SecretStatusResponse>\("save_secret_values"/);
   assert.match(frontend, /normalizeSecretStatus\(secretStatus\)/);
   assert.doesNotMatch(frontend, /state = \{ \.\.\.state, .*dbPassword/);
@@ -154,8 +159,8 @@ test("DBとStorageの接続確認結果を独立して反映する", () => {
   const frontend = readSource("tools/kawashima-backup/src/main.ts");
 
   assert.match(frontend, /Promise\.allSettled/);
-  assert.match(frontend, /dbResult\.status === "fulfilled"/);
-  assert.match(frontend, /storageResult\.status === "fulfilled"/);
-  assert.match(frontend, /failedDbCheck\(dbResult\.reason\)/);
-  assert.match(frontend, /failedStorageCheck\(storageResult\.reason\)/);
+  assert.match(frontend, /db\.status === "fulfilled"/);
+  assert.match(frontend, /storage\.status === "fulfilled"/);
+  assert.match(frontend, /message: redactSensitiveText\(db\.reason\)/);
+  assert.match(frontend, /message: redactSensitiveText\(storage\.reason\)/);
 });

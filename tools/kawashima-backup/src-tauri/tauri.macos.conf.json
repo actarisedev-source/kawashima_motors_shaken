@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "resources": [
+      "resources/prod-ca-2021.crt",
+      "resources/bin/macos-aarch64/**/*"
+    ]
+  }
+}

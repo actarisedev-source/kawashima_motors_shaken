@@ -518,6 +518,152 @@ dd {
   padding-left: 10px;
 }
 
+.version {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.setup-progress {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.setup-progress li {
+  display: grid;
+  min-height: 58px;
+  place-items: center;
+  border: 1px solid #d8e4f2;
+  border-radius: 6px;
+  padding: 7px;
+  color: #64748b;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.setup-progress li span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e2e8f0;
+}
+
+.setup-progress li.active {
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.setup-progress li.active span,
+.setup-progress li.complete span {
+  color: #fff;
+  background: #2563eb;
+}
+
+.setup-panel {
+  min-height: 360px;
+}
+
+.setup-nav,
+.unlock-row,
+.start-panel,
+.daily-dashboard,
+.status-box {
+  display: flex;
+  align-items: center;
+}
+
+.setup-nav {
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.setup-lock {
+  align-items: end;
+  margin-top: 14px;
+}
+
+.status-box {
+  min-height: 68px;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.status-box small {
+  overflow-wrap: anywhere;
+}
+
+.daily-dashboard {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid #d8e4f2;
+  border-radius: 8px;
+  background: #d8e4f2;
+}
+
+.daily-dashboard > div {
+  display: grid;
+  min-height: 92px;
+  align-content: center;
+  gap: 6px;
+  padding: 14px 18px;
+  background: #fff;
+}
+
+.daily-dashboard span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.daily-dashboard strong {
+  font-size: 18px;
+}
+
+.start-panel {
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.start-panel button {
+  min-width: 190px;
+  min-height: 48px;
+}
+
+.maintenance-panel {
+  border-color: #9fb6cf;
+  background: #f8fafc;
+}
+
+.unlock-row {
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.unlock-row input {
+  max-width: 360px;
+}
+
 @media (max-width: 860px) {
   .shell {
     width: min(100vw - 24px, 760px);
@@ -541,5 +687,14 @@ dd {
   .progress-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     row-gap: 14px;
+  }
+
+  .setup-progress {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .form-grid,
+  .daily-dashboard {
+    grid-template-columns: 1fr;
   }
 }

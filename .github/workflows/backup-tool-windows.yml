@@ -1,0 +1,59 @@
+name: Backup Tool Windows x64
+
+on:
+  push:
+    branches:
+      - feature/kawashima-backup-tool-phase3b
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install web dependencies
+        run: npm ci
+      - name: Install desktop dependencies
+        working-directory: tools/kawashima-backup
+        run: npm ci
+      - name: Web and source tests
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run build
+      - name: Desktop web checks
+        working-directory: tools/kawashima-backup
+        run: |
+          npm run check
+          npm run build:web
+      - name: Bundled PostgreSQL 17 runtime smoke test
+        run: |
+          $runtime = "tools/kawashima-backup/src-tauri/resources/bin/windows-x86_64"
+          $dumpVersion = & "$runtime/pg_dump.exe" --version
+          if ($LASTEXITCODE -ne 0 -or $dumpVersion -notmatch "pg_dump \(PostgreSQL\) 17\.") { throw "pg_dump 17 runtime check failed" }
+          $restoreVersion = & "$runtime/pg_restore.exe" --version
+          if ($LASTEXITCODE -ne 0 -or $restoreVersion -notmatch "pg_restore \(PostgreSQL\) 17\.") { throw "pg_restore 17 runtime check failed" }
+      - name: Rust tests
+        working-directory: tools/kawashima-backup/src-tauri
+        run: cargo test --locked
+      - name: Build unsigned NSIS installer
+        working-directory: tools/kawashima-backup
+        run: npm run build -- --bundles nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kawashima-backup-tool-0.4.0-windows-x64-unsigned
+          path: tools/kawashima-backup/src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error

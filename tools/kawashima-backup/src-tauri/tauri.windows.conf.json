@@ -1,0 +1,18 @@
+{
+  "bundle": {
+    "resources": [
+      "resources/prod-ca-2021.crt",
+      "resources/bin/windows-x86_64/**/*"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "perMachine",
+        "languages": ["Japanese"],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

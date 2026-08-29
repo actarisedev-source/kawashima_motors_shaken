@@ -1,0 +1,19 @@
+{
+  "postgresVersion": "17.11-1",
+  "architecture": "windows-x86_64",
+  "sourceUrl": "https://get.enterprisedb.com/postgresql/postgresql-17.11-1-windows-x64-binaries.zip",
+  "sourceArchiveSha256": "6eabdf00d2893713b75db4336a23c3fdf505f056e217ec6e2e95d901750cfea3",
+  "files": [
+    { "name": "pg_dump.exe", "sha256": "ff766351cc88b0ea2bc7b6e365777cb51f792b16000688a378f64124810ffa88" },
+    { "name": "pg_restore.exe", "sha256": "ae002028451e79240eaad9838d9eb0b644436a05decb3888468a529bf881ac6c" },
+    { "name": "libpq.dll", "sha256": "468ddfa39acedb484affcbe7207f62970d2ea021b4e7d23eb1b2e0af990cded9" },
+    { "name": "libintl-9.dll", "sha256": "1125ac8dc0c4f5c3ed4712e0d8ad29474099fcb55bb0e563a352ce9d03ef1d78" },
+    { "name": "libiconv-2.dll", "sha256": "3ee9786ab3eb8dfd791bdbd17c7e791dbe025734befcded0ee4170e1089f79df" },
+    { "name": "libwinpthread-1.dll", "sha256": "ffe2d56375bb4e8bdee9037df6befc5016ddd8871d0d85027314dd5792f8fdc9" },
+    { "name": "liblz4.dll", "sha256": "096af775241b3bd4b1c3d79c83b103bb8f02da54ec4cd76c5d49eef61a68ad01" },
+    { "name": "libzstd.dll", "sha256": "287e7e474961e8886a3d961e2c07da647a7ac8d60d97023545f3a3ecf604daba" },
+    { "name": "libcrypto-3-x64.dll", "sha256": "e864c2b31452d84892e885adfc07f151964bc9065134f7254b47194db253eaf7" },
+    { "name": "libssl-3-x64.dll", "sha256": "45041ed336e6658ac796424431eb8b22c08e5a51982155bf94d727a5442dfba7" },
+    { "name": "vcruntime140.dll", "sha256": "052ad6a20d375957e82aa6a3c441ea548d89be0981516ca7eb306e063d5027f4" }
+  ]
+}

@@ -15,9 +15,12 @@ certificate-chain, hostname, and SNI verification enabled.
 
 Do not replace this certificate with a generated or unverified certificate.
 
-## Phase 3A backup format
+## Phase 3B backup format
 
-The backup core creates one `kawashima-backup-YYYYMMDD-HHMMSS-JST.tar.age` artifact.
+The backup core creates one
+`kawashima-backup-ENDPOINT-ID-YYYYMMDD-HHMMSS-JST.tar.age` artifact. Phase 3A and
+older filenames remain readable because restore verification does not infer metadata
+from the filename; endpoint metadata is authoritative inside the encrypted manifest.
 The encrypted tar contains:
 
 - `database/public.dump`: PostgreSQL custom-format dump of the `public` schema
@@ -61,10 +64,56 @@ deletion. Database and Storage restore remain out of scope for Phase 3A.
 The macOS arm64 app bundles PostgreSQL 17 `pg_dump`, `pg_restore`, and their non-system runtime
 libraries under `src-tauri/resources/bin/macos-aarch64`. The files are packaged from
 the Homebrew `postgresql@17` formula with `scripts/package-pg-dump-macos.sh`; upstream
-license notices are included beside the binaries. The app passes credentials only through
+license notices are included beside the binaries. Windows x64 bundles the EDB official
+PostgreSQL 17.11 command-line binaries, their required DLLs, a SHA-256 runtime manifest,
+and upstream notices under `src-tauri/resources/bin/windows-x86_64`. The source archive is
+the PostgreSQL Windows binary ZIP linked by the PostgreSQL project for embedding in another
+installer. The app launches these binaries by absolute path, verifies every packaged file,
+sets the child working directory and Windows child `PATH` to the runtime directory, and never
+falls back to a system PostgreSQL installation. The app passes credentials only through
 the child-process environment and uses `sslmode=verify-full` with the official Supabase
-Root 2021 CA. Windows runtime packaging remains a Phase 3B task; the core resolves tools
-through a platform adapter and never falls back to an arbitrary system `PATH` binary.
+Root 2021 CA.
+
+Tauri platform configuration files package only the runtime for the target OS:
+`tauri.macos.conf.json` includes the macOS arm64 runtime and
+`tauri.windows.conf.json` includes the Windows x64 runtime. The common CA remains in both
+packages. The desktop webview also uses a restrictive CSP that permits local application
+assets and Tauri IPC without enabling arbitrary remote content.
+
+`npm run build` generates and checks the web frontend before refreshing the Tauri build
+script timestamp. This forces Cargo to re-embed the current frontend even when a previous
+`cargo check` cached an older `dist` directory; it avoids shipping stale UI assets on either
+platform.
+
+## Windows desktop behavior
+
+Windows x64 credentials use Generic Credentials with `CRED_PERSIST_LOCAL_MACHINE`; values
+remain scoped to the same Windows user and computer instead of requesting enterprise roaming.
+Writes are read back and compared before success is returned. Missing, corrupt, denied, and
+backend failure states remain distinct and are never treated as permission to overwrite.
+The Windows CI job also round-trips a uniquely named synthetic Generic Credential and removes
+it immediately; it never addresses the production credential account names.
+
+Private files are created with a protected current-user-only DACL. FAT/exFAT and other volumes
+without `FILE_PERSISTENT_ACLS` are rejected for secret-file operations. Temporary-directory
+cleanup, partial publication, and replacement use bounded retries for transient Windows file
+locks. This is normal cleanup and is not claimed to be secure deletion.
+
+Tauri is configured for an unsigned Japanese NSIS x64 test installer using `perMachine`
+installation under Program Files. Application settings and Windows Credentials live outside
+the installation directory and are not removed by installer replacement. Production delivery
+still requires Windows code signing to reduce SmartScreen warnings.
+
+## Setup and maintenance boundary
+
+The shared macOS/Windows UI has a six-step ACTARISE setup wizard. After completion the normal
+screen exposes only backup start, current state, last success, and save results. Credential,
+recipient, recovery verification, and destination changes require an Argon2-verified backend
+maintenance session. The opaque session token is memory-only and expires after 15 minutes;
+CSS visibility is not used as the authorization boundary.
+
+Copying to a Google Drive for desktop sync folder is reported only as a local file-copy result.
+The app does not claim that Google Drive cloud synchronization has completed.
 
 Relevant upstream documentation:
 

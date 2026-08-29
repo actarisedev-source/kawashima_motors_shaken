@@ -22,7 +22,7 @@ test("macOS arm64向けpg_dumpとpg_restoreを実行可能な状態で同梱す�
     assert.equal(existsSync(executable), true);
     assert.equal((statSync(executable).mode & 0o111) !== 0, true);
   }
-  const tauri = readSource("tools/kawashima-backup/src-tauri/tauri.conf.json");
+  const tauri = readSource("tools/kawashima-backup/src-tauri/tauri.macos.conf.json");
   assert.match(tauri, /resources\/bin\/macos-aarch64\/\*\*\/\*/);
 });
 
@@ -65,7 +65,8 @@ test("異なる公開鍵の通常上書きを拒否し保守変更を分離す�
   assert.match(backup, /replace_encryption_recipient/);
   assert.match(backup, /expected_current_fingerprint/);
   assert.match(backup, /RECIPIENT_REPLACEMENT_CONFIRMATION/);
-  assert.match(frontend, /保守担当者向け: 暗号化公開鍵を変更/);
+  assert.match(frontend, /ACTARISE保守/);
+  assert.match(frontend, /暗号化公開鍵を変更/);
   assert.match(frontend, /confirm\(/);
 });
 
@@ -101,7 +102,7 @@ test("履歴に秘密情報を保存せず自動削除しない", () => {
 test("進捗・確認ダイアログ・履歴を画面に表示する", () => {
   const frontend = readSource("tools/kawashima-backup/src/main.ts");
   assert.match(frontend, /backup-progress/);
-  assert.match(frontend, /role="dialog"/);
+  assert.match(frontend, /confirm\(/);
   assert.match(frontend, /バックアップ履歴/);
   assert.match(frontend, /整合性確認/);
   assert.match(frontend, /Google Drive同期フォルダ/);
@@ -128,8 +129,8 @@ test("復旧鍵を資格情報ストアへ再登録せず公開鍵とfingerprint
 
 test("復号確認はTempDirを全経路で解放し平文SHAとdump構造結果を返す", () => {
   const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
-  assert.match(backup, /tempfile::Builder::new\(\)/);
-  assert.match(backup, /drop\(temp\)/);
+  assert.match(backup, /PrivateTempDir::new/);
+  assert.match(backup, /temp\.close\(\)/);
   assert.match(backup, /temporary_files_removed/);
   assert.match(backup, /plaintext_archive_sha256/);
   assert.match(backup, /database_structure_valid/);

@@ -1,11 +1,12 @@
 use std::{
     fs,
-    fs::OpenOptions,
+    fs::{File, OpenOptions},
     io::{Cursor, Write},
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use chrono::{SecondsFormat, Utc};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use rustls::{ClientConfig, RootCertStore};
 use serde::{Deserialize, Serialize};
@@ -13,15 +14,18 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 use tokio_postgres::config::SslMode;
 use tokio_postgres_rustls::MakeRustlsConnect;
+use zeroize::Zeroizing;
 
 mod backup;
 mod credential_store;
 mod file_security;
+mod maintenance;
 mod postgres_runtime;
 
 pub(crate) use credential_store::{ACCOUNT_DB_PASSWORD, ACCOUNT_SERVICE_ROLE_KEY};
 const SETTINGS_FILE_NAME: &str = "settings.json";
 const MAX_STORAGE_OBJECTS_TO_SCAN: usize = 10_000;
+const STORAGE_BUCKET_NAME: &str = "line-message-images";
 // Supabase official distribution: https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt
 pub(crate) const SUPABASE_ROOT_CA_PEM: &[u8] = include_bytes!("../resources/prod-ca-2021.crt");
 
@@ -54,6 +58,12 @@ pub(crate) struct BackupToolSettings {
     pub(crate) recovery_key_fingerprint: Option<String>,
     #[serde(default)]
     pub(crate) recovery_key_exported_at: Option<String>,
+    #[serde(default)]
+    pub(crate) setup_complete: bool,
+    #[serde(default = "default_setup_step")]
+    pub(crate) setup_step: u8,
+    #[serde(default)]
+    pub(crate) setup_completed_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +112,32 @@ struct FolderCheckResult {
     message: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SetupStatus {
+    complete: bool,
+    current_step: u8,
+    total_steps: u8,
+    maintenance_configured: bool,
+    platform: String,
+    application_version: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SystemCheckResult {
+    ok: bool,
+    platform: String,
+    application_version: String,
+    postgres_runtime_ready: bool,
+    private_acl_ready: bool,
+    message: String,
+}
+
+const fn default_setup_step() -> u8 {
+    1
+}
+
 impl Default for BackupToolSettings {
     fn default() -> Self {
         Self {
@@ -122,18 +158,26 @@ impl Default for BackupToolSettings {
             encryption_recovery_exported: false,
             recovery_key_fingerprint: None,
             recovery_key_exported_at: None,
+            setup_complete: false,
+            setup_step: default_setup_step(),
+            setup_completed_at: None,
         }
     }
 }
 
 pub fn run() {
+    let _ = file_security::cleanup_stale_temp_dirs(std::time::Duration::from_secs(24 * 60 * 60));
     let app = tauri::Builder::default()
         .manage(backup::RecoveryKeyState::default())
+        .manage(maintenance::MaintenanceState::default())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             load_settings,
             save_settings,
+            get_setup_status,
+            check_system,
+            set_setup_step,
+            complete_setup,
             get_secret_status,
             save_secret_values,
             check_database,
@@ -148,6 +192,10 @@ pub fn run() {
             backup::verify_backup_file,
             backup::load_backup_history,
             backup::run_backup,
+            maintenance::get_maintenance_status,
+            maintenance::configure_maintenance_passcode,
+            maintenance::unlock_maintenance,
+            maintenance::lock_maintenance,
         ])
         .build(tauri::generate_context!())
         .expect("error while running Kawashima backup tool");
@@ -175,9 +223,17 @@ pub(crate) fn load_settings_from_disk(app: &AppHandle) -> Result<BackupToolSetti
 }
 
 #[tauri::command]
-fn save_settings(app: AppHandle, settings: BackupToolSettings) -> Result<(), String> {
+fn save_settings(
+    app: AppHandle,
+    settings: BackupToolSettings,
+    maintenance_token: Option<String>,
+    maintenance_state: tauri::State<'_, maintenance::MaintenanceState>,
+) -> Result<(), String> {
     validate_settings(&settings)?;
     let existing = load_settings_from_disk(&app)?;
+    if existing.setup_complete {
+        maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
+    }
     let settings = preserve_encryption_registration(existing, settings);
     save_settings_to_disk(&app, &settings)
 }
@@ -193,6 +249,9 @@ fn preserve_encryption_registration(
         existing.encryption_recipient_registered_by_app_version;
     incoming.endpoint_id = existing.endpoint_id;
     incoming.encryption_algorithm = existing.encryption_algorithm;
+    incoming.setup_complete = existing.setup_complete;
+    incoming.setup_step = existing.setup_step;
+    incoming.setup_completed_at = existing.setup_completed_at;
     incoming
 }
 
@@ -205,7 +264,109 @@ pub(crate) fn save_settings_to_disk(
         fs::create_dir_all(parent).map_err(|error| sanitized_error(error))?;
     }
     let content = serde_json::to_string_pretty(settings).map_err(|error| sanitized_error(error))?;
-    fs::write(path, content).map_err(|error| sanitized_error(error))
+    let partial = path.with_extension("json.partial");
+    fs::write(&partial, content).map_err(|error| sanitized_error(error))?;
+    File::open(&partial)
+        .and_then(|file| file.sync_all())
+        .map_err(|error| sanitized_error(error))?;
+    file_security::replace_file(&partial, &path).map_err(sanitized_error)
+}
+
+#[tauri::command]
+fn get_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
+    let settings = load_settings_from_disk(&app)?;
+    Ok(setup_status(&settings))
+}
+
+#[tauri::command]
+fn check_system(app: AppHandle) -> SystemCheckResult {
+    let runtime_ready = postgres_runtime::PostgresRuntime::resolve(&app).is_ok();
+    let acl_ready =
+        file_security::volume_supports_private_acl(&std::env::temp_dir()).unwrap_or(false);
+    let platform = if cfg!(all(windows, target_arch = "x86_64")) {
+        "Windows x64"
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        "macOS Apple Silicon"
+    } else {
+        "未対応OS"
+    };
+    SystemCheckResult {
+        ok: runtime_ready && acl_ready && platform != "未対応OS",
+        platform: platform.to_string(),
+        application_version: env!("CARGO_PKG_VERSION").to_string(),
+        postgres_runtime_ready: runtime_ready,
+        private_acl_ready: acl_ready,
+        message: if runtime_ready && acl_ready {
+            "システム確認済み"
+        } else {
+            "必要な実行環境を確認してください。"
+        }
+        .to_string(),
+    }
+}
+
+#[tauri::command]
+fn set_setup_step(app: AppHandle, step: u8) -> Result<SetupStatus, String> {
+    if !(1..=6).contains(&step) {
+        return Err("セットアップ手順を確認できません。".to_string());
+    }
+    let mut settings = load_settings_from_disk(&app)?;
+    if settings.setup_complete {
+        return Err("初回セットアップは完了しています。".to_string());
+    }
+    settings.setup_step = step;
+    save_settings_to_disk(&app, &settings)?;
+    Ok(setup_status(&settings))
+}
+
+#[tauri::command]
+fn complete_setup(app: AppHandle) -> Result<SetupStatus, String> {
+    let mut settings = load_settings_from_disk(&app)?;
+    if settings.setup_complete {
+        return Ok(setup_status(&settings));
+    }
+    validate_setup_prerequisites(&settings)?;
+    settings.setup_complete = true;
+    settings.setup_step = 6;
+    settings.setup_completed_at = Some(Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true));
+    save_settings_to_disk(&app, &settings)?;
+    Ok(setup_status(&settings))
+}
+
+fn setup_status(settings: &BackupToolSettings) -> SetupStatus {
+    SetupStatus {
+        complete: settings.setup_complete,
+        current_step: settings.setup_step.clamp(1, 6),
+        total_steps: 6,
+        maintenance_configured: maintenance::is_configured(),
+        platform: if cfg!(windows) {
+            "windows-x86_64"
+        } else if cfg!(target_os = "macos") {
+            "macos"
+        } else {
+            "unsupported"
+        }
+        .to_string(),
+        application_version: env!("CARGO_PKG_VERSION").to_string(),
+    }
+}
+
+fn validate_setup_prerequisites(settings: &BackupToolSettings) -> Result<(), String> {
+    validate_settings(settings)?;
+    if !maintenance::is_configured() {
+        return Err("ACTARISE保守ロックを設定してください。".to_string());
+    }
+    let secrets = get_secret_status_from_keyring();
+    if !secrets.db_password || !secrets.service_role_key {
+        return Err("接続資格情報を設定してください。".to_string());
+    }
+    if !Path::new(&settings.local_backup_path).is_dir()
+        || !Path::new(&settings.google_drive_path).is_dir()
+    {
+        return Err("2つのバックアップ保存先を確認してください。".to_string());
+    }
+    backup::validate_registered_recipient(settings)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -217,7 +378,15 @@ fn get_secret_status() -> SecretStatus {
 fn save_secret_values(
     db_password: String,
     service_role_key: String,
+    maintenance_token: Option<String>,
+    app: AppHandle,
+    maintenance_state: tauri::State<'_, maintenance::MaintenanceState>,
 ) -> Result<SecretStatus, String> {
+    if load_settings_from_disk(&app)?.setup_complete {
+        maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
+    }
+    let db_password = Zeroizing::new(db_password);
+    let service_role_key = Zeroizing::new(service_role_key);
     let should_save_db_password = !db_password.trim().is_empty();
     let should_save_service_role_key = !service_role_key.trim().is_empty();
     if !should_save_db_password && !should_save_service_role_key {
@@ -246,9 +415,14 @@ fn save_secret_values(
 }
 
 #[tauri::command]
-async fn check_database(settings: BackupToolSettings) -> Result<DbCheckResult, String> {
+async fn check_database(
+    app: AppHandle,
+    maintenance_token: Option<String>,
+    maintenance_state: tauri::State<'_, maintenance::MaintenanceState>,
+) -> Result<DbCheckResult, String> {
+    let settings = settings_for_protected_check(&app, maintenance_token, &maintenance_state)?;
     validate_settings(&settings)?;
-    let password = read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?;
+    let password = Zeroizing::new(read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?);
     let db_config = build_db_config(&settings, &password)?;
     let tls = build_database_tls_connector()?;
     let (client, connection_task) = db_config
@@ -287,18 +461,18 @@ async fn check_database(settings: BackupToolSettings) -> Result<DbCheckResult, S
 
 #[tauri::command]
 async fn check_storage(
-    project_url: String,
-    bucket_name: String,
+    app: AppHandle,
+    maintenance_token: Option<String>,
+    maintenance_state: tauri::State<'_, maintenance::MaintenanceState>,
 ) -> Result<StorageCheckResult, String> {
-    if bucket_name != "line-message-images" {
-        return Err("確認対象bucketが正しくありません。".to_string());
-    }
-    let project_url = normalize_project_url(&project_url)?;
-    let service_role_key = read_secret(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key")?;
+    let settings = settings_for_protected_check(&app, maintenance_token, &maintenance_state)?;
+    let project_url = normalize_project_url(&settings.supabase_project_url)?;
+    let service_role_key =
+        Zeroizing::new(read_secret(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key")?);
     let client = reqwest::Client::new();
     let headers = storage_headers(&service_role_key)?;
 
-    let bucket_url = format!("{project_url}/storage/v1/bucket/{bucket_name}");
+    let bucket_url = format!("{project_url}/storage/v1/bucket/{STORAGE_BUCKET_NAME}");
     let bucket_response = client
         .get(bucket_url)
         .headers(headers.clone())
@@ -328,7 +502,7 @@ async fn check_storage(
     let bucket_public = bucket_json.get("public").and_then(Value::as_bool);
 
     let object_count =
-        count_storage_objects(&client, &headers, &project_url, &bucket_name, "").await?;
+        count_storage_objects(&client, &headers, &project_url, STORAGE_BUCKET_NAME, "").await?;
     Ok(StorageCheckResult {
         ok: true,
         bucket_exists: true,
@@ -339,27 +513,33 @@ async fn check_storage(
 }
 
 #[tauri::command]
-fn check_folder(path: String) -> FolderCheckResult {
+fn check_folder(
+    app: AppHandle,
+    path: String,
+    maintenance_token: Option<String>,
+    maintenance_state: tauri::State<'_, maintenance::MaintenanceState>,
+) -> Result<FolderCheckResult, String> {
+    let _ = settings_for_protected_check(&app, maintenance_token, &maintenance_state)?;
     let trimmed = path.trim().to_string();
     if trimmed.is_empty() {
-        return FolderCheckResult {
+        return Ok(FolderCheckResult {
             ok: false,
             path: trimmed,
             writable: false,
             message: "フォルダを選択してください。".to_string(),
-        };
+        });
     }
     let folder = Path::new(&trimmed);
     if !folder.is_dir() {
-        return FolderCheckResult {
+        return Ok(FolderCheckResult {
             ok: false,
             path: trimmed,
             writable: false,
             message: "フォルダが存在しません。".to_string(),
-        };
+        });
     }
 
-    match write_probe_file(folder) {
+    Ok(match write_probe_file(folder) {
         Ok(()) => FolderCheckResult {
             ok: true,
             path: trimmed,
@@ -372,7 +552,19 @@ fn check_folder(path: String) -> FolderCheckResult {
             writable: false,
             message,
         },
+    })
+}
+
+fn settings_for_protected_check(
+    app: &AppHandle,
+    maintenance_token: Option<String>,
+    maintenance_state: &tauri::State<'_, maintenance::MaintenanceState>,
+) -> Result<BackupToolSettings, String> {
+    let settings = load_settings_from_disk(app)?;
+    if settings.setup_complete {
+        maintenance::authorize(maintenance_state, maintenance_token.as_deref())?;
     }
+    Ok(settings)
 }
 
 async fn count_storage_objects(

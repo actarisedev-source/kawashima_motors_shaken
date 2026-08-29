@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager, State};
+use zeroize::Zeroizing;
 
 use super::{
     build_database_tls_connector, build_db_config, connection_mode_label, normalize_project_url,
@@ -103,6 +104,8 @@ pub(crate) struct BackupHistoryEntry {
     verification_ok: bool,
     local_copy_ok: bool,
     google_drive_copy_ok: bool,
+    #[serde(default = "default_google_drive_sync_status")]
+    google_drive_sync_status: String,
     storage_object_count: usize,
     public_table_count: i64,
     #[serde(default)]
@@ -203,6 +206,10 @@ struct StorageObjectRef {
 
 struct BackupRunGuard;
 
+fn default_google_drive_sync_status() -> String {
+    "notVerified".to_string()
+}
+
 impl BackupRunGuard {
     fn acquire() -> Result<Self, String> {
         BACKUP_RUNNING
@@ -233,7 +240,12 @@ pub(crate) fn register_encryption_recipient(
     app: AppHandle,
     recipient: String,
     endpoint_id: String,
+    maintenance_token: Option<String>,
+    maintenance_state: State<'_, super::maintenance::MaintenanceState>,
 ) -> Result<EncryptionRecipientStatus, String> {
+    if super::load_settings_from_disk(&app)?.setup_complete {
+        super::maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
+    }
     let recipient = parse_encryption_recipient(&recipient)?;
     let endpoint_id = validate_endpoint_id(&endpoint_id)?;
     let mut settings = super::load_settings_from_disk(&app)?;
@@ -252,7 +264,10 @@ pub(crate) fn replace_encryption_recipient(
     endpoint_id: String,
     expected_current_fingerprint: String,
     confirmation: String,
+    maintenance_token: Option<String>,
+    maintenance_state: State<'_, super::maintenance::MaintenanceState>,
 ) -> Result<EncryptionRecipientStatus, String> {
+    super::maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
     if confirmation != RECIPIENT_REPLACEMENT_CONFIRMATION {
         return Err("公開鍵変更には明示的な保守確認が必要です。".to_string());
     }
@@ -281,7 +296,10 @@ pub(crate) fn import_recovery_key(
     app: AppHandle,
     path: String,
     state: State<'_, RecoveryKeyState>,
+    maintenance_token: Option<String>,
+    maintenance_state: State<'_, super::maintenance::MaintenanceState>,
 ) -> Result<RecoveryKeyImportStatus, String> {
+    super::maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
     {
         let mut loaded = state
             .0
@@ -327,13 +345,15 @@ pub(crate) fn verify_backup_file(
     app: AppHandle,
     path: String,
     state: State<'_, RecoveryKeyState>,
+    maintenance_token: Option<String>,
+    maintenance_state: State<'_, super::maintenance::MaintenanceState>,
 ) -> Result<BackupVerificationResult, String> {
+    super::maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
     let identity = state
         .0
         .lock()
         .map_err(|_| "復旧鍵の状態を読み込めませんでした。".to_string())?
-        .as_ref()
-        .cloned()
+        .take()
         .ok_or_else(|| "有効な復旧鍵を先に読み込んでください。".to_string())?;
     let runtime = postgres_runtime::PostgresRuntime::resolve(&app)?;
     verify_backup_file_with_identity(
@@ -350,11 +370,9 @@ pub(crate) fn load_backup_history(app: AppHandle) -> Result<Vec<BackupHistoryEnt
 }
 
 #[tauri::command]
-pub(crate) async fn run_backup(
-    app: AppHandle,
-    settings: BackupToolSettings,
-) -> Result<BackupResult, String> {
+pub(crate) async fn run_backup(app: AppHandle) -> Result<BackupResult, String> {
     let _guard = BackupRunGuard::acquire()?;
+    let settings = super::load_settings_from_disk(&app)?;
     let failed_started_at = Utc::now();
     let result = execute_backup(app.clone(), settings.clone()).await;
     if let Err(error) = &result {
@@ -373,6 +391,7 @@ pub(crate) async fn run_backup(
             verification_ok: false,
             local_copy_ok: false,
             google_drive_copy_ok: false,
+            google_drive_sync_status: default_google_drive_sync_status(),
             storage_object_count: 0,
             public_table_count: 0,
             endpoint_id: settings.endpoint_id.clone().unwrap_or_default(),
@@ -418,11 +437,8 @@ async fn execute_backup(
     let started_at = Utc::now();
     let local_started_at = Local::now();
     let backup_id = local_started_at.format("%Y%m%d-%H%M%S-JST").to_string();
-    let archive_name = format!("kawashima-backup-{backup_id}.tar.age");
-    let temp = tempfile::Builder::new()
-        .prefix("kawashima-backup-")
-        .tempdir()
-        .map_err(|error| sanitized_error(error))?;
+    let archive_name = archive_file_name(&endpoint_id, &backup_id);
+    let temp = file_security::PrivateTempDir::new("kawashima-backup-")?;
     let source_root = temp.path().join(ARCHIVE_ROOT);
     let database_dir = source_root.join("database");
     let storage_dir = source_root.join("storage").join(STORAGE_BUCKET);
@@ -437,8 +453,9 @@ async fn execute_backup(
         fs::create_dir_all(directory).map_err(|error| sanitized_error(error))?;
     }
 
-    let db_password = read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?;
-    let service_role_key = read_secret(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key")?;
+    let db_password = Zeroizing::new(read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?);
+    let service_role_key =
+        Zeroizing::new(read_secret(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key")?);
 
     let db_info = query_database_metadata(&settings, &db_password).await?;
     let postgres_runtime = postgres_runtime::PostgresRuntime::resolve(&app)?;
@@ -529,7 +546,7 @@ async fn execute_backup(
         objects: storage_manifest_objects,
     };
     let backup_manifest = BackupManifest {
-        format_version: 1,
+        format_version: 2,
         backup_id: backup_id.clone(),
         created_at: created_at.clone(),
         application: "Kawashima Motors Backup Tool".to_string(),
@@ -634,6 +651,7 @@ async fn execute_backup(
     );
     let (local_path, google_drive_path) =
         copy_to_destinations(&encrypted_path, &archive_name, &settings, &encrypted_sha256)?;
+    temp.close()?;
     emit_progress(
         &app,
         "copy",
@@ -658,6 +676,7 @@ async fn execute_backup(
         verification_ok: true,
         local_copy_ok: true,
         google_drive_copy_ok: true,
+        google_drive_sync_status: default_google_drive_sync_status(),
         storage_object_count: storage_manifest.object_count,
         public_table_count: database_manifest.public_table_count,
         endpoint_id,
@@ -803,8 +822,10 @@ fn read_recovery_identity_file(path: &Path) -> Result<x25519::Identity, String> 
     if metadata.len() == 0 || metadata.len() > MAX_RECOVERY_KEY_FILE_SIZE {
         return Err("復旧鍵ファイルの形式が正しくありません。".to_string());
     }
-    let content = fs::read_to_string(path)
-        .map_err(|_| "復旧鍵ファイルを読み込めませんでした。".to_string())?;
+    let content = Zeroizing::new(
+        fs::read_to_string(path)
+            .map_err(|_| "復旧鍵ファイルを読み込めませんでした。".to_string())?,
+    );
     parse_recovery_identity(&content)
 }
 
@@ -828,8 +849,34 @@ fn validate_backup_prerequisites(
     settings: &BackupToolSettings,
 ) -> Result<x25519::Recipient, String> {
     super::validate_settings(settings)?;
-    read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?;
-    read_secret(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key")?;
+    if !settings.setup_complete {
+        return Err("初回セットアップを完了してください。".to_string());
+    }
+    let _db_password = Zeroizing::new(read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?);
+    let _service_role_key =
+        Zeroizing::new(read_secret(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key")?);
+    let recipient = validate_registered_recipient(settings)?;
+    let local = Path::new(settings.local_backup_path.trim());
+    let drive = Path::new(settings.google_drive_path.trim());
+    if !local.is_dir() || !drive.is_dir() {
+        return Err("PC保存先とGoogle Drive同期フォルダを確認してください。".to_string());
+    }
+    let local = local
+        .canonicalize()
+        .map_err(|_| "PC保存先を確認してください。".to_string())?;
+    let drive = drive
+        .canonicalize()
+        .map_err(|_| "Google Drive保存先を確認してください。".to_string())?;
+    if local == drive {
+        return Err("PC保存先とGoogle Drive保存先は別のフォルダを指定してください。".to_string());
+    }
+    postgres_runtime::PostgresRuntime::resolve(app)?;
+    Ok(recipient)
+}
+
+pub(crate) fn validate_registered_recipient(
+    settings: &BackupToolSettings,
+) -> Result<x25519::Recipient, String> {
     let recipient = parse_encryption_recipient(
         settings
             .encryption_recipient
@@ -847,22 +894,11 @@ fn validate_backup_prerequisites(
     if settings.encryption_algorithm.as_deref() != Some(ENCRYPTION_ALGORITHM) {
         return Err("暗号化方式の設定が一致しません。".to_string());
     }
-    let local = Path::new(settings.local_backup_path.trim());
-    let drive = Path::new(settings.google_drive_path.trim());
-    if !local.is_dir() || !drive.is_dir() {
-        return Err("PC保存先とGoogle Drive同期フォルダを確認してください。".to_string());
-    }
-    let local = local
-        .canonicalize()
-        .map_err(|_| "PC保存先を確認してください。".to_string())?;
-    let drive = drive
-        .canonicalize()
-        .map_err(|_| "Google Drive保存先を確認してください。".to_string())?;
-    if local == drive {
-        return Err("PC保存先とGoogle Drive保存先は別のフォルダを指定してください。".to_string());
-    }
-    postgres_runtime::PostgresRuntime::resolve(app)?;
     Ok(recipient)
+}
+
+fn archive_file_name(endpoint_id: &str, backup_id: &str) -> String {
+    format!("kawashima-backup-{endpoint_id}-{backup_id}.tar.age")
 }
 
 async fn query_database_metadata(
@@ -1160,14 +1196,11 @@ fn verify_backup_file_with_identity(
     if !encrypted.is_file() {
         return Err("暗号化バックアップファイルを読み込めませんでした。".to_string());
     }
-    let temp = tempfile::Builder::new()
-        .prefix("kawashima-backup-verify-")
-        .tempdir()
-        .map_err(|error| sanitized_error(error))?;
+    let temp = file_security::PrivateTempDir::new("kawashima-backup-verify-")?;
     let temp_path = temp.path().to_path_buf();
     let verification = verify_encrypted_backup(encrypted, identity, temp.path(), pg_restore);
     let fingerprint = identity_fingerprint(identity);
-    drop(temp);
+    temp.close()?;
     if temp_path.exists() {
         return Err("復号確認用の一時ファイルを削除できませんでした。".to_string());
     }
@@ -1274,13 +1307,14 @@ fn copy_to_destinations(
 ) -> Result<(PathBuf, PathBuf), String> {
     let local = Path::new(&settings.local_backup_path).join(file_name);
     let drive = Path::new(&settings.google_drive_path).join(file_name);
-    let mut completed = Vec::new();
+    let mut completed: Vec<PathBuf> = Vec::new();
     for destination in [&local, &drive] {
         if let Err(error) = copy_atomic_verified(source, destination, expected_hash) {
             for path in completed {
-                let _ = fs::remove_file(path);
+                let _ = file_security::remove_file_with_retry(&path);
             }
-            let _ = fs::remove_file(destination.with_extension("age.partial"));
+            let _ =
+                file_security::remove_file_with_retry(&destination.with_extension("age.partial"));
             return Err(error);
         }
         completed.push(destination.to_path_buf());
@@ -1319,7 +1353,7 @@ fn copy_atomic_verified(
     }
     let partial = destination.with_extension("age.partial");
     if partial.exists() {
-        fs::remove_file(&partial).map_err(|error| sanitized_error(error))?;
+        file_security::remove_file_with_retry(&partial).map_err(|error| sanitized_error(error))?;
     }
     let result = (|| {
         fs::copy(source, &partial).map_err(|error| sanitized_error(error))?;
@@ -1333,7 +1367,7 @@ fn copy_atomic_verified(
         Ok(())
     })();
     if result.is_err() {
-        let _ = fs::remove_file(&partial);
+        let _ = file_security::remove_file_with_retry(&partial);
     }
     result
 }
@@ -1454,9 +1488,13 @@ mod tests {
             encryption_recovery_exported: true,
             recovery_key_fingerprint: None,
             recovery_key_exported_at: None,
+            setup_complete: true,
+            setup_step: 6,
+            setup_completed_at: Some("2026-08-28T00:00:00Z".to_string()),
         }
     }
 
+    #[cfg(unix)]
     fn create_test_backup(root: &Path, recipient: &x25519::Recipient) -> PathBuf {
         let source = root.join("source").join(ARCHIVE_ROOT);
         fs::create_dir_all(source.join("database")).unwrap();
@@ -1580,6 +1618,16 @@ mod tests {
             recipient_registration_exists_and_matches(&settings, &existing, "other-endpoint")
                 .is_err()
         );
+    }
+
+    #[test]
+    fn endpoint_id_is_part_of_the_new_filename_without_breaking_legacy_files() {
+        assert_eq!(
+            archive_file_name("kawashima-windows-main", "20260828-120000-JST"),
+            "kawashima-backup-kawashima-windows-main-20260828-120000-JST.tar.age"
+        );
+        let legacy = "kawashima-backup-20260828-120000-JST.tar.age";
+        assert!(legacy.ends_with(".tar.age"));
     }
 
     #[cfg(unix)]

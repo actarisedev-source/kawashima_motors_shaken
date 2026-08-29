@@ -21,6 +21,9 @@ export type BackupToolSettings = {
   encryptionRecoveryExported: boolean;
   recoveryKeyFingerprint: string | null;
   recoveryKeyExportedAt: string | null;
+  setupComplete: boolean;
+  setupStep: number;
+  setupCompletedAt: string | null;
 };
 
 export const emptySettings: BackupToolSettings = {
@@ -41,6 +44,9 @@ export const emptySettings: BackupToolSettings = {
   encryptionRecoveryExported: false,
   recoveryKeyFingerprint: null,
   recoveryKeyExportedAt: null,
+  setupComplete: false,
+  setupStep: 1,
+  setupCompletedAt: null,
 };
 
 export const secretFieldNames = ["dbPassword", "serviceRoleKey"] as const;
@@ -85,7 +91,24 @@ export function sanitizeSettings(input: BackupToolSettings): BackupToolSettings 
     encryptionRecoveryExported: Boolean(input.encryptionRecoveryExported),
     recoveryKeyFingerprint: input.recoveryKeyFingerprint?.trim() || null,
     recoveryKeyExportedAt: input.recoveryKeyExportedAt?.trim() || null,
+    setupComplete: Boolean(input.setupComplete),
+    setupStep: normalizeSetupStep(input.setupStep),
+    setupCompletedAt: input.setupCompletedAt?.trim() || null,
   };
+}
+
+export const setupSteps = [
+  "システム確認",
+  "バックアップ保存先",
+  "ACTARISE接続設定",
+  "暗号化設定",
+  "動作確認",
+  "セットアップ完了",
+] as const;
+
+export function normalizeSetupStep(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(setupSteps.length, Math.max(1, Math.trunc(value)));
 }
 
 export function validateFolderPath(path: string): string | null {

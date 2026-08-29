@@ -4,13 +4,13 @@ import test from "node:test";
 
 const readSource = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("Phase 3Aアプリ版は0.3.0で統一する", () => {
+test("Phase 3B候補アプリ版は0.4.0で統一する", () => {
   const packageJson = JSON.parse(readSource("tools/kawashima-backup/package.json"));
   const tauri = JSON.parse(readSource("tools/kawashima-backup/src-tauri/tauri.conf.json"));
   const cargo = readSource("tools/kawashima-backup/src-tauri/Cargo.toml");
-  assert.equal(packageJson.version, "0.3.0");
-  assert.equal(tauri.version, "0.3.0");
-  assert.match(cargo, /version = "0\.3\.0"/);
+  assert.equal(packageJson.version, "0.4.0");
+  assert.equal(tauri.version, "0.4.0");
+  assert.match(cargo, /version = "0\.4\.0"/);
 });
 
 test("Rust coreからOS資格情報・ファイル・PostgreSQL runtimeを分離する", () => {
