@@ -1360,7 +1360,9 @@ fn copy_atomic_verified(
         if file_size(source)? != file_size(&partial)? || sha256_file(&partial)? != expected_hash {
             return Err("保存先コピーの整合性確認に失敗しました。".to_string());
         }
-        File::open(&partial)
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&partial)
             .and_then(|file| file.sync_all())
             .map_err(|error| sanitized_error(error))?;
         file_security::publish_new_file(&partial, destination).map_err(sanitized_error)?;

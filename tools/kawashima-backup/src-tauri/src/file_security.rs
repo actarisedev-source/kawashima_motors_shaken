@@ -444,6 +444,7 @@ mod tests {
         let mut file = create_private_new(&path).unwrap();
         file.write_all(b"synthetic-only").unwrap();
         file.sync_all().unwrap();
+        drop(file);
         assert_eq!(fs::read(path).unwrap(), b"synthetic-only");
     }
 
