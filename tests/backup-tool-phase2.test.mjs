@@ -142,7 +142,7 @@ test("復号確認はTempDirを全経路で解放し平文SHAとdump構造結果
 test("通常バックアップ端末の資格情報ストア対象はDBとStorage secretだけ", () => {
   const credentials = readSource("tools/kawashima-backup/src-tauri/src/credential_store.rs");
   assert.match(credentials, /ACCOUNT_DB_PASSWORD/);
-  assert.match(credentials, /ACCOUNT_SERVICE_ROLE_KEY/);
+  assert.match(credentials, /ACCOUNT_STORAGE_AUTH_PASSWORD/);
   assert.doesNotMatch(credentials, /backup-age-identity/);
 });
 

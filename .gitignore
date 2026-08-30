@@ -8,6 +8,7 @@ out/
 
 # production
 build/
+/artifacts/
 
 # environment
 .env*.local

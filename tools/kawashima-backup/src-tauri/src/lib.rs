@@ -3,11 +3,13 @@ use std::{
     fs::{File, OpenOptions},
     io::{Cursor, Write},
     path::{Path, PathBuf},
+    sync::Mutex,
+    time::{Duration, Instant},
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use chrono::{SecondsFormat, Utc};
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
+use reqwest::header::HeaderMap;
 use rustls::{ClientConfig, RootCertStore};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -21,8 +23,9 @@ mod credential_store;
 mod file_security;
 mod maintenance;
 mod postgres_runtime;
+mod storage_auth;
 
-pub(crate) use credential_store::{ACCOUNT_DB_PASSWORD, ACCOUNT_SERVICE_ROLE_KEY};
+pub(crate) use credential_store::{ACCOUNT_DB_PASSWORD, ACCOUNT_STORAGE_AUTH_PASSWORD};
 const SETTINGS_FILE_NAME: &str = "settings.json";
 const MAX_STORAGE_OBJECTS_TO_SCAN: usize = 10_000;
 const STORAGE_BUCKET_NAME: &str = "line-message-images";
@@ -33,6 +36,10 @@ pub(crate) const SUPABASE_ROOT_CA_PEM: &[u8] = include_bytes!("../resources/prod
 #[serde(rename_all = "camelCase")]
 pub(crate) struct BackupToolSettings {
     pub(crate) supabase_project_url: String,
+    #[serde(default)]
+    pub(crate) supabase_publishable_key: String,
+    #[serde(default)]
+    pub(crate) storage_auth_email: String,
     pub(crate) db_host: String,
     pub(crate) db_port: String,
     pub(crate) db_name: String,
@@ -77,9 +84,30 @@ pub(crate) enum ConnectionMode {
 #[serde(rename_all = "camelCase")]
 struct SecretStatus {
     db_password: bool,
-    service_role_key: bool,
+    storage_auth_password: bool,
+    legacy_service_role_key: bool,
     db_password_state: String,
-    service_role_key_state: String,
+    storage_auth_password_state: String,
+    legacy_service_role_key_state: String,
+}
+
+#[derive(Default)]
+struct StorageValidationState(Mutex<Option<Instant>>);
+
+impl StorageValidationState {
+    fn mark_success(&self) {
+        if let Ok(mut verified_at) = self.0.lock() {
+            *verified_at = Some(Instant::now());
+        }
+    }
+
+    fn recently_succeeded(&self) -> bool {
+        self.0
+            .lock()
+            .ok()
+            .and_then(|verified_at| *verified_at)
+            .is_some_and(|verified_at| verified_at.elapsed() <= Duration::from_secs(10 * 60))
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -142,6 +170,8 @@ impl Default for BackupToolSettings {
     fn default() -> Self {
         Self {
             supabase_project_url: String::new(),
+            supabase_publishable_key: String::new(),
+            storage_auth_email: String::new(),
             db_host: String::new(),
             db_port: "5432".to_string(),
             db_name: "postgres".to_string(),
@@ -170,6 +200,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .manage(backup::RecoveryKeyState::default())
         .manage(maintenance::MaintenanceState::default())
+        .manage(StorageValidationState::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             load_settings,
@@ -180,6 +211,7 @@ pub fn run() {
             complete_setup,
             get_secret_status,
             save_secret_values,
+            delete_legacy_service_role_key,
             check_database,
             check_storage,
             check_folder,
@@ -357,7 +389,7 @@ fn validate_setup_prerequisites(settings: &BackupToolSettings) -> Result<(), Str
         return Err("ACTARISE保守ロックを設定してください。".to_string());
     }
     let secrets = get_secret_status_from_keyring();
-    if !secrets.db_password || !secrets.service_role_key {
+    if !secrets.db_password || !secrets.storage_auth_password {
         return Err("接続資格情報を設定してください。".to_string());
     }
     if !Path::new(&settings.local_backup_path).is_dir()
@@ -377,7 +409,7 @@ fn get_secret_status() -> SecretStatus {
 #[tauri::command]
 fn save_secret_values(
     db_password: String,
-    service_role_key: String,
+    storage_auth_password: String,
     maintenance_token: Option<String>,
     app: AppHandle,
     maintenance_state: tauri::State<'_, maintenance::MaintenanceState>,
@@ -386,10 +418,10 @@ fn save_secret_values(
         maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
     }
     let db_password = Zeroizing::new(db_password);
-    let service_role_key = Zeroizing::new(service_role_key);
+    let storage_auth_password = Zeroizing::new(storage_auth_password);
     let should_save_db_password = !db_password.trim().is_empty();
-    let should_save_service_role_key = !service_role_key.trim().is_empty();
-    if !should_save_db_password && !should_save_service_role_key {
+    let should_save_storage_auth_password = !storage_auth_password.trim().is_empty();
+    if !should_save_db_password && !should_save_storage_auth_password {
         return Err("保存する秘密情報を入力してください。".to_string());
     }
 
@@ -397,19 +429,53 @@ fn save_secret_values(
         credential_store::write_secret_explicit(ACCOUNT_DB_PASSWORD, db_password.trim())
             .map_err(|error| error.user_message("DBパスワード"))?;
     }
-    if !service_role_key.trim().is_empty() {
-        credential_store::write_secret_explicit(ACCOUNT_SERVICE_ROLE_KEY, service_role_key.trim())
-            .map_err(|error| error.user_message("Service Role Key"))?;
+    if !storage_auth_password.trim().is_empty() {
+        credential_store::write_secret_explicit(
+            ACCOUNT_STORAGE_AUTH_PASSWORD,
+            storage_auth_password.trim(),
+        )
+        .map_err(|error| error.user_message("Storage読み取り用パスワード"))?;
     }
 
     let status = get_secret_status_from_keyring();
     if should_save_db_password && !status.db_password {
         return Err("DBパスワードをOS資格情報ストアへ保存後に確認できませんでした。".to_string());
     }
-    if should_save_service_role_key && !status.service_role_key {
+    if should_save_storage_auth_password && !status.storage_auth_password {
         return Err(
-            "Service Role KeyをOS資格情報ストアへ保存後に確認できませんでした。".to_string(),
+            "Storage読み取り用パスワードをOS資格情報ストアへ保存後に確認できませんでした。"
+                .to_string(),
         );
+    }
+    Ok(status)
+}
+
+#[tauri::command]
+fn delete_legacy_service_role_key(
+    confirmation: String,
+    maintenance_token: Option<String>,
+    maintenance_state: tauri::State<'_, maintenance::MaintenanceState>,
+    validation_state: tauri::State<'_, StorageValidationState>,
+) -> Result<SecretStatus, String> {
+    maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
+    if confirmation.trim() != "旧Service Role Keyを削除する" {
+        return Err("確認文字列が一致しません。".to_string());
+    }
+    if !validation_state.recently_succeeded() {
+        return Err(
+            "新しいStorage読み取り資格情報の接続確認を10分以内に完了してください。".to_string(),
+        );
+    }
+    if credential_store::credential_state(ACCOUNT_STORAGE_AUTH_PASSWORD)
+        != credential_store::CredentialState::Stored
+    {
+        return Err("Storage読み取り用パスワードを確認してください。".to_string());
+    }
+    credential_store::delete_secret_explicit(credential_store::ACCOUNT_SERVICE_ROLE_KEY)
+        .map_err(|error| error.user_message("旧Service Role Key"))?;
+    let status = get_secret_status_from_keyring();
+    if status.legacy_service_role_key {
+        return Err("旧Service Role Keyの削除後確認に失敗しました。".to_string());
     }
     Ok(status)
 }
@@ -464,49 +530,27 @@ async fn check_storage(
     app: AppHandle,
     maintenance_token: Option<String>,
     maintenance_state: tauri::State<'_, maintenance::MaintenanceState>,
+    validation_state: tauri::State<'_, StorageValidationState>,
 ) -> Result<StorageCheckResult, String> {
     let settings = settings_for_protected_check(&app, maintenance_token, &maintenance_state)?;
     let project_url = normalize_project_url(&settings.supabase_project_url)?;
-    let service_role_key =
-        Zeroizing::new(read_secret(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key")?);
+    let storage_auth_password = Zeroizing::new(read_secret(
+        ACCOUNT_STORAGE_AUTH_PASSWORD,
+        "Storage読み取り用パスワード",
+    )?);
     let client = reqwest::Client::new();
-    let headers = storage_headers(&service_role_key)?;
-
-    let bucket_url = format!("{project_url}/storage/v1/bucket/{STORAGE_BUCKET_NAME}");
-    let bucket_response = client
-        .get(bucket_url)
-        .headers(headers.clone())
-        .send()
-        .await
-        .map_err(|error| storage_error_message(&error.to_string()))?;
-
-    if bucket_response.status().as_u16() == 404 {
-        return Ok(StorageCheckResult {
-            ok: false,
-            bucket_exists: false,
-            bucket_public: None,
-            object_count_estimate: None,
-            message: "bucketが見つかりません。".to_string(),
-        });
-    }
-    if !bucket_response.status().is_success() {
-        return Err(storage_error_message(&format!(
-            "Storage bucket確認に失敗しました: {}",
-            bucket_response.status()
-        )));
-    }
-    let bucket_json: Value = bucket_response
-        .json()
-        .await
-        .map_err(|error| storage_error_message(&error.to_string()))?;
-    let bucket_public = bucket_json.get("public").and_then(Value::as_bool);
+    let token = storage_auth::authenticate(&settings, &storage_auth_password).await?;
+    let headers = token.headers(&settings.supabase_publishable_key)?;
+    storage_auth::verify_bucket_access(&client, &project_url, STORAGE_BUCKET_NAME, &headers)
+        .await?;
 
     let object_count =
         count_storage_objects(&client, &headers, &project_url, STORAGE_BUCKET_NAME, "").await?;
+    validation_state.mark_success();
     Ok(StorageCheckResult {
         ok: true,
         bucket_exists: true,
-        bucket_public,
+        bucket_public: None,
         object_count_estimate: Some(object_count),
         message: "Storage接続成功".to_string(),
     })
@@ -647,6 +691,12 @@ pub(crate) fn validate_settings(settings: &BackupToolSettings) -> Result<(), Str
     if settings.db_port.parse::<u16>().is_err() {
         return Err("DB portは数値で入力してください。".to_string());
     }
+    if settings.supabase_publishable_key.trim().is_empty() {
+        return Err("Supabase Publishable Keyを入力してください。".to_string());
+    }
+    if !settings.storage_auth_email.contains('@') {
+        return Err("Storage読み取り用ユーザーのメールアドレスを確認してください。".to_string());
+    }
     Ok(())
 }
 
@@ -707,33 +757,32 @@ pub(crate) fn read_secret(key: &str, label: &str) -> Result<String, String> {
 
 fn get_secret_status_from_keyring() -> SecretStatus {
     let db_password_state = credential_store::credential_state(ACCOUNT_DB_PASSWORD);
-    let service_role_key_state = credential_store::credential_state(ACCOUNT_SERVICE_ROLE_KEY);
+    let storage_auth_password_state =
+        credential_store::credential_state(ACCOUNT_STORAGE_AUTH_PASSWORD);
+    let legacy_service_role_key_state =
+        credential_store::credential_state(credential_store::ACCOUNT_SERVICE_ROLE_KEY);
     SecretStatus {
         db_password: db_password_state == credential_store::CredentialState::Stored,
-        service_role_key: service_role_key_state == credential_store::CredentialState::Stored,
+        storage_auth_password: storage_auth_password_state
+            == credential_store::CredentialState::Stored,
+        legacy_service_role_key: legacy_service_role_key_state
+            == credential_store::CredentialState::Stored,
         db_password_state: db_password_state.label().to_string(),
-        service_role_key_state: service_role_key_state.label().to_string(),
+        storage_auth_password_state: storage_auth_password_state.label().to_string(),
+        legacy_service_role_key_state: legacy_service_role_key_state.label().to_string(),
     }
-}
-
-pub(crate) fn storage_headers(service_role_key: &str) -> Result<HeaderMap, String> {
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        "apikey",
-        HeaderValue::from_str(service_role_key)
-            .map_err(|_| "Service Role Keyの形式を確認してください。".to_string())?,
-    );
-    headers.insert(
-        AUTHORIZATION,
-        HeaderValue::from_str(&format!("Bearer {service_role_key}"))
-            .map_err(|_| "Service Role Keyの形式を確認してください。".to_string())?,
-    );
-    Ok(headers)
 }
 
 pub(crate) fn normalize_project_url(project_url: &str) -> Result<String, String> {
     let trimmed = project_url.trim().trim_end_matches('/');
-    if !(trimmed.starts_with("https://") || trimmed.starts_with("http://localhost")) {
+    let local_http = ["http://localhost", "http://127.0.0.1"]
+        .iter()
+        .any(|prefix| {
+            trimmed.strip_prefix(prefix).is_some_and(|suffix| {
+                suffix.is_empty() || suffix.starts_with(':') || suffix.starts_with('/')
+            })
+        });
+    if !(trimmed.starts_with("https://") || local_http) {
         return Err("Supabase Project URLを確認してください。".to_string());
     }
     Ok(trimmed.to_string())
@@ -785,7 +834,7 @@ fn db_error_message(error: &str, mode: &ConnectionMode) -> String {
 
 fn storage_error_message(error: &str) -> String {
     format!(
-        "Storage接続を確認できません。Project URLとService Role Keyを確認してください。 {}",
+        "Storage接続を確認できません。読み取り用ユーザー設定を確認してください。 {}",
         sanitized_error(error)
     )
 }
@@ -808,6 +857,32 @@ mod tests {
     #[test]
     fn bundled_supabase_ca_builds_a_tls_connector() {
         assert!(build_database_tls_connector().is_ok());
+    }
+
+    #[test]
+    fn project_url_allows_https_and_exact_local_hosts_only() {
+        assert!(normalize_project_url("https://example.supabase.co").is_ok());
+        assert!(normalize_project_url("http://localhost:55421").is_ok());
+        assert!(normalize_project_url("http://127.0.0.1:55421").is_ok());
+        assert!(normalize_project_url("http://localhost.evil.invalid").is_err());
+        assert!(normalize_project_url("http://127.0.0.1.evil.invalid").is_err());
+    }
+
+    #[test]
+    fn legacy_settings_load_with_new_storage_fields_unconfigured() {
+        let settings: BackupToolSettings = serde_json::from_value(json!({
+            "supabaseProjectUrl": "https://example.supabase.co",
+            "dbHost": "example.pooler.supabase.com",
+            "dbPort": "5432",
+            "dbName": "postgres",
+            "dbUser": "legacy-user",
+            "connectionMode": "session",
+            "localBackupPath": "/tmp/local",
+            "googleDrivePath": "/tmp/drive"
+        }))
+        .unwrap();
+        assert!(settings.supabase_publishable_key.is_empty());
+        assert!(settings.storage_auth_email.is_empty());
     }
 
     #[test]

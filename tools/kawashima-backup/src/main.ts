@@ -7,20 +7,25 @@ import {
   sanitizeSettings,
   setupSteps,
   type BackupToolSettings,
-  type SecretFieldName,
 } from "./lib/config";
 import "./styles.css";
 
 type CredentialState = "stored" | "missing" | "corrupt" | "accessDenied" | "backendError";
-type SecretStatus = Record<SecretFieldName, boolean> & {
+type SecretStatus = {
+  dbPassword: boolean;
+  storageAuthPassword: boolean;
+  legacyServiceRoleKey: boolean;
   dbPasswordState: CredentialState;
-  serviceRoleKeyState: CredentialState;
+  storageAuthPasswordState: CredentialState;
+  legacyServiceRoleKeyState: CredentialState;
 };
 type SecretStatusResponse = Partial<SecretStatus> & {
   db_password?: boolean;
-  service_role_key?: boolean;
+  storage_auth_password?: boolean;
+  legacy_service_role_key?: boolean;
   db_password_state?: CredentialState;
-  service_role_key_state?: CredentialState;
+  storage_auth_password_state?: CredentialState;
+  legacy_service_role_key_state?: CredentialState;
 };
 type SetupStatus = {
   complete: boolean;
@@ -107,7 +112,11 @@ const emptyRecipient: EncryptionRecipientStatus = {
 let state: AppState = {
   settings: { ...emptySettings }, setup: emptySetup, maintenance: emptyMaintenance,
   maintenanceToken: null, maintenanceOpen: false,
-  secretStatus: { dbPassword: false, serviceRoleKey: false, dbPasswordState: "missing", serviceRoleKeyState: "missing" },
+  secretStatus: {
+    dbPassword: false, storageAuthPassword: false, legacyServiceRoleKey: false,
+    dbPasswordState: "missing", storageAuthPasswordState: "missing",
+    legacyServiceRoleKeyState: "missing",
+  },
   recipientStatus: emptyRecipient, systemCheck: null, recoveryKeyStatus: null,
   verificationResult: null, dbCheck: null, storageCheck: null,
   localFolderCheck: null, googleDriveFolderCheck: null, history: [], progress: null,
@@ -132,11 +141,24 @@ const escapeHtml = (value: unknown) => String(value ?? "")
   .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 const shortFingerprint = (value: string | null | undefined) => value ? `${value.slice(0, 10)}...${value.slice(-8)}` : "未設定";
 const badge = (ok: boolean, label?: string) => `<span class="badge ${ok ? "ok" : "muted"}">${ok ? "✓" : "!"} ${escapeHtml(label ?? (ok ? "確認済み" : "未確認"))}</span>`;
+const credentialStateLabels: Record<CredentialState, string> = {
+  stored: "登録済み",
+  missing: "未登録",
+  corrupt: "破損",
+  accessDenied: "アクセス拒否",
+  backendError: "確認失敗",
+};
+const credentialBadge = (stored: boolean, status: CredentialState) =>
+  badge(stored, credentialStateLabels[status]);
 const normalizeSecretStatus = (status: SecretStatusResponse): SecretStatus => ({
   dbPassword: Boolean(status.dbPassword ?? status.db_password),
-  serviceRoleKey: Boolean(status.serviceRoleKey ?? status.service_role_key),
+  storageAuthPassword: Boolean(status.storageAuthPassword ?? status.storage_auth_password),
+  legacyServiceRoleKey: Boolean(status.legacyServiceRoleKey ?? status.legacy_service_role_key),
   dbPasswordState: status.dbPasswordState ?? status.db_password_state ?? "missing",
-  serviceRoleKeyState: status.serviceRoleKeyState ?? status.service_role_key_state ?? "missing",
+  storageAuthPasswordState:
+    status.storageAuthPasswordState ?? status.storage_auth_password_state ?? "missing",
+  legacyServiceRoleKeyState:
+    status.legacyServiceRoleKeyState ?? status.legacy_service_role_key_state ?? "missing",
 });
 const maintenanceArgs = () => ({ maintenanceToken: state.maintenanceToken });
 
@@ -147,6 +169,9 @@ function updateSettingsFromForm() {
   state.settings = sanitizeSettings({
     ...state.settings,
     supabaseProjectUrl: String(data.get("supabaseProjectUrl") ?? state.settings.supabaseProjectUrl),
+    supabasePublishableKey:
+      String(data.get("supabasePublishableKey") ?? state.settings.supabasePublishableKey),
+    storageAuthEmail: String(data.get("storageAuthEmail") ?? state.settings.storageAuthEmail),
     dbHost: String(data.get("dbHost") ?? state.settings.dbHost),
     dbPort: String(data.get("dbPort") ?? state.settings.dbPort),
     dbName: String(data.get("dbName") ?? state.settings.dbName),
@@ -168,13 +193,33 @@ async function saveSettings() {
 
 async function saveSecrets() {
   const dbPassword = app.querySelector<HTMLInputElement>("#db-password")?.value ?? "";
-  const serviceRoleKey = app.querySelector<HTMLInputElement>("#service-role-key")?.value ?? "";
+  const storageAuthPassword =
+    app.querySelector<HTMLInputElement>("#storage-auth-password")?.value ?? "";
   try {
     const result = await runCommand<SecretStatusResponse>("save_secret_values", {
-      dbPassword, serviceRoleKey, ...maintenanceArgs(),
+      dbPassword, storageAuthPassword, ...maintenanceArgs(),
     });
     state.secretStatus = normalizeSecretStatus(result);
     state.message = "接続資格情報をOS資格情報ストアへ保存し、再読込を確認しました。";
+  } catch (error) {
+    state.message = redactSensitiveText(error);
+  }
+  render();
+}
+
+async function deleteLegacyServiceRoleKey() {
+  if (!state.maintenanceToken || !state.secretStatus.legacyServiceRoleKey) return;
+  if (!await confirm("旧Service Role KeyをOS資格情報ストアから削除します。新しいStorage接続確認は完了していますか？", {
+    title: "旧資格情報の削除", kind: "warning",
+  })) return;
+  const confirmation =
+    app.querySelector<HTMLInputElement>("#legacy-service-role-confirmation")?.value ?? "";
+  try {
+    const result = await runCommand<SecretStatusResponse>("delete_legacy_service_role_key", {
+      confirmation, ...maintenanceArgs(),
+    });
+    state.secretStatus = normalizeSecretStatus(result);
+    state.message = "旧Service Role Keyを明示操作により削除しました。";
   } catch (error) {
     state.message = redactSensitiveText(error);
   }
@@ -386,6 +431,8 @@ function setupProgressMarkup() {
 function connectionFormMarkup() {
   return `<form id="settings-form" class="form-grid">
     <label>接続先URL<input name="supabaseProjectUrl" value="${escapeHtml(state.settings.supabaseProjectUrl)}" /></label>
+    <label>Supabase Publishable Key<input name="supabasePublishableKey" value="${escapeHtml(state.settings.supabasePublishableKey)}" /></label>
+    <label>Storage読取ユーザー<input name="storageAuthEmail" type="email" value="${escapeHtml(state.settings.storageAuthEmail)}" /></label>
     <label>接続方式<select name="connectionMode"><option value="direct" ${state.settings.connectionMode === "direct" ? "selected" : ""}>Direct</option><option value="session" ${state.settings.connectionMode === "session" ? "selected" : ""}>Session pooler</option></select></label>
     <label>DB host<input name="dbHost" value="${escapeHtml(state.settings.dbHost)}" /></label>
     <label>DB port<input name="dbPort" value="${escapeHtml(state.settings.dbPort)}" /></label>
@@ -404,7 +451,7 @@ function setupStepMarkup() {
       return `<h2>バックアップ保存先</h2>${pathRowsMarkup()}<div class="actions"><button id="check-folders">保存先を確認</button></div>`;
     case 3:
       return `<h2>ACTARISE 接続設定</h2><p class="note">この画面は納品担当者が設定します。秘密情報はOS資格情報ストアだけに保存されます。</p>${connectionFormMarkup()}
-        <div class="secret-grid two-col"><label>DBパスワード ${badge(state.secretStatus.dbPassword)}<input id="db-password" type="password" autocomplete="new-password" /></label><label>Service Role Key ${badge(state.secretStatus.serviceRoleKey)}<input id="service-role-key" type="password" autocomplete="new-password" /></label></div>
+        <div class="secret-grid two-col"><label>DBパスワード ${credentialBadge(state.secretStatus.dbPassword, state.secretStatus.dbPasswordState)}<input id="db-password" type="password" autocomplete="new-password" /></label><label>Storage読取パスワード ${credentialBadge(state.secretStatus.storageAuthPassword, state.secretStatus.storageAuthPasswordState)}<input id="storage-auth-password" type="password" autocomplete="new-password" /></label></div>
         <div class="actions"><button id="save-settings" class="outline">接続先を保存</button><button id="save-secrets">資格情報を保存</button></div>`;
     case 4:
       return `<h2>暗号化・保守設定</h2><p class="note">テスト用公開鍵のみ使用してください。秘密鍵はこの端末へ保存しません。</p>
@@ -417,7 +464,7 @@ function setupStepMarkup() {
         <div class="actions"><button id="run-checks">接続・設定を確認</button></div>`;
     default:
       return `<h2>セットアップ完了</h2><p class="note">すべての設定を確認後、通常のバックアップ画面へ切り替えます。</p>
-        <dl class="results"><div><dt>資格情報</dt><dd>${badge(state.secretStatus.dbPassword && state.secretStatus.serviceRoleKey)}</dd></div><div><dt>保存先</dt><dd>${badge(Boolean(state.localFolderCheck?.ok && state.googleDriveFolderCheck?.ok))}</dd></div><div><dt>暗号化設定</dt><dd>${badge(state.recipientStatus.configured)}</dd></div><div><dt>保守ロック</dt><dd>${badge(state.setup.maintenanceConfigured)}</dd></div></dl>
+        <dl class="results"><div><dt>資格情報</dt><dd>${badge(state.secretStatus.dbPassword && state.secretStatus.storageAuthPassword)}</dd></div><div><dt>保存先</dt><dd>${badge(Boolean(state.localFolderCheck?.ok && state.googleDriveFolderCheck?.ok))}</dd></div><div><dt>暗号化設定</dt><dd>${badge(state.recipientStatus.configured)}</dd></div><div><dt>保守ロック</dt><dd>${badge(state.setup.maintenanceConfigured)}</dd></div></dl>
         <div class="actions"><button id="complete-setup">セットアップを完了</button></div>`;
   }
 }
@@ -444,8 +491,9 @@ function maintenanceMarkup() {
     return `<section class="panel maintenance-panel"><h2>ACTARISE保守</h2><p class="note">資格情報・暗号化・保存先の変更には保守ロック解除が必要です。</p><div class="unlock-row"><input id="maintenance-unlock-passcode" type="password" autocomplete="current-password" placeholder="保守パスコード" /><button id="unlock-maintenance">保守ロックを解除</button></div></section>`;
   }
   return `<section class="panel maintenance-panel"><div class="section-heading"><div><h2>ACTARISE保守</h2><p class="note">バックエンド認証済みの短時間セッションです。</p></div><button id="lock-maintenance" class="outline">保守モードを閉じる</button></div>
-    ${connectionFormMarkup()}<div class="secret-grid two-col"><label>DBパスワード ${badge(state.secretStatus.dbPassword)}<input id="db-password" type="password" autocomplete="new-password" /></label><label>Service Role Key ${badge(state.secretStatus.serviceRoleKey)}<input id="service-role-key" type="password" autocomplete="new-password" /></label></div>
+    ${connectionFormMarkup()}<div class="secret-grid two-col"><label>DBパスワード ${credentialBadge(state.secretStatus.dbPassword, state.secretStatus.dbPasswordState)}<input id="db-password" type="password" autocomplete="new-password" /></label><label>Storage読取パスワード ${credentialBadge(state.secretStatus.storageAuthPassword, state.secretStatus.storageAuthPasswordState)}<input id="storage-auth-password" type="password" autocomplete="new-password" /></label></div>
     ${pathRowsMarkup()}<div class="actions"><button id="save-settings" class="outline">設定を保存</button><button id="save-secrets" class="outline">資格情報を保存</button><button id="run-checks">接続・設定を確認</button></div>
+    <details class="maintenance-tools"><summary>旧資格情報の整理</summary><p class="note">旧Service Role Keyは通常処理に使用しません。新しいStorage接続確認後、明示操作でのみ削除できます。</p><div class="results"><div><dt>旧Service Role Key</dt><dd>${state.secretStatus.legacyServiceRoleKey ? badge(true, "保存済み（未使用）") : credentialBadge(false, state.secretStatus.legacyServiceRoleKeyState)}</dd></div></div><label>確認文字列<input id="legacy-service-role-confirmation" placeholder="旧Service Role Keyを削除する" /></label><div class="actions"><button id="delete-legacy-service-role" class="outline" ${state.secretStatus.legacyServiceRoleKey ? "" : "disabled"}>旧資格情報を削除</button></div></details>
     <details class="maintenance-tools"><summary>暗号化公開鍵を変更</summary><p class="warning">既存バックアップとの鍵不一致を招くため、fingerprintを確認した保守作業でのみ使用します。</p><div class="two-col"><label>新しい端末ID<input id="maintenance-endpoint-id" /></label><label>新しいage公開鍵<input id="maintenance-recipient" placeholder="age1..." /></label></div><label>確認文字列<input id="recipient-change-confirmation" placeholder="公開鍵を変更する" /></label><div class="actions"><button id="replace-recipient" class="outline">公開鍵を変更</button></div></details>
     <div class="recovery-tools"><div><strong>復旧検証</strong><small>復旧鍵はRustメモリだけに読み込み、画面へ秘密値を返しません。</small></div>${state.recoveryKeyStatus ? badge(state.recoveryKeyStatus.valid, state.recoveryKeyStatus.matchesRecipient ? "fingerprint一致" : "fingerprint不一致") : badge(false, "未読込")}<div class="actions"><button id="import-recovery-key" class="outline">復旧鍵を選択</button><button id="verify-with-recovery" ${state.recoveryKeyStatus?.loaded ? "" : "disabled"}>復旧鍵で復号確認</button></div></div>
     ${state.verificationResult ? `<p class="message">DB・manifest・verification・pg_restore構造・SHA-256を確認し、一時ファイルを削除しました。</p>` : ""}
@@ -458,7 +506,7 @@ function renderSetup() {
 
 function renderNormal() {
   const lastSuccess = state.history.find((entry) => entry.success);
-  const canStart = state.setup.complete && state.secretStatus.dbPassword && state.secretStatus.serviceRoleKey
+  const canStart = state.setup.complete && state.secretStatus.dbPassword && state.secretStatus.storageAuthPassword
     && state.recipientStatus.configured && Boolean(state.settings.localBackupPath && state.settings.googleDrivePath) && !state.busy;
   app.innerHTML = `<main class="shell"><header class="hero"><div><p class="brand">Kawashima Motors</p><h1>バックアップ</h1><p class="lead">業務データを2つの保存先へ保護します。</p></div><button id="toggle-maintenance" class="outline">ACTARISE保守</button></header>
     <section class="daily-dashboard"><div><span>現在の状態</span><strong>${state.busy ? "バックアップ中" : canStart ? "準備完了" : "設定を確認してください"}</strong></div><div><span>最終成功</span><strong>${lastSuccess ? escapeHtml(new Date(lastSuccess.completedAt).toLocaleString("ja-JP")) : "まだありません"}</strong></div><div><span>保存結果</span><strong>${lastSuccess?.localCopyOk && lastSuccess.googleDriveCopyOk ? "2か所へ保存済み" : "未確認"}</strong><small>クラウド同期完了は別途確認</small></div></section>
@@ -478,6 +526,7 @@ function bindCommonEvents() {
   app.querySelector("#replace-recipient")?.addEventListener("click", () => void replaceRecipient());
   app.querySelector("#import-recovery-key")?.addEventListener("click", () => void importRecoveryKey());
   app.querySelector("#verify-with-recovery")?.addEventListener("click", () => void verifyBackup());
+  app.querySelector("#delete-legacy-service-role")?.addEventListener("click", () => void deleteLegacyServiceRoleKey());
 }
 
 function render() {

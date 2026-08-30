@@ -130,9 +130,9 @@ test("secret保存は保存後にKeychainから再読込してstatusだけ返す
 test("保存時と読込時のKeychain識別子は同じ定数を使う", () => {
   const rust = readSource("tools/kawashima-backup/src-tauri/src/lib.rs");
   assert.match(rust, /write_secret_explicit\(ACCOUNT_DB_PASSWORD, db_password\.trim\(\)\)/);
-  assert.match(rust, /ACCOUNT_SERVICE_ROLE_KEY,/);
+  assert.match(rust, /ACCOUNT_STORAGE_AUTH_PASSWORD,/);
   assert.match(rust, /read_secret\(ACCOUNT_DB_PASSWORD, "DBパスワード"\)/);
-  assert.match(rust, /read_secret\(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key"\)/);
+  assert.match(rust, /read_secret\(\s*ACCOUNT_STORAGE_AUTH_PASSWORD,/);
 });
 
 test("Supabase公式CAを追加し証明書検証を維持する", () => {

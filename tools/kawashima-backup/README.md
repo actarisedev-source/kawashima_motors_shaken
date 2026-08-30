@@ -24,7 +24,8 @@ from the filename; endpoint metadata is authoritative inside the encrypted manif
 The encrypted tar contains:
 
 - `database/public.dump`: PostgreSQL custom-format dump of the `public` schema
-- `storage/line-message-images/`: all objects downloaded from the private bucket
+- `storage/line-message-images/`: all objects discovered through the endpoint's
+  read-only Storage policy
 - `manifests/backup.json`, `database.json`, and `storage.json`
 - `verification/sha256sums.txt`
 
@@ -114,6 +115,40 @@ CSS visibility is not used as the authorization boundary.
 
 Copying to a Google Drive for desktop sync folder is reported only as a local file-copy result.
 The app does not claim that Google Drive cloud synchronization has completed.
+
+## Least-privilege endpoint credentials
+
+Normal backups no longer use a Supabase Service Role Key. Each endpoint uses its own
+Supabase Auth user, a publishable key, and an Auth password stored only in Keychain or
+Windows Credential Manager. The password grant returns a short-lived user JWT that remains
+in Rust memory for the Storage operation and is not written to settings, manifests, history,
+logs, or frontend state. Separate `storage.objects` SELECT policies permit each endpoint
+to list only `line-message-images`; no write policy is granted.
+
+The legacy `supabase-service-role-key` credential account is retained for older installed
+versions but is not read by the normal backup path. It is never migrated, overwritten, or
+deleted automatically. The new app can remove it only from an unlocked maintenance session,
+after a recent successful check with the replacement credentials and an exact confirmation
+phrase.
+
+Database dumps use separate Windows and macOS login roles with `BYPASSRLS`, schema usage,
+table/sequence SELECT, and `default_transaction_read_only=on`. They are not superusers and
+receive no mutation, DDL, or function-execution grant. The reproducible local-only role,
+Storage policy, revocation, privilege-audit, and logical dump comparison assets are under
+`nonprod/`; the runner refuses non-loopback database endpoints.
+
+`line-message-images` remains a public bucket for existing LINE delivery URLs. RLS controls
+object discovery by the backup tool, but cannot revoke access to an already-known public
+object URL. Endpoint policy removal immediately stops listing and therefore stops the normal
+backup workflow. Changing the bucket to private would require a separately reviewed LINE URL
+delivery design.
+
+## SBOM
+
+The `Backup Tool SBOM` GitHub Actions workflow generates separate CycloneDX JSON inventories
+for the root web npm lockfile, desktop npm lockfile, and Cargo lockfile, then publishes them as
+one CI artifact. These unsigned build-preparation artifacts contain dependency metadata only;
+the workflow leaves room for a later Windows signing stage after the native build.
 
 Relevant upstream documentation:
 

@@ -5,6 +5,8 @@ export const storageBucketName = "line-message-images";
 
 export type BackupToolSettings = {
   supabaseProjectUrl: string;
+  supabasePublishableKey: string;
+  storageAuthEmail: string;
   dbHost: string;
   dbPort: string;
   dbName: string;
@@ -28,6 +30,8 @@ export type BackupToolSettings = {
 
 export const emptySettings: BackupToolSettings = {
   supabaseProjectUrl: "",
+  supabasePublishableKey: "",
+  storageAuthEmail: "",
   dbHost: "",
   dbPort: "5432",
   dbName: "postgres",
@@ -49,7 +53,7 @@ export const emptySettings: BackupToolSettings = {
   setupCompletedAt: null,
 };
 
-export const secretFieldNames = ["dbPassword", "serviceRoleKey"] as const;
+export const secretFieldNames = ["dbPassword", "storageAuthPassword", "serviceRoleKey"] as const;
 export type SecretFieldName = (typeof secretFieldNames)[number];
 
 const secretPatterns = [
@@ -57,6 +61,8 @@ const secretPatterns = [
   /(password=)[^;\s]+/gi,
   /(apikey=)[^&\s]+/gi,
   /(authorization:\s*bearer\s+)[^\s]+/gi,
+  /(access[_-]?token["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
+  /(storage[_-]?auth[_-]?password["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
   /(service[_-]?role[_-]?key["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
 ];
 
@@ -74,6 +80,8 @@ export function validateConnectionMode(value: string): ConnectionMode {
 export function sanitizeSettings(input: BackupToolSettings): BackupToolSettings {
   return {
     supabaseProjectUrl: input.supabaseProjectUrl.trim(),
+    supabasePublishableKey: input.supabasePublishableKey?.trim() ?? "",
+    storageAuthEmail: input.storageAuthEmail?.trim() ?? "",
     dbHost: input.dbHost.trim(),
     dbPort: input.dbPort.trim() || "5432",
     dbName: input.dbName.trim() || "postgres",

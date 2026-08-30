@@ -20,8 +20,8 @@ use zeroize::Zeroizing;
 
 use super::{
     build_database_tls_connector, build_db_config, connection_mode_label, normalize_project_url,
-    read_secret, sanitized_error, save_settings_to_disk, storage_headers, BackupToolSettings,
-    ACCOUNT_DB_PASSWORD, ACCOUNT_SERVICE_ROLE_KEY, SUPABASE_ROOT_CA_PEM,
+    read_secret, sanitized_error, save_settings_to_disk, storage_auth, BackupToolSettings,
+    ACCOUNT_DB_PASSWORD, ACCOUNT_STORAGE_AUTH_PASSWORD, SUPABASE_ROOT_CA_PEM,
 };
 use super::{file_security, postgres_runtime};
 
@@ -454,8 +454,10 @@ async fn execute_backup(
     }
 
     let db_password = Zeroizing::new(read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?);
-    let service_role_key =
-        Zeroizing::new(read_secret(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key")?);
+    let storage_auth_password = Zeroizing::new(read_secret(
+        ACCOUNT_STORAGE_AUTH_PASSWORD,
+        "Storage読み取り用パスワード",
+    )?);
 
     let db_info = query_database_metadata(&settings, &db_password).await?;
     let postgres_runtime = postgres_runtime::PostgresRuntime::resolve(&app)?;
@@ -497,12 +499,22 @@ async fn execute_backup(
         None,
         None,
     );
+    let storage_token = storage_auth::authenticate(&settings, &storage_auth_password).await?;
+    let storage_headers = storage_token.headers(&settings.supabase_publishable_key)?;
+    let normalized_project_url = normalize_project_url(&settings.supabase_project_url)?;
+    storage_auth::verify_bucket_access(
+        &reqwest::Client::new(),
+        &normalized_project_url,
+        STORAGE_BUCKET,
+        &storage_headers,
+    )
+    .await?;
     let storage_objects =
-        list_storage_objects(&settings.supabase_project_url, &service_role_key).await?;
+        list_storage_objects(&settings.supabase_project_url, &storage_headers).await?;
     let storage_manifest_objects = download_storage_objects(
         &app,
         &settings.supabase_project_url,
-        &service_role_key,
+        &storage_headers,
         &storage_dir,
         &storage_objects,
     )
@@ -853,8 +865,10 @@ fn validate_backup_prerequisites(
         return Err("初回セットアップを完了してください。".to_string());
     }
     let _db_password = Zeroizing::new(read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?);
-    let _service_role_key =
-        Zeroizing::new(read_secret(ACCOUNT_SERVICE_ROLE_KEY, "Service Role Key")?);
+    let _storage_auth_password = Zeroizing::new(read_secret(
+        ACCOUNT_STORAGE_AUTH_PASSWORD,
+        "Storage読み取り用パスワード",
+    )?);
     let recipient = validate_registered_recipient(settings)?;
     let local = Path::new(settings.local_backup_path.trim());
     let drive = Path::new(settings.google_drive_path.trim());
@@ -938,11 +952,10 @@ async fn query_database_metadata(
 
 async fn list_storage_objects(
     project_url: &str,
-    service_role_key: &str,
+    headers: &HeaderMap,
 ) -> Result<Vec<StorageObjectRef>, String> {
     let project_url = normalize_project_url(project_url)?;
     let client = reqwest::Client::new();
-    let headers = storage_headers(service_role_key)?;
     let mut objects = Vec::new();
     let mut folders = vec![String::new()];
     while let Some(prefix) = folders.pop() {
@@ -1015,12 +1028,11 @@ async fn list_storage_objects(
 async fn download_storage_objects(
     app: &AppHandle,
     project_url: &str,
-    service_role_key: &str,
+    headers: &HeaderMap,
     storage_root: &Path,
     objects: &[StorageObjectRef],
 ) -> Result<Vec<StorageObjectManifest>, String> {
     let client = reqwest::Client::new();
-    let headers = storage_headers(service_role_key)?;
     let base = normalize_project_url(project_url)?;
     let mut manifest = Vec::with_capacity(objects.len());
     for (index, object) in objects.iter().enumerate() {
@@ -1037,7 +1049,7 @@ async fn download_storage_objects(
             fs::create_dir_all(parent).map_err(|error| sanitized_error(error))?;
         }
         let bytes =
-            download_storage_object_with_retry(&client, &headers, &base, &object.path).await?;
+            download_storage_object_with_retry(&client, headers, &base, &object.path).await?;
         fs::write(&destination, &bytes).map_err(|error| sanitized_error(error))?;
         manifest.push(StorageObjectManifest {
             path: object.path.clone(),
@@ -1474,6 +1486,8 @@ mod tests {
         let recipient = x25519::Identity::generate().to_public();
         BackupToolSettings {
             supabase_project_url: "https://example.supabase.co".to_string(),
+            supabase_publishable_key: "publishable-test".to_string(),
+            storage_auth_email: "endpoint@nonprod.invalid".to_string(),
             db_host: "example.pooler.supabase.com".to_string(),
             db_port: "5432".to_string(),
             db_name: "postgres".to_string(),

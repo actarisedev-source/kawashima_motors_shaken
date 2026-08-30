@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/kawashima-backup-tool-phase3b
+      - feature/kawashima-backup-tool-phase4a2
   workflow_dispatch:
 
 permissions:

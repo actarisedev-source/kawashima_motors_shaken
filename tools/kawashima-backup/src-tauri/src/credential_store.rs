@@ -5,6 +5,7 @@ use zeroize::Zeroize;
 pub(crate) const SERVICE_NAME: &str = "jp.actarise.kawashima.backup";
 pub(crate) const ACCOUNT_DB_PASSWORD: &str = "db-password";
 pub(crate) const ACCOUNT_SERVICE_ROLE_KEY: &str = "supabase-service-role-key";
+pub(crate) const ACCOUNT_STORAGE_AUTH_PASSWORD: &str = "supabase-storage-auth-password";
 pub(crate) const ACCOUNT_MAINTENANCE_VERIFIER: &str = "maintenance-verifier";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,6 +64,7 @@ impl CredentialStoreError {
 trait CredentialBackend {
     fn read(&self, account: &str) -> Result<String, CredentialStoreError>;
     fn write(&self, account: &str, value: &str) -> Result<(), CredentialStoreError>;
+    fn delete(&self, account: &str) -> Result<(), CredentialStoreError>;
 }
 
 struct OsCredentialBackend;
@@ -74,6 +76,10 @@ impl CredentialBackend for OsCredentialBackend {
 
     fn write(&self, account: &str, value: &str) -> Result<(), CredentialStoreError> {
         platform::write(account, value)
+    }
+
+    fn delete(&self, account: &str) -> Result<(), CredentialStoreError> {
+        platform::delete(account)
     }
 }
 
@@ -96,6 +102,10 @@ pub(crate) fn write_secret_explicit(
     value: &str,
 ) -> Result<(), CredentialStoreError> {
     write_secret_with_backend(&OsCredentialBackend, account, value)
+}
+
+pub(crate) fn delete_secret_explicit(account: &str) -> Result<(), CredentialStoreError> {
+    OsCredentialBackend.delete(account)
 }
 
 fn write_secret_with_backend(
@@ -140,6 +150,12 @@ mod platform {
             .map_err(classify_keyring_error)
     }
 
+    pub(super) fn delete(account: &str) -> Result<(), CredentialStoreError> {
+        entry(account)?
+            .delete_credential()
+            .map_err(classify_keyring_error)
+    }
+
     fn entry(account: &str) -> Result<Entry, CredentialStoreError> {
         Entry::new(SERVICE_NAME, account).map_err(classify_keyring_error)
     }
@@ -162,15 +178,13 @@ mod platform {
     use std::{ffi::c_void, mem::MaybeUninit, ptr};
 
     use super::*;
-    #[cfg(test)]
-    use windows_sys::Win32::Security::Credentials::CredDeleteW;
     use windows_sys::Win32::{
         Foundation::{
             GetLastError, ERROR_ACCESS_DENIED, ERROR_INVALID_DATA, ERROR_NOT_FOUND,
             ERROR_NO_SUCH_LOGON_SESSION, FILETIME,
         },
         Security::Credentials::{
-            CredFree, CredReadW, CredWriteW, CREDENTIALW, CRED_PERSIST_LOCAL_MACHINE,
+            CredDeleteW, CredFree, CredReadW, CredWriteW, CREDENTIALW, CRED_PERSIST_LOCAL_MACHINE,
             CRED_TYPE_GENERIC,
         },
     };
@@ -246,8 +260,7 @@ mod platform {
         result
     }
 
-    #[cfg(test)]
-    pub(super) fn delete_test_credential(account: &str) -> Result<(), CredentialStoreError> {
+    pub(super) fn delete(account: &str) -> Result<(), CredentialStoreError> {
         let target = wide(&target_name(account));
         if unsafe { CredDeleteW(target.as_ptr(), CRED_TYPE_GENERIC, 0) } == 0 {
             return Err(last_error());
@@ -312,6 +325,14 @@ mod tests {
                 .insert(account.to_string(), value.to_string());
             Ok(())
         }
+
+        fn delete(&self, account: &str) -> Result<(), CredentialStoreError> {
+            self.values
+                .borrow_mut()
+                .remove(account)
+                .map(|_| ())
+                .ok_or(CredentialStoreError::Missing)
+        }
     }
 
     #[test]
@@ -348,6 +369,18 @@ mod tests {
         assert!(backend.values.borrow().is_empty());
     }
 
+    #[test]
+    fn legacy_secret_is_deleted_only_by_an_explicit_delete_call() {
+        let backend = FakeBackend::empty();
+        write_secret_with_backend(&backend, ACCOUNT_SERVICE_ROLE_KEY, "synthetic-only").unwrap();
+        assert!(backend.read(ACCOUNT_SERVICE_ROLE_KEY).is_ok());
+        backend.delete(ACCOUNT_SERVICE_ROLE_KEY).unwrap();
+        assert_eq!(
+            backend.read(ACCOUNT_SERVICE_ROLE_KEY),
+            Err(CredentialStoreError::Missing)
+        );
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_credential_manager_round_trip_uses_a_synthetic_entry() {
@@ -361,7 +394,7 @@ mod tests {
         let value = "synthetic-ci-credential";
         platform::write(&account, value).unwrap();
         let result = platform::read(&account);
-        let cleanup = platform::delete_test_credential(&account);
+        let cleanup = platform::delete(&account);
         assert_eq!(result.unwrap(), value);
         cleanup.unwrap();
         assert_eq!(platform::read(&account), Err(CredentialStoreError::Missing));

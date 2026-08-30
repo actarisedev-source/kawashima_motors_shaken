@@ -1,0 +1,45 @@
+name: Backup Tool SBOM
+
+on:
+  push:
+    branches:
+      - feature/kawashima-backup-tool-phase4a2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare SBOM output directory
+        run: mkdir -p artifacts/sbom
+      - name: Generate web-npm CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          file: package-lock.json
+          format: cyclonedx-json
+          output-file: artifacts/sbom/web-npm.cdx.json
+          upload-artifact: false
+      - name: Generate desktop-npm CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          file: tools/kawashima-backup/package-lock.json
+          format: cyclonedx-json
+          output-file: artifacts/sbom/desktop-npm.cdx.json
+          upload-artifact: false
+      - name: Generate cargo-rust CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          file: tools/kawashima-backup/src-tauri/Cargo.lock
+          format: cyclonedx-json
+          output-file: artifacts/sbom/cargo-rust.cdx.json
+          upload-artifact: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kawashima-backup-tool-sbom
+          path: artifacts/sbom/*.cdx.json
+          if-no-files-found: error
