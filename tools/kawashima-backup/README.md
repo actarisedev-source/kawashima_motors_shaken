@@ -64,19 +64,19 @@ deletion. Database and Storage restore remain out of scope for Phase 3A.
 
 No production age key has been generated. The approved ceremony uses the official
 `FiloSottile/age` v1.3.2 stable release and the classic X25519 mode accepted by this
-application. Key generation will run on an ACTARISE-controlled x86_64 computer booted
-into an offline Linux live environment, with networking disabled, swap disabled,
-internal disks left unmounted, and the plaintext identity kept only on a RAM-backed
-filesystem. The normal ACTARISE Mac and the Kawashima Windows endpoint are not key-
-generation environments and will receive only the public recipient.
+application. Key generation will run on the FileVault-protected ACTARISE Mac with the
+plaintext identity confined to a RAM-backed volume, shell history and tracing disabled,
+and no clipboard use. Only a passphrase-encrypted recovery file may leave RAM. The
+Kawashima Windows endpoint and the normal backup application receive only the public
+recipient; neither backup endpoint stores the private identity.
 
 Pinned production ceremony artifact:
 
 - Source: https://github.com/FiloSottile/age/releases/tag/v1.3.2
-- Archive: `age-v1.3.2-linux-amd64.tar.gz`
-- Archive SHA-256: `cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10`
-- `age-keygen` SHA-256: `0a0009db842259d6717f7eeb30acb6b90d2a2eb924c6acd0a0db0ca1f1537899`
-- Architecture: Linux x86-64, statically linked
+- Archive: `age-v1.3.2-darwin-arm64.tar.gz`
+- Archive SHA-256: `e2020b073c44f692685a24d6abc378817eb81ffaaf49fd0531ef8565f767f2f5`
+- `age-keygen` SHA-256: `c16e229245123d0ad27442317461d63915416cad0294395cd19ca93feb3211ea`
+- Architecture: macOS arm64
 
 Before the ceremony, both the published SHA-256 and the release Sigsum proof must be
 verified using the public keys and procedure in the upstream `SIGSUM.md`. The operator
@@ -86,19 +86,24 @@ not sufficient to proceed.
 
 The identity is generated into RAM with restrictive permissions and is never printed,
 copied to the clipboard, placed in shell history, or written to an internal disk. It is
-wrapped with age passphrase encryption before leaving RAM. Three byte-identical encrypted
-copies are written to removable media from different purchase batches: one in the
-ACTARISE fire-resistant safe, one in the Kawashima Motors locked safe, and one in a
-separate off-site safe. Their SHA-256 hashes are recorded and each copy is tested before
-the live environment is powered off. The passphrase is held separately in the ACTARISE
-managed password vault with MFA, with a sealed emergency record stored away from all
-three media. No passphrase is written on a recovery medium.
+wrapped with age passphrase encryption before leaving RAM. One encrypted recovery file
+is copied to two independent ACTARISE-managed cloud systems: Google Drive and Microsoft
+OneDrive. The two copies must not rely on the same account or sync backend. Each copy is
+downloaded again, compared with the original encrypted-file SHA-256, parsed as an age
+identity, and used for a test-data decrypt before custody is accepted. USB recovery media
+and Kawashima Motors custody of the private identity are not part of this operating model.
+
+The randomly generated recovery passphrase is stored only in Apple Passwords and is
+never placed in either cloud account, a filename, application settings, Keychain backup
+credential accounts, Windows Credential Manager, Git, logs, or the clipboard. Cloud
+uploads and Apple Passwords entry are deliberate human operations, not automated by the
+backup application or Codex.
 
 The canonical public-key fingerprint is lowercase SHA-256 of the exact canonical
 `age1...` recipient string with no trailing newline. The full 64-hex value is checked at
 generation, after recovery-media verification, during registration of endpoint IDs
 `kawashima-windows-main` and `actarise-mac-secondary`, and in the first backup manifest.
-The encrypted recovery media never becomes a normal backup destination.
+The encrypted recovery file never becomes a normal backup destination.
 
 ## Bundled PostgreSQL tools
 
