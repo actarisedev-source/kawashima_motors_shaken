@@ -60,6 +60,46 @@ Temporary verification files are removed when verification finishes, including f
 paths; this is normal filesystem cleanup and is not described as guaranteed secure
 deletion. Database and Storage restore remain out of scope for Phase 3A.
 
+## Phase 4B production-key ceremony decision
+
+No production age key has been generated. The approved ceremony uses the official
+`FiloSottile/age` v1.3.2 stable release and the classic X25519 mode accepted by this
+application. Key generation will run on an ACTARISE-controlled x86_64 computer booted
+into an offline Linux live environment, with networking disabled, swap disabled,
+internal disks left unmounted, and the plaintext identity kept only on a RAM-backed
+filesystem. The normal ACTARISE Mac and the Kawashima Windows endpoint are not key-
+generation environments and will receive only the public recipient.
+
+Pinned production ceremony artifact:
+
+- Source: https://github.com/FiloSottile/age/releases/tag/v1.3.2
+- Archive: `age-v1.3.2-linux-amd64.tar.gz`
+- Archive SHA-256: `cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10`
+- `age-keygen` SHA-256: `0a0009db842259d6717f7eeb30acb6b90d2a2eb924c6acd0a0db0ca1f1537899`
+- Architecture: Linux x86-64, statically linked
+
+Before the ceremony, both the published SHA-256 and the release Sigsum proof must be
+verified using the public keys and procedure in the upstream `SIGSUM.md`. The operator
+records the release URL, archive and executable hashes, Sigsum result, UTC time, and
+operator names in the ceremony record. A checksum match without a valid Sigsum proof is
+not sufficient to proceed.
+
+The identity is generated into RAM with restrictive permissions and is never printed,
+copied to the clipboard, placed in shell history, or written to an internal disk. It is
+wrapped with age passphrase encryption before leaving RAM. Three byte-identical encrypted
+copies are written to removable media from different purchase batches: one in the
+ACTARISE fire-resistant safe, one in the Kawashima Motors locked safe, and one in a
+separate off-site safe. Their SHA-256 hashes are recorded and each copy is tested before
+the live environment is powered off. The passphrase is held separately in the ACTARISE
+managed password vault with MFA, with a sealed emergency record stored away from all
+three media. No passphrase is written on a recovery medium.
+
+The canonical public-key fingerprint is lowercase SHA-256 of the exact canonical
+`age1...` recipient string with no trailing newline. The full 64-hex value is checked at
+generation, after recovery-media verification, during registration of endpoint IDs
+`kawashima-windows-main` and `actarise-mac-secondary`, and in the first backup manifest.
+The encrypted recovery media never becomes a normal backup destination.
+
 ## Bundled PostgreSQL tools
 
 The macOS arm64 app bundles PostgreSQL 17 `pg_dump`, `pg_restore`, and their non-system runtime
@@ -102,8 +142,12 @@ locks. This is normal cleanup and is not claimed to be secure deletion.
 
 Tauri is configured for an unsigned Japanese NSIS x64 test installer using `perMachine`
 installation under Program Files. Application settings and Windows Credentials live outside
-the installation directory and are not removed by installer replacement. Production delivery
-still requires Windows code signing to reduce SmartScreen warnings.
+the installation directory and are not removed by installer replacement. For the current
+direct ACTARISE installation at one Kawashima Motors site, the approved Phase 4A operating
+decision is to deploy an unsigned installer only after an ACTARISE operator compares its
+SHA-256 with the release ledger. SmartScreen warnings are expected and must not be bypassed
+without that comparison. Paid code signing must be reconsidered before any public,
+multi-customer, or commercial distribution.
 
 ## Setup and maintenance boundary
 
