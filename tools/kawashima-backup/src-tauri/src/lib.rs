@@ -60,17 +60,52 @@ pub(crate) struct BackupToolSettings {
     #[serde(default)]
     pub(crate) encryption_algorithm: Option<String>,
     #[serde(default)]
-    pub(crate) encryption_recovery_exported: bool,
+    pub(crate) public_key_ledger: Vec<PublicKeyLedgerEntry>,
     #[serde(default)]
-    pub(crate) recovery_key_fingerprint: Option<String>,
-    #[serde(default)]
-    pub(crate) recovery_key_exported_at: Option<String>,
+    pub(crate) production_key_ceremony: Option<ProductionKeyCeremonyMetadata>,
     #[serde(default)]
     pub(crate) setup_complete: bool,
     #[serde(default = "default_setup_step")]
     pub(crate) setup_step: u8,
     #[serde(default)]
     pub(crate) setup_completed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PublicKeyLedgerEntry {
+    pub(crate) key_id: String,
+    pub(crate) public_recipient: String,
+    pub(crate) fingerprint: String,
+    pub(crate) generated_at: String,
+    pub(crate) age_version: String,
+    pub(crate) purpose: String,
+    pub(crate) status: PublicKeyStatus,
+    pub(crate) retired_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum PublicKeyStatus {
+    Active,
+    Retired,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ProductionKeyCeremonyMetadata {
+    pub(crate) key_id: String,
+    #[serde(default)]
+    pub(crate) public_recipient: String,
+    pub(crate) recipient_fingerprint: String,
+    pub(crate) generated_at: String,
+    pub(crate) age_version: String,
+    pub(crate) google_drive_stored_at: String,
+    pub(crate) external_media_stored_at: String,
+    pub(crate) google_drive_verified_at: String,
+    pub(crate) external_media_verified_at: String,
+    pub(crate) completed_at: String,
+    pub(crate) recorded_by_app_version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -185,9 +220,8 @@ impl Default for BackupToolSettings {
             encryption_recipient_registered_by_app_version: None,
             endpoint_id: None,
             encryption_algorithm: None,
-            encryption_recovery_exported: false,
-            recovery_key_fingerprint: None,
-            recovery_key_exported_at: None,
+            public_key_ledger: Vec::new(),
+            production_key_ceremony: None,
             setup_complete: false,
             setup_step: default_setup_step(),
             setup_completed_at: None,
@@ -219,6 +253,7 @@ pub fn run() {
             backup::get_encryption_recipient_status,
             backup::register_encryption_recipient,
             backup::replace_encryption_recipient,
+            backup::complete_production_key_ceremony,
             backup::import_recovery_key,
             backup::clear_imported_recovery_key,
             backup::verify_backup_file,
@@ -281,6 +316,8 @@ fn preserve_encryption_registration(
         existing.encryption_recipient_registered_by_app_version;
     incoming.endpoint_id = existing.endpoint_id;
     incoming.encryption_algorithm = existing.encryption_algorithm;
+    incoming.public_key_ledger = existing.public_key_ledger;
+    incoming.production_key_ceremony = existing.production_key_ceremony;
     incoming.setup_complete = existing.setup_complete;
     incoming.setup_step = existing.setup_step;
     incoming.setup_completed_at = existing.setup_completed_at;

@@ -48,13 +48,19 @@ recipient cannot replace an existing registration through the normal setup opera
 replacement requires a separate maintenance operation, the current fingerprint, an
 exact confirmation phrase, and an OS confirmation dialog.
 
-An offline recovery-key file can be imported temporarily without exposing its secret
-value to the frontend. The app validates its X25519 identity, compares the derived
-public-key fingerprint with the registered recipient, and can use a matching imported
-key to decrypt an artifact into a temporary directory for structure, checksum,
-`pg_restore --list`, and plaintext archive SHA-256 verification. The imported identity
-is memory-only and has an explicit release action. It is never registered in Keychain
-or Windows Credential Manager by the normal backup application.
+The application imports only a plaintext X25519 identity file containing one
+`AGE-SECRET-KEY-...` value; it does not open a passphrase-encrypted identity file. For
+recovery verification, an operator first retrieves the encrypted recovery identity,
+uses the standard age CLI and the passphrase from Apple Passwords to decrypt it into a
+RAM-backed volume, and then selects that temporary plaintext file in the application.
+The app validates the identity, compares its derived public-key fingerprint with the
+registered recipient, and can use a matching imported key to decrypt an artifact into
+a private temporary directory for structure, checksum, `pg_restore --list`, and
+plaintext archive SHA-256 verification. The imported identity is memory-only after the
+file read and has an explicit release action. The operator must detach the RAM-backed
+volume after verification. The application does not delete or securely erase the
+operator-selected source file, decrypt the passphrase wrapper, or register the identity
+in Keychain or Windows Credential Manager.
 
 Temporary verification files are removed when verification finishes, including failure
 paths; this is normal filesystem cleanup and is not described as guaranteed secure
@@ -86,24 +92,72 @@ not sufficient to proceed.
 
 The identity is generated into RAM with restrictive permissions and is never printed,
 copied to the clipboard, placed in shell history, or written to an internal disk. It is
-wrapped with age passphrase encryption before leaving RAM. One encrypted recovery file
-is copied to two independent ACTARISE-managed cloud systems: Google Drive and Microsoft
-OneDrive. The two copies must not rely on the same account or sync backend. Each copy is
-downloaded again, compared with the original encrypted-file SHA-256, parsed as an age
-identity, and used for a test-data decrypt before custody is accepted. USB recovery media
-and Kawashima Motors custody of the private identity are not part of this operating model.
+wrapped with standard age passphrase encryption before leaving RAM. One encrypted
+recovery file is copied to two ACTARISE-managed locations: a restricted Google Drive
+folder and an external SSD or USB device. Each copy is retrieved from its destination,
+compared with the original encrypted-file SHA-256, and used with the standard age CLI
+and recovery passphrase for an independent test-data decrypt before custody is accepted.
+The plaintext identity created for an application verification is confined to the
+RAM-backed volume, and that volume is detached after the app releases the imported key.
+Kawashima Motors custody of the private identity is not part of this model.
 
 The randomly generated recovery passphrase is stored only in Apple Passwords and is
-never placed in either cloud account, a filename, application settings, Keychain backup
-credential accounts, Windows Credential Manager, Git, logs, or the clipboard. Cloud
-uploads and Apple Passwords entry are deliberate human operations, not automated by the
-backup application or Codex.
+never placed in Google Drive, the external medium, a filename, application settings,
+the public-key ledger, manifests, Keychain backup credential accounts, Windows
+Credential Manager, Git, README content, logs, or the clipboard. The application has no
+field, command, or credential account for this passphrase. Destination copies and the
+Apple Passwords entry are deliberate human operations, not automated by the backup
+application or Codex. A paper emergency copy is not required by this operating model.
 
 The canonical public-key fingerprint is lowercase SHA-256 of the exact canonical
 `age1...` recipient string with no trailing newline. The full 64-hex value is checked at
 generation, after recovery-media verification, during registration of endpoint IDs
 `kawashima-windows-main` and `actarise-mac-secondary`, and in the first backup manifest.
 The encrypted recovery file never becomes a normal backup destination.
+
+### Public-key ledger and production backup guard
+
+The settings file contains a public-only key ledger. Every entry records `keyId`,
+`publicRecipient`, `fingerprint`, `generatedAt`, `ageVersion`, `purpose`, `status`
+(`active` or `retired`), and optional `retiredAt`. It never contains an identity or
+passphrase. Key IDs are unique lowercase identifiers and the production purpose is fixed
+to `Kawashima Motors production backup encryption`.
+
+After the operator has stored and independently retrieved and decrypted both recovery
+copies, an unlocked maintenance session can record production-key ceremony metadata. It
+records the key ID, fingerprint, generation time, age version, Google Drive storage and
+verification times, external-media storage and verification times, completion time, and
+recording application version. These timestamps are an operator record of work actually
+performed; their presence is not a claim that a checkbox or the application guarantees
+custody safety. The command accepts no private identity or passphrase.
+
+A production backup is blocked unless the current canonical recipient and fingerprint
+match both the ceremony metadata and one `active` ledger entry. The ledger recipient,
+fingerprint, generation time, age version, and purpose must also match. Each backup
+manifest and local history entry records both the key ID and fingerprint. If the
+recipient changes, the previous ledger entry is retained as `retired`, the ceremony
+metadata is cleared, and backups remain blocked until the new key has completed the full
+two-destination ceremony. Retired identities must remain recoverable for old backups,
+but cannot authorize new backups.
+
+### Recovery sequence
+
+1. Retrieve the encrypted recovery identity from Google Drive. If Google Drive is
+   unavailable, retrieve the independently stored copy from the external SSD or USB.
+2. Retrieve the recovery passphrase from Apple Passwords. Do not save it beside the
+   recovery identity or enter it in the backup application.
+3. On a FileVault-protected ACTARISE Mac, create a restrictive RAM-backed volume with
+   shell history, tracing, logging, and clipboard use disabled.
+4. For tool-independent recovery, pass the encrypted identity directly to standard age
+   as a passphrase-protected identity and decrypt the backup artifact; no plaintext
+   identity file is needed.
+5. For backup-tool verification only, use the verified standard age CLI to decrypt the
+   encrypted identity into the RAM-backed volume. Do not direct plaintext output to
+   Terminal or an internal disk.
+6. Select only that temporary plaintext identity in the backup tool, verify its
+   fingerprint and the backup, and explicitly release it from the app.
+7. Detach the RAM-backed volume after verification. Normal filesystem cleanup is not
+   described as guaranteed secure deletion.
 
 ## Bundled PostgreSQL tools
 

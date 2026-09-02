@@ -39,9 +39,8 @@ test("通常設定にはsecret項目を含めない", () => {
     encryptionRecipientRegisteredByAppVersion: null,
     endpointId: null,
     encryptionAlgorithm: null,
-    encryptionRecoveryExported: false,
-    recoveryKeyFingerprint: null,
-    recoveryKeyExportedAt: null,
+    publicKeyLedger: [],
+    productionKeyCeremony: null,
   });
 
   assert.equal(sanitized.dbPort, "5432");
@@ -50,6 +49,7 @@ test("通常設定にはsecret項目を含めない", () => {
   assert.equal(hasSecretLikeValue({ dbPassword: "secret" }), true);
   assert.equal(hasSecretLikeValue({ serviceRoleKey: "secret" }), true);
   assert.equal(hasSecretLikeValue({ recoveryKey: "secret" }), true);
+  assert.equal(hasSecretLikeValue({ recoveryPassphrase: "secret" }), true);
 });
 
 test("secretマスキングとエラー文言のredactionを行う", () => {
@@ -66,6 +66,14 @@ test("secretマスキングとエラー文言のredactionを行う", () => {
   assert.equal(
     redactSensitiveText("service_role_key='abcdefg'"),
     "service_role_key='[masked]'",
+  );
+  assert.equal(
+    redactSensitiveText("recovery_passphrase='abcdefg'"),
+    "recovery_passphrase='[masked]'",
+  );
+  assert.equal(
+    redactSensitiveText("identity=AGE-SECRET-KEY-1TESTVALUE"),
+    "identity=[masked]",
   );
 });
 

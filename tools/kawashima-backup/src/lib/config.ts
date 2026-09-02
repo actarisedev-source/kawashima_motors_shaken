@@ -3,6 +3,33 @@ export type ConnectionMode = (typeof allowedConnectionModes)[number];
 
 export const storageBucketName = "line-message-images";
 
+export type PublicKeyStatus = "active" | "retired";
+
+export type PublicKeyLedgerEntry = {
+  keyId: string;
+  publicRecipient: string;
+  fingerprint: string;
+  generatedAt: string;
+  ageVersion: string;
+  purpose: string;
+  status: PublicKeyStatus;
+  retiredAt: string | null;
+};
+
+export type ProductionKeyCeremonyMetadata = {
+  keyId: string;
+  publicRecipient: string;
+  recipientFingerprint: string;
+  generatedAt: string;
+  ageVersion: string;
+  googleDriveStoredAt: string;
+  externalMediaStoredAt: string;
+  googleDriveVerifiedAt: string;
+  externalMediaVerifiedAt: string;
+  completedAt: string;
+  recordedByAppVersion: string;
+};
+
 export type BackupToolSettings = {
   supabaseProjectUrl: string;
   supabasePublishableKey: string;
@@ -20,9 +47,8 @@ export type BackupToolSettings = {
   encryptionRecipientRegisteredByAppVersion: string | null;
   endpointId: string | null;
   encryptionAlgorithm: string | null;
-  encryptionRecoveryExported: boolean;
-  recoveryKeyFingerprint: string | null;
-  recoveryKeyExportedAt: string | null;
+  publicKeyLedger: PublicKeyLedgerEntry[];
+  productionKeyCeremony: ProductionKeyCeremonyMetadata | null;
   setupComplete: boolean;
   setupStep: number;
   setupCompletedAt: string | null;
@@ -45,9 +71,8 @@ export const emptySettings: BackupToolSettings = {
   encryptionRecipientRegisteredByAppVersion: null,
   endpointId: null,
   encryptionAlgorithm: null,
-  encryptionRecoveryExported: false,
-  recoveryKeyFingerprint: null,
-  recoveryKeyExportedAt: null,
+  publicKeyLedger: [],
+  productionKeyCeremony: null,
   setupComplete: false,
   setupStep: 1,
   setupCompletedAt: null,
@@ -57,6 +82,7 @@ export const secretFieldNames = ["dbPassword", "storageAuthPassword", "serviceRo
 export type SecretFieldName = (typeof secretFieldNames)[number];
 
 const secretPatterns = [
+  /()AGE-SECRET-KEY-[A-Z0-9-]+/g,
   /((?:postgres|postgresql):\/\/)[^@\s]+@/gi,
   /(password=)[^;\s]+/gi,
   /(apikey=)[^&\s]+/gi,
@@ -64,6 +90,7 @@ const secretPatterns = [
   /(access[_-]?token["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
   /(storage[_-]?auth[_-]?password["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
   /(service[_-]?role[_-]?key["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
+  /((?:recovery[_-]?)?passphrase["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
 ];
 
 export function isConnectionMode(value: string): value is ConnectionMode {
@@ -96,9 +123,8 @@ export function sanitizeSettings(input: BackupToolSettings): BackupToolSettings 
       input.encryptionRecipientRegisteredByAppVersion?.trim() || null,
     endpointId: input.endpointId?.trim() || null,
     encryptionAlgorithm: input.encryptionAlgorithm?.trim() || null,
-    encryptionRecoveryExported: Boolean(input.encryptionRecoveryExported),
-    recoveryKeyFingerprint: input.recoveryKeyFingerprint?.trim() || null,
-    recoveryKeyExportedAt: input.recoveryKeyExportedAt?.trim() || null,
+    publicKeyLedger: Array.isArray(input.publicKeyLedger) ? input.publicKeyLedger : [],
+    productionKeyCeremony: input.productionKeyCeremony ?? null,
     setupComplete: Boolean(input.setupComplete),
     setupStep: normalizeSetupStep(input.setupStep),
     setupCompletedAt: input.setupCompletedAt?.trim() || null,
@@ -140,6 +166,15 @@ export function redactSensitiveText(value: unknown): string {
 }
 
 export function hasSecretLikeValue(settings: Record<string, unknown>): boolean {
-  return [...secretFieldNames, "backupAgeIdentity", "recoveryKey", "privateKey", "secretKey"]
+  return [
+    ...secretFieldNames,
+    "backupAgeIdentity",
+    "ageIdentity",
+    "recoveryKey",
+    "recoveryPassphrase",
+    "passphrase",
+    "privateKey",
+    "secretKey",
+  ]
     .some((name) => Object.prototype.hasOwnProperty.call(settings, name));
 }
