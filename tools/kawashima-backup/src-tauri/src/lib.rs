@@ -48,64 +48,15 @@ pub(crate) struct BackupToolSettings {
     pub(crate) local_backup_path: String,
     pub(crate) google_drive_path: String,
     #[serde(default)]
-    pub(crate) encryption_recipient: Option<String>,
-    #[serde(default)]
-    pub(crate) encryption_recipient_fingerprint: Option<String>,
-    #[serde(default)]
-    pub(crate) encryption_recipient_registered_at: Option<String>,
-    #[serde(default)]
-    pub(crate) encryption_recipient_registered_by_app_version: Option<String>,
-    #[serde(default)]
     pub(crate) endpoint_id: Option<String>,
     #[serde(default)]
     pub(crate) encryption_algorithm: Option<String>,
-    #[serde(default)]
-    pub(crate) public_key_ledger: Vec<PublicKeyLedgerEntry>,
-    #[serde(default)]
-    pub(crate) production_key_ceremony: Option<ProductionKeyCeremonyMetadata>,
     #[serde(default)]
     pub(crate) setup_complete: bool,
     #[serde(default = "default_setup_step")]
     pub(crate) setup_step: u8,
     #[serde(default)]
     pub(crate) setup_completed_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct PublicKeyLedgerEntry {
-    pub(crate) key_id: String,
-    pub(crate) public_recipient: String,
-    pub(crate) fingerprint: String,
-    pub(crate) generated_at: String,
-    pub(crate) age_version: String,
-    pub(crate) purpose: String,
-    pub(crate) status: PublicKeyStatus,
-    pub(crate) retired_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub(crate) enum PublicKeyStatus {
-    Active,
-    Retired,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ProductionKeyCeremonyMetadata {
-    pub(crate) key_id: String,
-    #[serde(default)]
-    pub(crate) public_recipient: String,
-    pub(crate) recipient_fingerprint: String,
-    pub(crate) generated_at: String,
-    pub(crate) age_version: String,
-    pub(crate) google_drive_stored_at: String,
-    pub(crate) external_media_stored_at: String,
-    pub(crate) google_drive_verified_at: String,
-    pub(crate) external_media_verified_at: String,
-    pub(crate) completed_at: String,
-    pub(crate) recorded_by_app_version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -214,14 +165,8 @@ impl Default for BackupToolSettings {
             connection_mode: ConnectionMode::Direct,
             local_backup_path: String::new(),
             google_drive_path: String::new(),
-            encryption_recipient: None,
-            encryption_recipient_fingerprint: None,
-            encryption_recipient_registered_at: None,
-            encryption_recipient_registered_by_app_version: None,
             endpoint_id: None,
-            encryption_algorithm: None,
-            public_key_ledger: Vec::new(),
-            production_key_ceremony: None,
+            encryption_algorithm: Some("age-passphrase".to_string()),
             setup_complete: false,
             setup_step: default_setup_step(),
             setup_completed_at: None,
@@ -232,7 +177,6 @@ impl Default for BackupToolSettings {
 pub fn run() {
     let _ = file_security::cleanup_stale_temp_dirs(std::time::Duration::from_secs(24 * 60 * 60));
     let app = tauri::Builder::default()
-        .manage(backup::RecoveryKeyState::default())
         .manage(maintenance::MaintenanceState::default())
         .manage(StorageValidationState::default())
         .plugin(tauri_plugin_dialog::init())
@@ -250,12 +194,7 @@ pub fn run() {
             check_storage,
             check_folder,
             backup::backup_is_running,
-            backup::get_encryption_recipient_status,
-            backup::register_encryption_recipient,
-            backup::replace_encryption_recipient,
-            backup::complete_production_key_ceremony,
-            backup::import_recovery_key,
-            backup::clear_imported_recovery_key,
+            backup::get_encryption_status,
             backup::verify_backup_file,
             backup::load_backup_history,
             backup::run_backup,
@@ -286,7 +225,10 @@ pub(crate) fn load_settings_from_disk(app: &AppHandle) -> Result<BackupToolSetti
         return Ok(BackupToolSettings::default());
     }
     let content = fs::read_to_string(path).map_err(|error| sanitized_error(error))?;
-    serde_json::from_str(&content).map_err(|error| sanitized_error(error))
+    let mut settings: BackupToolSettings =
+        serde_json::from_str(&content).map_err(|error| sanitized_error(error))?;
+    settings.encryption_algorithm = Some("age-passphrase".to_string());
+    Ok(settings)
 }
 
 #[tauri::command]
@@ -301,23 +243,15 @@ fn save_settings(
     if existing.setup_complete {
         maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
     }
-    let settings = preserve_encryption_registration(existing, settings);
+    let settings = normalize_persisted_settings(existing, settings);
     save_settings_to_disk(&app, &settings)
 }
 
-fn preserve_encryption_registration(
+fn normalize_persisted_settings(
     existing: BackupToolSettings,
     mut incoming: BackupToolSettings,
 ) -> BackupToolSettings {
-    incoming.encryption_recipient = existing.encryption_recipient;
-    incoming.encryption_recipient_fingerprint = existing.encryption_recipient_fingerprint;
-    incoming.encryption_recipient_registered_at = existing.encryption_recipient_registered_at;
-    incoming.encryption_recipient_registered_by_app_version =
-        existing.encryption_recipient_registered_by_app_version;
-    incoming.endpoint_id = existing.endpoint_id;
-    incoming.encryption_algorithm = existing.encryption_algorithm;
-    incoming.public_key_ledger = existing.public_key_ledger;
-    incoming.production_key_ceremony = existing.production_key_ceremony;
+    incoming.encryption_algorithm = Some("age-passphrase".to_string());
     incoming.setup_complete = existing.setup_complete;
     incoming.setup_step = existing.setup_step;
     incoming.setup_completed_at = existing.setup_completed_at;
@@ -434,8 +368,34 @@ fn validate_setup_prerequisites(settings: &BackupToolSettings) -> Result<(), Str
     {
         return Err("2つのバックアップ保存先を確認してください。".to_string());
     }
-    backup::validate_registered_recipient(settings)?;
+    validate_endpoint_id(settings.endpoint_id.as_deref().unwrap_or_default())?;
+    if settings.encryption_algorithm.as_deref() != Some("age-passphrase") {
+        return Err("暗号化方式はage passphrase方式で設定してください。".to_string());
+    }
     Ok(())
+}
+
+fn validate_endpoint_id(value: &str) -> Result<String, String> {
+    let value = value.trim();
+    let valid = (3..=64).contains(&value.len())
+        && value.chars().all(|character| {
+            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
+        })
+        && value
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_lowercase())
+        && value
+            .chars()
+            .last()
+            .is_some_and(|character| character.is_ascii_alphanumeric());
+    if !valid {
+        return Err(
+            "端末IDは英小文字で始まる3〜64文字の英小文字・数字・ハイフンで指定してください。"
+                .to_string(),
+        );
+    }
+    Ok(value.to_string())
 }
 
 #[tauri::command]

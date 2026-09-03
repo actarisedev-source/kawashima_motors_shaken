@@ -4,99 +4,66 @@ import test from "node:test";
 
 const readSource = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("本番バックアップは公開鍵台帳と鍵式metadataの一致を要求する", () => {
+test("本番バックアップは標準age passphrase方式を使用する", () => {
   const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
   for (const marker of [
-    "validate_backup_encryption_authorization",
-    "production_key_ceremony",
-    "public_key_ledger",
-    "APPROVED_PRODUCTION_AGE_VERSION",
-    "PublicKeyStatus::Active",
-    "retired鍵では新しいバックアップを作成できません",
+    'ENCRYPTION_ALGORITHM: &str = "age-passphrase"',
+    "Encryptor::with_user_passphrase",
+    "age::scrypt::Identity::new",
+    "validate_recovery_password",
   ]) {
-    assert.match(backup, new RegExp(marker));
+    assert.match(backup, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  assert.match(backup, /ceremony\.recipient_fingerprint != fingerprint/);
-  assert.match(backup, /ledger\.public_recipient != recipient\.to_string\(\)/);
+  assert.doesNotMatch(backup, /Encryptor::with_recipients|x25519|parse_encryption_recipient/);
 });
 
-test("公開鍵台帳はローテーション追跡用の公開metadataだけを保持する", () => {
+test("公開鍵台帳とProduction Key Ceremonyを設定から外す", () => {
   const rust = readSource("tools/kawashima-backup/src-tauri/src/lib.rs");
   const config = readSource("tools/kawashima-backup/src/lib/config.ts");
-  for (const field of [
-    "key_id",
-    "public_recipient",
-    "fingerprint",
-    "generated_at",
-    "age_version",
-    "purpose",
-    "status",
-    "retired_at",
-  ]) {
-    assert.match(rust, new RegExp(field));
-  }
-  const settings = config.slice(
-    config.indexOf("export type BackupToolSettings"),
-    config.indexOf("export const emptySettings"),
-  );
-  assert.match(settings, /publicKeyLedger/);
-  assert.match(settings, /productionKeyCeremony/);
-  assert.doesNotMatch(settings, /passphrase|privateKey|secretKey|backupAgeIdentity/);
+  const settings = `${rust}\n${config}`;
+  assert.doesNotMatch(settings, /PublicKeyLedgerEntry|ProductionKeyCeremonyMetadata/);
+  assert.doesNotMatch(settings, /publicKeyLedger|productionKeyCeremony|encryptionRecipient/);
+  assert.match(settings, /endpointId/);
+  assert.match(settings, /age-passphrase/);
 });
 
-test("recipient変更は旧鍵をretiredにして鍵式完了記録を無効化する", () => {
-  const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
-  const registration = backup.slice(
-    backup.indexOf("fn apply_recipient_registration"),
-    backup.indexOf("fn recipient_registration_exists_and_matches"),
-  );
-  assert.match(registration, /retire_other_active_ledger_keys/);
-  assert.match(registration, /production_key_ceremony = None/);
-  assert.match(registration, /PublicKeyStatus::Retired/);
-});
-
-test("manifestと履歴にkey IDとfingerprintを保存し秘密情報を含めない", () => {
+test("manifestは非秘密の暗号化方式metadataだけを保存する", () => {
   const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
   const manifest = backup.slice(
     backup.indexOf("struct BackupManifest"),
     backup.indexOf("struct BackupReport"),
   );
-  assert.match(manifest, /encryption_key_id/);
-  assert.match(manifest, /encryption_recipient_fingerprint/);
-  assert.doesNotMatch(manifest, /identity|passphrase|private|secret/i);
-
-  const history = backup.slice(
-    backup.indexOf("struct BackupHistoryEntry"),
-    backup.indexOf("struct BackupResult"),
-  );
-  assert.match(history, /key_id/);
-  assert.match(history, /recipient_fingerprint/);
+  assert.match(manifest, /EncryptionManifest/);
+  assert.match(manifest, /scheme/);
+  assert.match(manifest, /format/);
+  assert.match(manifest, /version/);
+  assert.doesNotMatch(manifest, /passphrase|password|fingerprint|recipient|identity|private|secret/i);
 });
 
-test("鍵式登録APIは秘密鍵とpassphraseを受け取らない", () => {
+test("復旧パスワードは都度入力し保存しない", () => {
+  const frontend = readSource("tools/kawashima-backup/src/main.ts");
   const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
-  const input = backup.slice(
-    backup.indexOf("struct CompleteProductionKeyCeremonyInput"),
-    backup.indexOf("struct ValidatedEncryptionContext"),
-  );
-  assert.match(input, /google_drive_stored_at/);
-  assert.match(input, /external_media_verified_at/);
-  assert.doesNotMatch(input, /identity|passphrase|private|secret/i);
-  assert.match(backup, /CEREMONY_COMPLETION_CONFIRMATION/);
-});
-
-test("READMEは暗号化identityをRAM上へ復号してからアプリへ渡す", () => {
-  const readme = readSource("tools/kawashima-backup/README.md");
-  assert.match(readme, /does not open a passphrase-encrypted identity file/);
-  assert.match(readme, /RAM-backed volume/);
-  assert.match(readme, /Google Drive/);
-  assert.match(readme, /external SSD or USB/);
-  assert.doesNotMatch(readme.slice(readme.indexOf("## Phase 4B"), readme.indexOf("## Bundled PostgreSQL")), /OneDrive/);
-});
-
-test("age秘密鍵をKeychainまたは通常端末へ保存しない", () => {
   const credentials = readSource("tools/kawashima-backup/src-tauri/src/credential_store.rs");
-  const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
-  assert.doesNotMatch(credentials, /ACCOUNT_(?:AGE|ENCRYPTION|RECOVERY).*IDENTITY/);
-  assert.doesNotMatch(backup, /write_secret_explicit\([^)]*(?:identity|recovery|age)/i);
+  assert.match(frontend, /Apple Passwords/);
+  assert.match(frontend, /backup-recovery-password/);
+  assert.match(frontend, /recovery-password/);
+  assert.match(frontend, /input\.value = ""/);
+  assert.match(backup, /Zeroizing::new\(recovery_password\)/);
+  assert.doesNotMatch(credentials, /recovery-password|passphrase|backup-age-identity/);
+});
+
+test("通常UIに旧X25519専門用語を残さない", () => {
+  const frontend = readSource("tools/kawashima-backup/src/main.ts");
+  assert.match(frontend, /復旧パスワード/);
+  assert.doesNotMatch(frontend, /公開鍵|recipient|fingerprint|key ceremony|identity|本番鍵式|復旧鍵/);
+});
+
+test("READMEは運用者向けpassphrase復旧フローを説明する", () => {
+  const readme = readSource("tools/kawashima-backup/README.md");
+  assert.match(readme, /標準ageのpassphrase方式/);
+  assert.match(readme, /Apple Passwords/);
+  assert.match(readme, /川島モータース バックアップ復旧パスワード/);
+  assert.match(readme, /バックアップファイルを選ぶ/);
+  assert.match(readme, /標準age CLI/);
+  assert.doesNotMatch(readme, /Production Key Ceremony|public-key ledger|X25519本番秘密鍵/);
 });

@@ -53,5 +53,6 @@ test("秘密鍵文字列を設定・UI・manifest構造へ含めない", () => {
   assert.doesNotMatch(frontend, /AGE-SECRET-KEY-/);
   const manifest = backup.slice(backup.indexOf("struct BackupManifest"), backup.indexOf("struct BackupReport"));
   assert.doesNotMatch(manifest, /identity|private|secret/i);
-  assert.match(manifest, /encryption_recipient_fingerprint/);
+  assert.match(manifest, /EncryptionManifest/);
+  assert.match(manifest, /scheme/);
 });

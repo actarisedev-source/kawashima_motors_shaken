@@ -67,12 +67,14 @@ test("ACTARISE保守操作はRust backendの短時間tokenで拒否できる", (
   assert.doesNotMatch(backup, /run_backup\(\s*app: AppHandle,\s*settings:/);
 });
 
-test("復旧鍵は復号確認時にRustメモリから取り出して再利用させない", () => {
+test("復旧パスワードは復号確認時だけRustへ渡して保持しない", () => {
   const backup = readSource("tools/kawashima-backup/src-tauri/src/backup.rs");
   const frontend = readSource("tools/kawashima-backup/src/main.ts");
-  assert.match(backup, /\.lock\(\)[\s\S]*?\.take\(\)[\s\S]*?有効な復旧鍵を先に読み込んでください/);
-  assert.match(backup, /Zeroizing::new\([\s\S]*?fs::read_to_string/);
-  assert.match(frontend, /finally \{\s*state\.recoveryKeyStatus = null/);
+  assert.match(backup, /recovery_password: String/);
+  assert.match(backup, /Zeroizing::new\(recovery_password\)/);
+  assert.match(backup, /verify_backup_file_with_passphrase/);
+  assert.match(frontend, /recovery-password/);
+  assert.match(frontend, /input\.value = ""/);
 });
 
 test("endpointIdをmanifest・履歴・新形式ファイル名へ記録する", () => {

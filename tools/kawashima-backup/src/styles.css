@@ -303,13 +303,13 @@ dd {
   gap: 6px;
 }
 
-.encryption-actions .recipient-form,
+.encryption-actions .password-form,
 .encryption-actions > .actions {
   grid-column: 1 / -1;
   width: 100%;
 }
 
-.encryption-actions .recipient-form {
+.encryption-actions .password-form {
   justify-items: stretch;
 }
 

@@ -33,14 +33,8 @@ test("通常設定にはsecret項目を含めない", () => {
     connectionMode: "direct",
     localBackupPath: " /tmp/backup ",
     googleDrivePath: " /tmp/drive ",
-    encryptionRecipient: null,
-    encryptionRecipientFingerprint: null,
-    encryptionRecipientRegisteredAt: null,
-    encryptionRecipientRegisteredByAppVersion: null,
     endpointId: null,
-    encryptionAlgorithm: null,
-    publicKeyLedger: [],
-    productionKeyCeremony: null,
+    encryptionAlgorithm: "age-passphrase",
   });
 
   assert.equal(sanitized.dbPort, "5432");
@@ -50,6 +44,7 @@ test("通常設定にはsecret項目を含めない", () => {
   assert.equal(hasSecretLikeValue({ serviceRoleKey: "secret" }), true);
   assert.equal(hasSecretLikeValue({ recoveryKey: "secret" }), true);
   assert.equal(hasSecretLikeValue({ recoveryPassphrase: "secret" }), true);
+  assert.equal(hasSecretLikeValue({ recoveryPassword: "secret" }), true);
 });
 
 test("secretマスキングとエラー文言のredactionを行う", () => {

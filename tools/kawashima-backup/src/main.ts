@@ -40,18 +40,12 @@ type SystemCheckResult = {
   ok: boolean; platform: string; applicationVersion: string;
   postgresRuntimeReady: boolean; privateAclReady: boolean; message: string;
 };
-type EncryptionRecipientStatus = {
-  configured: boolean; state: string; recipient: string | null; fingerprint: string | null;
-  registeredAt: string | null; registeredByAppVersion: string | null;
-  endpointId: string | null; algorithm: string;
-  ceremonyCompleted: boolean; ceremonyKeyId: string | null;
-  ceremonyCompletedAt: string | null; keyStatus: "active" | "retired" | null;
-};
-type RecoveryKeyImportStatus = {
-  loaded: boolean; valid: boolean; fingerprint: string; matchesRecipient: boolean | null;
+type EncryptionStatus = {
+  configured: boolean; state: string; algorithm: string; credentialMode: string;
+  endpointId: string | null;
 };
 type BackupVerificationResult = {
-  ok: boolean; keySource: string; keyFingerprint: string;
+  ok: boolean;
   databaseDumpPresent: boolean; manifestsPresent: boolean; storagePresent: boolean;
   verificationPresent: boolean; databaseStructureValid: boolean;
   plaintextArchiveSha256: string; temporaryFilesRemoved: boolean;
@@ -74,7 +68,7 @@ type BackupHistoryEntry = {
   databaseOk: boolean; storageOk: boolean; verificationOk: boolean;
   localCopyOk: boolean; googleDriveCopyOk: boolean; googleDriveSyncStatus?: string;
   storageObjectCount: number; publicTableCount: number; endpointId?: string;
-  keyId?: string; recipientFingerprint?: string;
+  encryptionScheme?: string;
 };
 type BackupResult = { history: BackupHistoryEntry; localPath: string; googleDrivePath: string };
 type AppState = {
@@ -84,9 +78,8 @@ type AppState = {
   maintenanceToken: string | null;
   maintenanceOpen: boolean;
   secretStatus: SecretStatus;
-  recipientStatus: EncryptionRecipientStatus;
+  encryptionStatus: EncryptionStatus;
   systemCheck: SystemCheckResult | null;
-  recoveryKeyStatus: RecoveryKeyImportStatus | null;
   verificationResult: BackupVerificationResult | null;
   dbCheck: DbCheckResult | null;
   storageCheck: StorageCheckResult | null;
@@ -107,10 +100,9 @@ const emptySetup: SetupStatus = {
   maintenanceConfigured: false, platform: "", applicationVersion: "0.4.0",
 };
 const emptyMaintenance: MaintenanceStatus = { configured: false, state: "missing", unlocked: false };
-const emptyRecipient: EncryptionRecipientStatus = {
-  configured: false, state: "missing", recipient: null, fingerprint: null,
-  registeredAt: null, registeredByAppVersion: null, endpointId: null, algorithm: "age X25519",
-  ceremonyCompleted: false, ceremonyKeyId: null, ceremonyCompletedAt: null, keyStatus: null,
+const emptyEncryption: EncryptionStatus = {
+  configured: true, state: "configured", algorithm: "age-passphrase",
+  credentialMode: "enteredPerBackup", endpointId: null,
 };
 
 let state: AppState = {
@@ -121,7 +113,7 @@ let state: AppState = {
     dbPasswordState: "missing", storageAuthPasswordState: "missing",
     legacyServiceRoleKeyState: "missing",
   },
-  recipientStatus: emptyRecipient, systemCheck: null, recoveryKeyStatus: null,
+  encryptionStatus: emptyEncryption, systemCheck: null,
   verificationResult: null, dbCheck: null, storageCheck: null,
   localFolderCheck: null, googleDriveFolderCheck: null, history: [], progress: null,
   busy: false, message: "",
@@ -143,7 +135,6 @@ const runCommand = async <T>(name: string, args?: Record<string, unknown>): Prom
 const escapeHtml = (value: unknown) => String(value ?? "")
   .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
   .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
-const shortFingerprint = (value: string | null | undefined) => value ? `${value.slice(0, 10)}...${value.slice(-8)}` : "未設定";
 const badge = (ok: boolean, label?: string) => `<span class="badge ${ok ? "ok" : "muted"}">${ok ? "✓" : "!"} ${escapeHtml(label ?? (ok ? "確認済み" : "未確認"))}</span>`;
 const credentialStateLabels: Record<CredentialState, string> = {
   stored: "登録済み",
@@ -181,6 +172,8 @@ function updateSettingsFromForm() {
     dbName: String(data.get("dbName") ?? state.settings.dbName),
     dbUser: String(data.get("dbUser") ?? state.settings.dbUser),
     connectionMode: String(data.get("connectionMode") ?? state.settings.connectionMode) as BackupToolSettings["connectionMode"],
+    endpointId: String(data.get("endpointId") ?? state.settings.endpointId ?? ""),
+    encryptionAlgorithm: "age-passphrase",
   });
 }
 
@@ -279,81 +272,6 @@ async function runConnectionChecks() {
   render();
 }
 
-async function registerRecipient() {
-  const recipient = app.querySelector<HTMLInputElement>("#encryption-recipient")?.value ?? "";
-  const endpointId = app.querySelector<HTMLInputElement>("#endpoint-id")?.value ?? "";
-  try {
-    state.recipientStatus = await runCommand("register_encryption_recipient", {
-      recipient, endpointId, ...maintenanceArgs(),
-    });
-    state.settings = {
-      ...state.settings,
-      encryptionRecipient: state.recipientStatus.recipient,
-      encryptionRecipientFingerprint: state.recipientStatus.fingerprint,
-      encryptionRecipientRegisteredAt: state.recipientStatus.registeredAt,
-      encryptionRecipientRegisteredByAppVersion: state.recipientStatus.registeredByAppVersion,
-      endpointId: state.recipientStatus.endpointId,
-      encryptionAlgorithm: state.recipientStatus.algorithm,
-    };
-    state.message = "暗号化設定を登録しました。復号用の秘密鍵はこの端末へ保存していません。";
-  } catch (error) {
-    state.message = redactSensitiveText(error);
-  }
-  render();
-}
-
-async function replaceRecipient() {
-  if (!state.recipientStatus.fingerprint || !state.maintenanceToken) return;
-  if (!await confirm("登録済み暗号化設定を変更します。既存バックアップとの一致を確認しましたか？", { title: "保守確認", kind: "warning" })) return;
-  try {
-    state.recipientStatus = await runCommand("replace_encryption_recipient", {
-      recipient: app.querySelector<HTMLInputElement>("#maintenance-recipient")?.value ?? "",
-      endpointId: app.querySelector<HTMLInputElement>("#maintenance-endpoint-id")?.value ?? "",
-      expectedCurrentFingerprint: state.recipientStatus.fingerprint,
-      confirmation: app.querySelector<HTMLInputElement>("#recipient-change-confirmation")?.value ?? "",
-      ...maintenanceArgs(),
-    });
-    state.message = "暗号化設定を変更しました。新しい鍵式実施記録が登録されるまでバックアップは停止します。";
-  } catch (error) {
-    state.message = redactSensitiveText(error);
-  }
-  render();
-}
-
-const ceremonyTimestamp = (id: string) => {
-  const value = app.querySelector<HTMLInputElement>(`#${id}`)?.value ?? "";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
-};
-
-async function completeProductionKeyCeremony() {
-  if (!state.maintenanceToken || !state.recipientStatus.configured) return;
-  if (!await confirm(
-    "Google Driveと外部媒体への保存、および両方からの再取得・復号を実際に完了した記録を登録します。",
-    { title: "本番鍵式の実施記録", kind: "warning" },
-  )) return;
-  try {
-    state.recipientStatus = await runCommand("complete_production_key_ceremony", {
-      input: {
-        keyId: app.querySelector<HTMLInputElement>("#ceremony-key-id")?.value ?? "",
-        generatedAt: ceremonyTimestamp("ceremony-generated-at"),
-        ageVersion: "v1.3.2",
-        googleDriveStoredAt: ceremonyTimestamp("ceremony-google-stored-at"),
-        externalMediaStoredAt: ceremonyTimestamp("ceremony-external-stored-at"),
-        googleDriveVerifiedAt: ceremonyTimestamp("ceremony-google-verified-at"),
-        externalMediaVerifiedAt: ceremonyTimestamp("ceremony-external-verified-at"),
-        confirmation: app.querySelector<HTMLInputElement>("#ceremony-confirmation")?.value ?? "",
-      },
-      ...maintenanceArgs(),
-    });
-    state.settings = await runCommand("load_settings");
-    state.message = "本番鍵式の実施記録と公開鍵台帳を登録しました。";
-  } catch (error) {
-    state.message = redactSensitiveText(error);
-  }
-  render();
-}
-
 async function configureMaintenance() {
   const passcode = app.querySelector<HTMLInputElement>("#maintenance-passcode")?.value ?? "";
   try {
@@ -391,33 +309,21 @@ async function lockMaintenance() {
   render();
 }
 
-async function importRecoveryKey() {
-  if (!state.maintenanceToken) return;
-  const selected = await open({ multiple: false, directory: false, filters: [{ name: "復旧鍵", extensions: ["txt", "key"] }] });
-  if (typeof selected !== "string") return;
-  try {
-    const recoveryKeyStatus = await runCommand<RecoveryKeyImportStatus>("import_recovery_key", { path: selected, ...maintenanceArgs() });
-    state.recoveryKeyStatus = recoveryKeyStatus;
-    state.message = recoveryKeyStatus.matchesRecipient === false ? "復旧鍵は登録済み暗号化設定と一致しません。" : "有効な復旧鍵です。";
-  } catch (error) {
-    state.recoveryKeyStatus = null;
-    state.message = redactSensitiveText(error);
-  }
-  render();
-}
-
 async function verifyBackup() {
-  if (!state.maintenanceToken || !state.recoveryKeyStatus?.loaded) return;
+  if (!state.maintenanceToken) return;
   const selected = await open({ multiple: false, directory: false, filters: [{ name: "暗号化バックアップ", extensions: ["age"] }] });
   if (typeof selected !== "string") return;
+  const input = app.querySelector<HTMLInputElement>("#recovery-password");
+  const recoveryPassword = input?.value ?? "";
+  if (input) input.value = "";
   try {
-    state.verificationResult = await runCommand("verify_backup_file", { path: selected, ...maintenanceArgs() });
+    state.verificationResult = await runCommand("verify_backup_file", {
+      path: selected, recoveryPassword, ...maintenanceArgs(),
+    });
     state.message = "復号・構造・SHA-256確認が完了し、一時領域を削除しました。";
   } catch (error) {
     state.verificationResult = null;
     state.message = redactSensitiveText(error);
-  } finally {
-    state.recoveryKeyStatus = null;
   }
   render();
 }
@@ -444,11 +350,14 @@ async function completeSetup() {
 
 async function startBackup() {
   if (!await confirm("バックアップを開始します。完了するまでアプリを閉じないでください。", { title: "バックアップ開始", kind: "info" })) return;
+  const input = app.querySelector<HTMLInputElement>("#backup-recovery-password");
+  const recoveryPassword = input?.value ?? "";
+  if (input) input.value = "";
   state.busy = true;
   state.progress = { stage: "preflight", status: "running", message: "準備しています。", current: null, total: null };
   render();
   try {
-    const result = await runCommand<BackupResult>("run_backup");
+    const result = await runCommand<BackupResult>("run_backup", { recoveryPassword });
     state.history = await runCommand("load_backup_history");
     state.message = `バックアップが完了しました。${result.history.fileName}`;
   } catch (error) {
@@ -472,6 +381,7 @@ function connectionFormMarkup() {
     <label>Supabase Publishable Key<input name="supabasePublishableKey" value="${escapeHtml(state.settings.supabasePublishableKey)}" /></label>
     <label>Storage読取ユーザー<input name="storageAuthEmail" type="email" value="${escapeHtml(state.settings.storageAuthEmail)}" /></label>
     <label>接続方式<select name="connectionMode"><option value="direct" ${state.settings.connectionMode === "direct" ? "selected" : ""}>Direct</option><option value="session" ${state.settings.connectionMode === "session" ? "selected" : ""}>Session pooler</option></select></label>
+    <label>端末ID<input name="endpointId" value="${escapeHtml(state.settings.endpointId ?? "")}" placeholder="kawashima-windows-main" /></label>
     <label>DB host<input name="dbHost" value="${escapeHtml(state.settings.dbHost)}" /></label>
     <label>DB port<input name="dbPort" value="${escapeHtml(state.settings.dbPort)}" /></label>
     <label>Database<input name="dbName" value="${escapeHtml(state.settings.dbName)}" /></label>
@@ -492,17 +402,17 @@ function setupStepMarkup() {
         <div class="secret-grid two-col"><label>DBパスワード ${credentialBadge(state.secretStatus.dbPassword, state.secretStatus.dbPasswordState)}<input id="db-password" type="password" autocomplete="new-password" /></label><label>Storage読取パスワード ${credentialBadge(state.secretStatus.storageAuthPassword, state.secretStatus.storageAuthPasswordState)}<input id="storage-auth-password" type="password" autocomplete="new-password" /></label></div>
         <div class="actions"><button id="save-settings" class="outline">接続先を保存</button><button id="save-secrets">資格情報を保存</button></div>`;
     case 4:
-      return `<h2>暗号化・保守設定</h2><p class="note">テスト用公開鍵のみ使用してください。秘密鍵はこの端末へ保存しません。</p>
-        <div class="two-col"><label>端末ID<input id="endpoint-id" value="${escapeHtml(state.recipientStatus.endpointId ?? "")}" placeholder="kawashima-windows-main" /></label><label>age公開鍵<input id="encryption-recipient" placeholder="age1..." /></label></div>
-        <div class="two-col setup-lock"><label>ACTARISE保守パスコード ${badge(state.setup.maintenanceConfigured)}<input id="maintenance-passcode" type="password" autocomplete="new-password" /></label><div class="status-box"><strong>暗号化設定</strong>${badge(state.recipientStatus.configured, state.recipientStatus.configured ? "公開鍵設定済み" : "未設定")}<small>fingerprint ${escapeHtml(shortFingerprint(state.recipientStatus.fingerprint))}</small></div></div>
-        <div class="actions"><button id="configure-maintenance" class="outline">保守ロックを設定</button><button id="register-recipient">暗号化設定を登録</button></div>`;
+      return `<h2>暗号化・保守設定</h2><p class="note">バックアップは復旧パスワードで暗号化します。復旧パスワードはApple Passwordsで人間が管理し、このアプリには保存しません。</p>
+        ${connectionFormMarkup()}
+        <div class="two-col setup-lock"><label>ACTARISE保守パスコード ${badge(state.setup.maintenanceConfigured)}<input id="maintenance-passcode" type="password" autocomplete="new-password" /></label><div class="status-box"><strong>暗号化方式</strong>${badge(state.encryptionStatus.configured, "復旧パスワード方式")}<small>標準age互換</small></div></div>
+        <div class="actions"><button id="save-settings" class="outline">設定を保存</button><button id="configure-maintenance">保守ロックを設定</button></div>`;
     case 5:
       return `<h2>動作確認</h2><p class="note">接続と保存先を読み取り・書込確認します。バックアップはまだ生成しません。</p>
         ${connectionFormMarkup()}<dl class="results"><div><dt>DB接続</dt><dd>${state.dbCheck ? badge(state.dbCheck.ok, state.dbCheck.message) : "未確認"}</dd></div><div><dt>画像Storage</dt><dd>${state.storageCheck ? badge(state.storageCheck.ok, state.storageCheck.message) : "未確認"}</dd></div><div><dt>PC保存先</dt><dd>${badge(Boolean(state.localFolderCheck?.ok))}</dd></div><div><dt>同期フォルダ</dt><dd>${badge(Boolean(state.googleDriveFolderCheck?.ok))}</dd></div></dl>
         <div class="actions"><button id="run-checks">接続・設定を確認</button></div>`;
     default:
       return `<h2>セットアップ完了</h2><p class="note">すべての設定を確認後、通常のバックアップ画面へ切り替えます。</p>
-        <dl class="results"><div><dt>資格情報</dt><dd>${badge(state.secretStatus.dbPassword && state.secretStatus.storageAuthPassword)}</dd></div><div><dt>保存先</dt><dd>${badge(Boolean(state.localFolderCheck?.ok && state.googleDriveFolderCheck?.ok))}</dd></div><div><dt>暗号化設定</dt><dd>${badge(state.recipientStatus.configured)}</dd></div><div><dt>保守ロック</dt><dd>${badge(state.setup.maintenanceConfigured)}</dd></div></dl>
+        <dl class="results"><div><dt>資格情報</dt><dd>${badge(state.secretStatus.dbPassword && state.secretStatus.storageAuthPassword)}</dd></div><div><dt>保存先</dt><dd>${badge(Boolean(state.localFolderCheck?.ok && state.googleDriveFolderCheck?.ok))}</dd></div><div><dt>暗号化方式</dt><dd>${badge(state.encryptionStatus.configured, "復旧パスワード方式")}</dd></div><div><dt>保守ロック</dt><dd>${badge(state.setup.maintenanceConfigured)}</dd></div></dl>
         <div class="actions"><button id="complete-setup">セットアップを完了</button></div>`;
   }
 }
@@ -514,7 +424,7 @@ function pathRowsMarkup() {
 
 function historyMarkup() {
   if (!state.history.length) return `<section class="panel"><h2>バックアップ履歴</h2><p class="empty">まだ履歴はありません。</p></section>`;
-  return `<section class="panel"><div class="section-heading"><div><h2>バックアップ履歴</h2><p class="note">同期フォルダへのコピーとクラウド同期完了は別です。</p></div></div><div class="history-table-wrap"><table class="history-table"><thead><tr><th>完了日時</th><th>端末</th><th>鍵ID</th><th>結果</th><th>保存</th></tr></thead><tbody>${state.history.slice(0, 20).map((entry) => `<tr><td>${escapeHtml(new Date(entry.completedAt).toLocaleString("ja-JP"))}</td><td>${escapeHtml(entry.endpointId ?? "旧形式")}</td><td>${escapeHtml(entry.keyId || "旧形式")}</td><td>${entry.success ? "成功" : "失敗"}</td><td>${entry.googleDriveCopyOk ? "2か所へコピー済み / クラウド同期未確認" : "未完了"}</td></tr>`).join("")}</tbody></table></div></section>`;
+  return `<section class="panel"><div class="section-heading"><div><h2>バックアップ履歴</h2><p class="note">同期フォルダへのコピーとクラウド同期完了は別です。</p></div></div><div class="history-table-wrap"><table class="history-table"><thead><tr><th>完了日時</th><th>端末</th><th>暗号化</th><th>結果</th><th>保存</th></tr></thead><tbody>${state.history.slice(0, 20).map((entry) => `<tr><td>${escapeHtml(new Date(entry.completedAt).toLocaleString("ja-JP"))}</td><td>${escapeHtml(entry.endpointId ?? "旧形式")}</td><td>${escapeHtml(entry.encryptionScheme ?? "age-passphrase")}</td><td>${entry.success ? "成功" : "失敗"}</td><td>${entry.googleDriveCopyOk ? "2か所へコピー済み / クラウド同期未確認" : "未完了"}</td></tr>`).join("")}</tbody></table></div></section>`;
 }
 
 function progressMarkup() {
@@ -532,9 +442,7 @@ function maintenanceMarkup() {
     ${connectionFormMarkup()}<div class="secret-grid two-col"><label>DBパスワード ${credentialBadge(state.secretStatus.dbPassword, state.secretStatus.dbPasswordState)}<input id="db-password" type="password" autocomplete="new-password" /></label><label>Storage読取パスワード ${credentialBadge(state.secretStatus.storageAuthPassword, state.secretStatus.storageAuthPasswordState)}<input id="storage-auth-password" type="password" autocomplete="new-password" /></label></div>
     ${pathRowsMarkup()}<div class="actions"><button id="save-settings" class="outline">設定を保存</button><button id="save-secrets" class="outline">資格情報を保存</button><button id="run-checks">接続・設定を確認</button></div>
     <details class="maintenance-tools"><summary>旧資格情報の整理</summary><p class="note">旧Service Role Keyは通常処理に使用しません。新しいStorage接続確認後、明示操作でのみ削除できます。</p><div class="results"><div><dt>旧Service Role Key</dt><dd>${state.secretStatus.legacyServiceRoleKey ? badge(true, "保存済み（未使用）") : credentialBadge(false, state.secretStatus.legacyServiceRoleKeyState)}</dd></div></div><label>確認文字列<input id="legacy-service-role-confirmation" placeholder="旧Service Role Keyを削除する" /></label><div class="actions"><button id="delete-legacy-service-role" class="outline" ${state.secretStatus.legacyServiceRoleKey ? "" : "disabled"}>旧資格情報を削除</button></div></details>
-    <details class="maintenance-tools"><summary>暗号化公開鍵を変更</summary><p class="warning">既存バックアップとの鍵不一致を招くため、fingerprintを確認した保守作業でのみ使用します。</p><div class="two-col"><label>新しい端末ID<input id="maintenance-endpoint-id" /></label><label>新しいage公開鍵<input id="maintenance-recipient" placeholder="age1..." /></label></div><label>確認文字列<input id="recipient-change-confirmation" placeholder="公開鍵を変更する" /></label><div class="actions"><button id="replace-recipient" class="outline">公開鍵を変更</button></div></details>
-    <details class="maintenance-tools"><summary>本番鍵式の実施記録</summary><p class="warning">この記録は、人間が二経路への保存と復号を実施した事実を残すもので、安全性を自動保証するものではありません。</p><dl class="results"><div><dt>鍵式状態</dt><dd>${badge(state.recipientStatus.ceremonyCompleted, state.recipientStatus.ceremonyCompleted ? "完了記録あり" : "未完了")}</dd></div><div><dt>鍵ID</dt><dd>${escapeHtml(state.recipientStatus.ceremonyKeyId ?? "未登録")}</dd></div></dl><div class="two-col"><label>key ID<input id="ceremony-key-id" placeholder="kawashima-prod-2026-01" /></label><label>age version<input value="v1.3.2" readonly /></label><label>鍵生成日時<input id="ceremony-generated-at" type="datetime-local" /></label><label>Google Drive保管日時<input id="ceremony-google-stored-at" type="datetime-local" /></label><label>外部媒体保管日時<input id="ceremony-external-stored-at" type="datetime-local" /></label><label>Google Drive再取得・復号日時<input id="ceremony-google-verified-at" type="datetime-local" /></label><label>外部媒体再取得・復号日時<input id="ceremony-external-verified-at" type="datetime-local" /></label><label>確認文字列<input id="ceremony-confirmation" placeholder="復旧鍵の二経路保管と復号を確認した" /></label></div><div class="actions"><button id="complete-production-ceremony" ${state.recipientStatus.configured && !state.recipientStatus.ceremonyCompleted ? "" : "disabled"}>鍵式実施記録を登録</button></div></details>
-    <div class="recovery-tools"><div><strong>復旧検証</strong><small>標準age CLIで暗号化identityをRAM上へ一時復号し、その平文identityだけを選択します。</small></div>${state.recoveryKeyStatus ? badge(state.recoveryKeyStatus.valid, state.recoveryKeyStatus.matchesRecipient ? "fingerprint一致" : "fingerprint不一致") : badge(false, "未読込")}<div class="actions"><button id="import-recovery-key" class="outline">RAM上の復旧鍵を選択</button><button id="verify-with-recovery" ${state.recoveryKeyStatus?.loaded ? "" : "disabled"}>復旧鍵で復号確認</button></div></div>
+    <div class="recovery-tools"><div><strong>復旧確認</strong><small>暗号化バックアップを選び、復旧パスワードで復号・検証します。</small></div><label>復旧パスワード<input id="recovery-password" type="password" autocomplete="current-password" /></label><div class="actions"><button id="verify-with-recovery">バックアップを選択して確認</button></div></div>
     ${state.verificationResult ? `<p class="message">DB・manifest・verification・pg_restore構造・SHA-256を確認し、一時ファイルを削除しました。</p>` : ""}
   </section>`;
 }
@@ -546,11 +454,11 @@ function renderSetup() {
 function renderNormal() {
   const lastSuccess = state.history.find((entry) => entry.success);
   const canStart = state.setup.complete && state.secretStatus.dbPassword && state.secretStatus.storageAuthPassword
-    && state.recipientStatus.configured && state.recipientStatus.ceremonyCompleted
+    && state.encryptionStatus.configured
     && Boolean(state.settings.localBackupPath && state.settings.googleDrivePath) && !state.busy;
   app.innerHTML = `<main class="shell"><header class="hero"><div><p class="brand">Kawashima Motors</p><h1>バックアップ</h1><p class="lead">業務データを2つの保存先へ保護します。</p></div><button id="toggle-maintenance" class="outline">ACTARISE保守</button></header>
     <section class="daily-dashboard"><div><span>現在の状態</span><strong>${state.busy ? "バックアップ中" : canStart ? "準備完了" : "設定を確認してください"}</strong></div><div><span>最終成功</span><strong>${lastSuccess ? escapeHtml(new Date(lastSuccess.completedAt).toLocaleString("ja-JP")) : "まだありません"}</strong></div><div><span>保存結果</span><strong>${lastSuccess?.localCopyOk && lastSuccess.googleDriveCopyOk ? "2か所へ保存済み" : "未確認"}</strong><small>クラウド同期完了は別途確認</small></div></section>
-    <section class="panel start-panel"><div><h2>${state.busy ? "処理しています" : "バックアップを開始"}</h2><p class="note">完了するまでアプリを閉じないでください。</p></div><button id="start-backup" ${canStart ? "" : "disabled"}>${state.busy ? "実行中..." : "バックアップ開始"}</button></section>
+    <section class="panel start-panel"><div><h2>${state.busy ? "処理しています" : "バックアップを開始"}</h2><p class="note">Apple Passwordsの「川島モータース バックアップ復旧パスワード」を入力します。アプリには保存しません。</p></div><label>復旧パスワード<input id="backup-recovery-password" type="password" autocomplete="current-password" /></label><button id="start-backup" ${canStart ? "" : "disabled"}>${state.busy ? "実行中..." : "バックアップ開始"}</button></section>
     ${progressMarkup()}${historyMarkup()}${maintenanceMarkup()}${state.message ? `<p class="message" aria-live="polite">${escapeHtml(state.message)}</p>` : ""}</main>`;
 }
 
@@ -561,11 +469,7 @@ function bindCommonEvents() {
   app.querySelector("#save-settings")?.addEventListener("click", () => void saveSettings());
   app.querySelector("#save-secrets")?.addEventListener("click", () => void saveSecrets());
   app.querySelector("#run-checks")?.addEventListener("click", () => void runConnectionChecks());
-  app.querySelector("#register-recipient")?.addEventListener("click", () => void registerRecipient());
   app.querySelector("#configure-maintenance")?.addEventListener("click", () => void configureMaintenance());
-  app.querySelector("#replace-recipient")?.addEventListener("click", () => void replaceRecipient());
-  app.querySelector("#complete-production-ceremony")?.addEventListener("click", () => void completeProductionKeyCeremony());
-  app.querySelector("#import-recovery-key")?.addEventListener("click", () => void importRecoveryKey());
   app.querySelector("#verify-with-recovery")?.addEventListener("click", () => void verifyBackup());
   app.querySelector("#delete-legacy-service-role")?.addEventListener("click", () => void deleteLegacyServiceRoleKey());
 }
@@ -592,14 +496,14 @@ function render() {
 }
 
 async function loadInitialState() {
-  const [settings, setup, maintenance, secretStatus, recipientStatus, history, running] = await Promise.all([
+  const [settings, setup, maintenance, secretStatus, encryptionStatus, history, running] = await Promise.all([
     runCommand<BackupToolSettings>("load_settings"), runCommand<SetupStatus>("get_setup_status"),
     runCommand<MaintenanceStatus>("get_maintenance_status"), runCommand<SecretStatusResponse>("get_secret_status"),
-    runCommand<EncryptionRecipientStatus>("get_encryption_recipient_status"),
+    runCommand<EncryptionStatus>("get_encryption_status"),
     runCommand<BackupHistoryEntry[]>("load_backup_history"), runCommand<boolean>("backup_is_running"),
   ]);
   state = { ...state, settings: { ...emptySettings, ...settings }, setup, maintenance,
-    secretStatus: normalizeSecretStatus(secretStatus), recipientStatus, history, busy: running };
+    secretStatus: normalizeSecretStatus(secretStatus), encryptionStatus, history, busy: running };
 }
 
 void listen<BackupProgress>("backup-progress", ({ payload }) => {

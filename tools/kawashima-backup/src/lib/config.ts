@@ -3,33 +3,6 @@ export type ConnectionMode = (typeof allowedConnectionModes)[number];
 
 export const storageBucketName = "line-message-images";
 
-export type PublicKeyStatus = "active" | "retired";
-
-export type PublicKeyLedgerEntry = {
-  keyId: string;
-  publicRecipient: string;
-  fingerprint: string;
-  generatedAt: string;
-  ageVersion: string;
-  purpose: string;
-  status: PublicKeyStatus;
-  retiredAt: string | null;
-};
-
-export type ProductionKeyCeremonyMetadata = {
-  keyId: string;
-  publicRecipient: string;
-  recipientFingerprint: string;
-  generatedAt: string;
-  ageVersion: string;
-  googleDriveStoredAt: string;
-  externalMediaStoredAt: string;
-  googleDriveVerifiedAt: string;
-  externalMediaVerifiedAt: string;
-  completedAt: string;
-  recordedByAppVersion: string;
-};
-
 export type BackupToolSettings = {
   supabaseProjectUrl: string;
   supabasePublishableKey: string;
@@ -41,14 +14,8 @@ export type BackupToolSettings = {
   connectionMode: ConnectionMode;
   localBackupPath: string;
   googleDrivePath: string;
-  encryptionRecipient: string | null;
-  encryptionRecipientFingerprint: string | null;
-  encryptionRecipientRegisteredAt: string | null;
-  encryptionRecipientRegisteredByAppVersion: string | null;
   endpointId: string | null;
   encryptionAlgorithm: string | null;
-  publicKeyLedger: PublicKeyLedgerEntry[];
-  productionKeyCeremony: ProductionKeyCeremonyMetadata | null;
   setupComplete: boolean;
   setupStep: number;
   setupCompletedAt: string | null;
@@ -65,14 +32,8 @@ export const emptySettings: BackupToolSettings = {
   connectionMode: "direct",
   localBackupPath: "",
   googleDrivePath: "",
-  encryptionRecipient: null,
-  encryptionRecipientFingerprint: null,
-  encryptionRecipientRegisteredAt: null,
-  encryptionRecipientRegisteredByAppVersion: null,
   endpointId: null,
-  encryptionAlgorithm: null,
-  publicKeyLedger: [],
-  productionKeyCeremony: null,
+  encryptionAlgorithm: "age-passphrase",
   setupComplete: false,
   setupStep: 1,
   setupCompletedAt: null,
@@ -116,15 +77,8 @@ export function sanitizeSettings(input: BackupToolSettings): BackupToolSettings 
     connectionMode: validateConnectionMode(input.connectionMode),
     localBackupPath: input.localBackupPath.trim(),
     googleDrivePath: input.googleDrivePath.trim(),
-    encryptionRecipient: input.encryptionRecipient?.trim() || null,
-    encryptionRecipientFingerprint: input.encryptionRecipientFingerprint?.trim() || null,
-    encryptionRecipientRegisteredAt: input.encryptionRecipientRegisteredAt?.trim() || null,
-    encryptionRecipientRegisteredByAppVersion:
-      input.encryptionRecipientRegisteredByAppVersion?.trim() || null,
     endpointId: input.endpointId?.trim() || null,
-    encryptionAlgorithm: input.encryptionAlgorithm?.trim() || null,
-    publicKeyLedger: Array.isArray(input.publicKeyLedger) ? input.publicKeyLedger : [],
-    productionKeyCeremony: input.productionKeyCeremony ?? null,
+    encryptionAlgorithm: "age-passphrase",
     setupComplete: Boolean(input.setupComplete),
     setupStep: normalizeSetupStep(input.setupStep),
     setupCompletedAt: input.setupCompletedAt?.trim() || null,
@@ -172,6 +126,7 @@ export function hasSecretLikeValue(settings: Record<string, unknown>): boolean {
     "ageIdentity",
     "recoveryKey",
     "recoveryPassphrase",
+    "recoveryPassword",
     "passphrase",
     "privateKey",
     "secretKey",

@@ -2,15 +2,11 @@ use std::{
     fs::{self, File},
     io::{BufRead, BufReader, BufWriter, Read, Write},
     path::{Component, Path, PathBuf},
-    str::FromStr,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Mutex,
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 
-use age::{x25519, Decryptor, Encryptor};
-use chrono::{DateTime, Local, SecondsFormat, Utc};
+use age::{secrecy::SecretString, Decryptor, Encryptor};
+use chrono::{Local, SecondsFormat, Utc};
 use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -20,8 +16,7 @@ use zeroize::Zeroizing;
 
 use super::{
     build_database_tls_connector, build_db_config, connection_mode_label, normalize_project_url,
-    read_secret, sanitized_error, save_settings_to_disk, storage_auth, BackupToolSettings,
-    ProductionKeyCeremonyMetadata, PublicKeyLedgerEntry, PublicKeyStatus, ACCOUNT_DB_PASSWORD,
+    read_secret, sanitized_error, storage_auth, BackupToolSettings, ACCOUNT_DB_PASSWORD,
     ACCOUNT_STORAGE_AUTH_PASSWORD, SUPABASE_ROOT_CA_PEM,
 };
 use super::{file_security, postgres_runtime};
@@ -33,70 +28,32 @@ const STORAGE_DOWNLOAD_ATTEMPTS: usize = 3;
 const PROGRESS_EVENT: &str = "backup-progress";
 const ARCHIVE_ROOT: &str = "kawashima-backup";
 const DUMP_FILE_NAME: &str = "public.dump";
-const MAX_RECOVERY_KEY_FILE_SIZE: u64 = 16 * 1024;
-const ENCRYPTION_ALGORITHM: &str = "age X25519";
-const RECIPIENT_REPLACEMENT_CONFIRMATION: &str = "公開鍵を変更する";
-const CEREMONY_COMPLETION_CONFIRMATION: &str = "復旧鍵の二経路保管と復号を確認した";
-const APPROVED_PRODUCTION_AGE_VERSION: &str = "v1.3.2";
-const PRODUCTION_KEY_PURPOSE: &str = "Kawashima Motors production backup encryption";
+const ENCRYPTION_ALGORITHM: &str = "age-passphrase";
+const ENCRYPTION_FORMAT: &str = "age";
+const ENCRYPTION_FORMAT_VERSION: u32 = 1;
+const MIN_RECOVERY_PASSWORD_CHARS: usize = 16;
 
 static BACKUP_RUNNING: AtomicBool = AtomicBool::new(false);
 
-#[derive(Default)]
-pub(crate) struct RecoveryKeyState(Mutex<Option<x25519::Identity>>);
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct EncryptionRecipientStatus {
+pub(crate) struct EncryptionStatus {
     configured: bool,
     state: String,
-    recipient: Option<String>,
-    fingerprint: Option<String>,
-    registered_at: Option<String>,
-    registered_by_app_version: Option<String>,
-    endpoint_id: Option<String>,
     algorithm: String,
-    ceremony_completed: bool,
-    ceremony_key_id: Option<String>,
-    ceremony_completed_at: Option<String>,
-    key_status: Option<PublicKeyStatus>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct CompleteProductionKeyCeremonyInput {
-    key_id: String,
-    generated_at: String,
-    age_version: String,
-    google_drive_stored_at: String,
-    external_media_stored_at: String,
-    google_drive_verified_at: String,
-    external_media_verified_at: String,
-    confirmation: String,
+    credential_mode: String,
+    endpoint_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 struct ValidatedEncryptionContext {
-    recipient: x25519::Recipient,
-    recipient_fingerprint: String,
-    key_id: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct RecoveryKeyImportStatus {
-    loaded: bool,
-    valid: bool,
-    fingerprint: String,
-    matches_recipient: Option<bool>,
+    passphrase: SecretString,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct BackupVerificationResult {
     ok: bool,
-    key_source: String,
-    key_fingerprint: String,
     database_dump_present: bool,
     manifests_present: bool,
     storage_present: bool,
@@ -138,10 +95,8 @@ pub(crate) struct BackupHistoryEntry {
     public_table_count: i64,
     #[serde(default)]
     endpoint_id: String,
-    #[serde(default)]
-    key_id: String,
-    #[serde(default)]
-    recipient_fingerprint: String,
+    #[serde(default = "default_encryption_scheme")]
+    encryption_scheme: String,
     #[serde(default)]
     plaintext_archive_sha256: String,
     #[serde(default)]
@@ -212,9 +167,15 @@ struct BackupManifest {
     database_manifest: String,
     storage_manifest: String,
     checksum_manifest: String,
-    encryption: String,
-    encryption_key_id: String,
-    encryption_recipient_fingerprint: String,
+    encryption: EncryptionManifest,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EncryptionManifest {
+    scheme: String,
+    format: String,
+    version: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -241,6 +202,10 @@ fn default_google_drive_sync_status() -> String {
     "notVerified".to_string()
 }
 
+fn default_encryption_scheme() -> String {
+    ENCRYPTION_ALGORITHM.to_string()
+}
+
 impl BackupRunGuard {
     fn acquire() -> Result<Self, String> {
         BACKUP_RUNNING
@@ -262,151 +227,23 @@ pub(crate) fn backup_is_running() -> bool {
 }
 
 #[tauri::command]
-pub(crate) fn get_encryption_recipient_status(app: AppHandle) -> EncryptionRecipientStatus {
-    encryption_recipient_status(&app)
-}
-
-#[tauri::command]
-pub(crate) fn register_encryption_recipient(
-    app: AppHandle,
-    recipient: String,
-    endpoint_id: String,
-    maintenance_token: Option<String>,
-    maintenance_state: State<'_, super::maintenance::MaintenanceState>,
-) -> Result<EncryptionRecipientStatus, String> {
-    if super::load_settings_from_disk(&app)?.setup_complete {
-        super::maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
-    }
-    let recipient = parse_encryption_recipient(&recipient)?;
-    let endpoint_id = validate_endpoint_id(&endpoint_id)?;
-    let mut settings = super::load_settings_from_disk(&app)?;
-    if recipient_registration_exists_and_matches(&settings, &recipient, &endpoint_id)? {
-        return Ok(encryption_recipient_status(&app));
-    }
-    apply_recipient_registration(&mut settings, &recipient, endpoint_id);
-    save_settings_to_disk(&app, &settings)?;
-    Ok(encryption_recipient_status(&app))
-}
-
-#[tauri::command]
-pub(crate) fn replace_encryption_recipient(
-    app: AppHandle,
-    recipient: String,
-    endpoint_id: String,
-    expected_current_fingerprint: String,
-    confirmation: String,
-    maintenance_token: Option<String>,
-    maintenance_state: State<'_, super::maintenance::MaintenanceState>,
-) -> Result<EncryptionRecipientStatus, String> {
-    super::maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
-    if confirmation != RECIPIENT_REPLACEMENT_CONFIRMATION {
-        return Err("公開鍵変更には明示的な保守確認が必要です。".to_string());
-    }
-    let recipient = parse_encryption_recipient(&recipient)?;
-    let endpoint_id = validate_endpoint_id(&endpoint_id)?;
-    let mut settings = super::load_settings_from_disk(&app)?;
-    let existing = settings
-        .encryption_recipient
-        .as_deref()
-        .ok_or_else(|| "登録済み公開鍵がありません。通常登録を使用してください。".to_string())?;
-    let existing = parse_encryption_recipient(existing)
-        .map_err(|_| "登録済み公開鍵が破損しています。自動上書きしません。".to_string())?;
-    if recipient_fingerprint(&existing) != expected_current_fingerprint {
-        return Err("現在の公開鍵fingerprintが一致しないため変更を中止しました。".to_string());
-    }
-    if existing == recipient && settings.endpoint_id.as_deref() == Some(endpoint_id.as_str()) {
-        return Ok(encryption_recipient_status(&app));
-    }
-    apply_recipient_registration(&mut settings, &recipient, endpoint_id);
-    save_settings_to_disk(&app, &settings)?;
-    Ok(encryption_recipient_status(&app))
-}
-
-#[tauri::command]
-pub(crate) fn complete_production_key_ceremony(
-    app: AppHandle,
-    input: CompleteProductionKeyCeremonyInput,
-    maintenance_token: Option<String>,
-    maintenance_state: State<'_, super::maintenance::MaintenanceState>,
-) -> Result<EncryptionRecipientStatus, String> {
-    super::maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
-    let mut settings = super::load_settings_from_disk(&app)?;
-    record_completed_ceremony(&mut settings, input, Utc::now())?;
-    save_settings_to_disk(&app, &settings)?;
-    Ok(encryption_recipient_status(&app))
-}
-
-#[tauri::command]
-pub(crate) fn import_recovery_key(
-    app: AppHandle,
-    path: String,
-    state: State<'_, RecoveryKeyState>,
-    maintenance_token: Option<String>,
-    maintenance_state: State<'_, super::maintenance::MaintenanceState>,
-) -> Result<RecoveryKeyImportStatus, String> {
-    super::maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
-    {
-        let mut loaded = state
-            .0
-            .lock()
-            .map_err(|_| "復旧鍵の状態を更新できませんでした。".to_string())?;
-        *loaded = None;
-    }
-    let identity = read_recovery_identity_file(Path::new(path.trim()))?;
-    let fingerprint = identity_fingerprint(&identity);
-    let settings = super::load_settings_from_disk(&app)?;
-    let matches_recipient = settings
-        .encryption_recipient
-        .as_deref()
-        .and_then(|value| parse_encryption_recipient(value).ok())
-        .map(|recipient| recipient_fingerprint(&recipient) == fingerprint);
-    let mut loaded = state
-        .0
-        .lock()
-        .map_err(|_| "復旧鍵の状態を更新できませんでした。".to_string())?;
-    *loaded = Some(identity);
-    Ok(RecoveryKeyImportStatus {
-        loaded: true,
-        valid: true,
-        fingerprint,
-        matches_recipient,
-    })
-}
-
-#[tauri::command]
-pub(crate) fn clear_imported_recovery_key(
-    state: State<'_, RecoveryKeyState>,
-) -> Result<(), String> {
-    let mut identity = state
-        .0
-        .lock()
-        .map_err(|_| "復旧鍵の状態を更新できませんでした。".to_string())?;
-    *identity = None;
-    Ok(())
+pub(crate) fn get_encryption_status(app: AppHandle) -> EncryptionStatus {
+    encryption_status(&app)
 }
 
 #[tauri::command]
 pub(crate) fn verify_backup_file(
     app: AppHandle,
     path: String,
-    state: State<'_, RecoveryKeyState>,
+    recovery_password: String,
     maintenance_token: Option<String>,
     maintenance_state: State<'_, super::maintenance::MaintenanceState>,
 ) -> Result<BackupVerificationResult, String> {
     super::maintenance::authorize(&maintenance_state, maintenance_token.as_deref())?;
-    let identity = state
-        .0
-        .lock()
-        .map_err(|_| "復旧鍵の状態を読み込めませんでした。".to_string())?
-        .take()
-        .ok_or_else(|| "有効な復旧鍵を先に読み込んでください。".to_string())?;
+    let recovery_password = Zeroizing::new(recovery_password);
+    let passphrase = validate_recovery_password(&recovery_password)?;
     let runtime = postgres_runtime::PostgresRuntime::resolve(&app)?;
-    verify_backup_file_with_identity(
-        Path::new(path.trim()),
-        &identity,
-        "復旧鍵",
-        &runtime.pg_restore,
-    )
+    verify_backup_file_with_passphrase(Path::new(path.trim()), &passphrase, &runtime.pg_restore)
 }
 
 #[tauri::command]
@@ -415,11 +252,15 @@ pub(crate) fn load_backup_history(app: AppHandle) -> Result<Vec<BackupHistoryEnt
 }
 
 #[tauri::command]
-pub(crate) async fn run_backup(app: AppHandle) -> Result<BackupResult, String> {
+pub(crate) async fn run_backup(
+    app: AppHandle,
+    recovery_password: String,
+) -> Result<BackupResult, String> {
     let _guard = BackupRunGuard::acquire()?;
     let settings = super::load_settings_from_disk(&app)?;
+    let recovery_password = Zeroizing::new(recovery_password);
     let failed_started_at = Utc::now();
-    let result = execute_backup(app.clone(), settings.clone()).await;
+    let result = execute_backup(app.clone(), settings.clone(), recovery_password).await;
     if let Err(error) = &result {
         let now = Utc::now();
         let failed_entry = BackupHistoryEntry {
@@ -440,17 +281,9 @@ pub(crate) async fn run_backup(app: AppHandle) -> Result<BackupResult, String> {
             storage_object_count: 0,
             public_table_count: 0,
             endpoint_id: settings.endpoint_id.clone().unwrap_or_default(),
-            recipient_fingerprint: settings
-                .encryption_recipient_fingerprint
-                .clone()
-                .unwrap_or_default(),
+            encryption_scheme: ENCRYPTION_ALGORITHM.to_string(),
             plaintext_archive_sha256: String::new(),
             application_version: env!("CARGO_PKG_VERSION").to_string(),
-            key_id: settings
-                .production_key_ceremony
-                .as_ref()
-                .map(|metadata| metadata.key_id.clone())
-                .unwrap_or_default(),
         };
         let _ = append_history(&app, failed_entry);
         emit_progress(
@@ -468,11 +301,10 @@ pub(crate) async fn run_backup(app: AppHandle) -> Result<BackupResult, String> {
 async fn execute_backup(
     app: AppHandle,
     settings: BackupToolSettings,
+    recovery_password: Zeroizing<String>,
 ) -> Result<BackupResult, String> {
-    let encryption = validate_backup_prerequisites(&app, &settings)?;
-    let recipient = encryption.recipient;
-    let recipient_fingerprint = encryption.recipient_fingerprint;
-    let key_id = encryption.key_id;
+    let encryption = validate_backup_prerequisites(&app, &settings, &recovery_password)?;
+    let passphrase = encryption.passphrase;
     let endpoint_id = settings
         .endpoint_id
         .clone()
@@ -619,9 +451,11 @@ async fn execute_backup(
         database_manifest: "manifests/database.json".to_string(),
         storage_manifest: "manifests/storage.json".to_string(),
         checksum_manifest: "verification/sha256sums.txt".to_string(),
-        encryption: ENCRYPTION_ALGORITHM.to_string(),
-        encryption_key_id: key_id.clone(),
-        encryption_recipient_fingerprint: recipient_fingerprint.clone(),
+        encryption: EncryptionManifest {
+            scheme: ENCRYPTION_ALGORITHM.to_string(),
+            format: ENCRYPTION_FORMAT.to_string(),
+            version: ENCRYPTION_FORMAT_VERSION,
+        },
     };
     let backup_report = BackupReport {
         status: "success".to_string(),
@@ -675,7 +509,7 @@ async fn execute_backup(
         None,
     );
     let encrypted_path = temp.path().join(&archive_name);
-    encrypt_file(&tar_path, &encrypted_path, &recipient)?;
+    encrypt_file(&tar_path, &encrypted_path, &passphrase)?;
     let encrypted_size = file_size(&encrypted_path)?;
     let encrypted_sha256 = sha256_file(&encrypted_path)?;
     emit_progress(
@@ -696,12 +530,18 @@ async fn execute_backup(
         None,
     );
     validate_encrypted_envelope(&encrypted_path)?;
+    verify_encrypted_backup(
+        &encrypted_path,
+        &passphrase,
+        &temp.path().join("self-check"),
+        &postgres_runtime.pg_restore,
+    )?;
     verify_checksum_manifest(&source_root, &verification_dir.join("sha256sums.txt"))?;
     emit_progress(
         &app,
         "verify",
         "complete",
-        "公開鍵暗号化と事前整合性を確認しました。",
+        "復旧パスワードで復号できることと事前整合性を確認しました。",
         None,
         None,
     );
@@ -745,8 +585,7 @@ async fn execute_backup(
         storage_object_count: storage_manifest.object_count,
         public_table_count: database_manifest.public_table_count,
         endpoint_id,
-        key_id,
-        recipient_fingerprint,
+        encryption_scheme: ENCRYPTION_ALGORITHM.to_string(),
         plaintext_archive_sha256,
         application_version: env!("CARGO_PKG_VERSION").to_string(),
     };
@@ -767,319 +606,31 @@ async fn execute_backup(
     })
 }
 
-fn encryption_recipient_status(app: &AppHandle) -> EncryptionRecipientStatus {
+fn encryption_status(app: &AppHandle) -> EncryptionStatus {
     let settings = super::load_settings_from_disk(app).unwrap_or_default();
-    let parsed = settings
-        .encryption_recipient
-        .as_deref()
-        .map(parse_encryption_recipient);
-    let (recipient, fingerprint, state) = match parsed {
-        Some(Ok(recipient)) => {
-            let fingerprint = recipient_fingerprint(&recipient);
-            if settings.encryption_recipient_fingerprint.as_deref() == Some(fingerprint.as_str()) {
-                (Some(recipient.to_string()), Some(fingerprint), "configured")
-            } else {
-                (None, None, "metadataMismatch")
-            }
-        }
-        Some(Err(_)) => (None, None, "invalid"),
-        None => (None, None, "missing"),
-    };
-    let ceremony = settings.production_key_ceremony.as_ref();
-    let ledger_entry = ceremony.and_then(|metadata| {
-        settings
-            .public_key_ledger
-            .iter()
-            .find(|entry| entry.key_id == metadata.key_id)
-    });
-    let ceremony_completed = validate_backup_encryption_authorization(&settings).is_ok();
-    EncryptionRecipientStatus {
-        configured: state == "configured",
-        state: state.to_string(),
-        recipient,
-        fingerprint,
-        registered_at: settings.encryption_recipient_registered_at,
-        registered_by_app_version: settings.encryption_recipient_registered_by_app_version,
+    let algorithm = settings
+        .encryption_algorithm
+        .unwrap_or_else(|| ENCRYPTION_ALGORITHM.to_string());
+    let configured = algorithm == ENCRYPTION_ALGORITHM;
+    EncryptionStatus {
+        configured,
+        state: if configured { "configured" } else { "invalid" }.to_string(),
+        algorithm,
+        credential_mode: "enteredPerBackup".to_string(),
         endpoint_id: settings.endpoint_id,
-        algorithm: settings
-            .encryption_algorithm
-            .unwrap_or_else(|| ENCRYPTION_ALGORITHM.to_string()),
-        ceremony_completed,
-        ceremony_key_id: ceremony.map(|metadata| metadata.key_id.clone()),
-        ceremony_completed_at: ceremony.map(|metadata| metadata.completed_at.clone()),
-        key_status: ledger_entry.map(|entry| entry.status.clone()),
     }
-}
-
-fn parse_encryption_recipient(value: &str) -> Result<x25519::Recipient, String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty()
-        || trimmed.lines().count() != 1
-        || trimmed.split_whitespace().count() != 1
-        || !trimmed.starts_with("age1")
-    {
-        return Err("有効なage X25519公開鍵を入力してください。".to_string());
-    }
-    x25519::Recipient::from_str(trimmed)
-        .map_err(|_| "有効なage X25519公開鍵を入力してください。".to_string())
-}
-
-fn validate_endpoint_id(value: &str) -> Result<String, String> {
-    let value = value.trim();
-    let valid = (3..=64).contains(&value.len())
-        && value.chars().all(|character| {
-            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
-        })
-        && value
-            .chars()
-            .next()
-            .is_some_and(|character| character.is_ascii_lowercase())
-        && value
-            .chars()
-            .last()
-            .is_some_and(|character| character.is_ascii_alphanumeric());
-    if !valid {
-        return Err(
-            "endpointIdは英小文字で始まる3〜64文字の英小文字・数字・ハイフンで指定してください。"
-                .to_string(),
-        );
-    }
-    Ok(value.to_string())
-}
-
-fn identity_fingerprint(identity: &x25519::Identity) -> String {
-    recipient_fingerprint(&identity.to_public())
-}
-
-fn recipient_fingerprint(recipient: &x25519::Recipient) -> String {
-    sha256_bytes(recipient.to_string().as_bytes())
-}
-
-fn apply_recipient_registration(
-    settings: &mut BackupToolSettings,
-    recipient: &x25519::Recipient,
-    endpoint_id: String,
-) {
-    let fingerprint = recipient_fingerprint(recipient);
-    let recipient_string = recipient.to_string();
-    let previous_fingerprint = settings.encryption_recipient_fingerprint.clone();
-    let registration_changed = settings
-        .encryption_recipient
-        .as_deref()
-        .is_some_and(|value| value != recipient_string)
-        || previous_fingerprint
-            .as_deref()
-            .is_some_and(|value| value != fingerprint)
-        || settings
-            .production_key_ceremony
-            .as_ref()
-            .is_some_and(|metadata| metadata.recipient_fingerprint != fingerprint);
-    let retired_other_key = retire_other_active_ledger_keys(settings, &fingerprint, Utc::now());
-    if registration_changed || retired_other_key {
-        settings.production_key_ceremony = None;
-    }
-    settings.encryption_recipient = Some(recipient_string);
-    settings.encryption_recipient_fingerprint = Some(fingerprint);
-    settings.encryption_recipient_registered_at =
-        Some(Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true));
-    settings.encryption_recipient_registered_by_app_version =
-        Some(env!("CARGO_PKG_VERSION").to_string());
-    settings.endpoint_id = Some(endpoint_id);
-    settings.encryption_algorithm = Some(ENCRYPTION_ALGORITHM.to_string());
-}
-
-fn retire_other_active_ledger_keys(
-    settings: &mut BackupToolSettings,
-    current_fingerprint: &str,
-    retired_at: DateTime<Utc>,
-) -> bool {
-    let retired_at = retired_at.to_rfc3339_opts(SecondsFormat::Secs, true);
-    let mut retired = false;
-    for entry in &mut settings.public_key_ledger {
-        if entry.fingerprint != current_fingerprint && entry.status == PublicKeyStatus::Active {
-            entry.status = PublicKeyStatus::Retired;
-            entry.retired_at = Some(retired_at.clone());
-            retired = true;
-        }
-    }
-    retired
-}
-
-fn record_completed_ceremony(
-    settings: &mut BackupToolSettings,
-    input: CompleteProductionKeyCeremonyInput,
-    completed_at: DateTime<Utc>,
-) -> Result<(), String> {
-    if input.confirmation != CEREMONY_COMPLETION_CONFIRMATION {
-        return Err("鍵式完了記録には二経路の保管・復号を実施した明示確認が必要です。".to_string());
-    }
-    if settings.production_key_ceremony.is_some() {
-        return Err("現在のrecipientには本番鍵式の完了記録がすでに存在します。".to_string());
-    }
-    let recipient = validate_registered_recipient(settings)?;
-    let fingerprint = recipient_fingerprint(&recipient);
-    let key_id = validate_key_id(&input.key_id)?;
-    if input.age_version.trim() != APPROVED_PRODUCTION_AGE_VERSION {
-        return Err(format!(
-            "本番鍵式のage versionは{APPROVED_PRODUCTION_AGE_VERSION}を指定してください。"
-        ));
-    }
-    let generated_at = validate_ceremony_timestamp("鍵生成日時", &input.generated_at)?;
-    let google_drive_stored_at =
-        validate_ceremony_timestamp("Google Drive保管確認日時", &input.google_drive_stored_at)?;
-    let external_media_stored_at =
-        validate_ceremony_timestamp("外部媒体保管確認日時", &input.external_media_stored_at)?;
-    let google_drive_verified_at = validate_ceremony_timestamp(
-        "Google Drive復旧鍵検証日時",
-        &input.google_drive_verified_at,
-    )?;
-    let external_media_verified_at =
-        validate_ceremony_timestamp("外部媒体復旧鍵検証日時", &input.external_media_verified_at)?;
-    if google_drive_stored_at < generated_at
-        || external_media_stored_at < generated_at
-        || google_drive_verified_at < google_drive_stored_at
-        || external_media_verified_at < external_media_stored_at
-        || completed_at < google_drive_verified_at
-        || completed_at < external_media_verified_at
-        || completed_at < generated_at
-    {
-        return Err("鍵式日時の前後関係を確認してください。".to_string());
-    }
-    if settings
-        .public_key_ledger
-        .iter()
-        .any(|entry| entry.key_id == key_id)
-    {
-        return Err("同じkey IDの公開鍵台帳エントリがすでに存在します。".to_string());
-    }
-    if settings
-        .public_key_ledger
-        .iter()
-        .any(|entry| entry.status == PublicKeyStatus::Active && entry.fingerprint != fingerprint)
-    {
-        return Err(
-            "別のactive鍵が公開鍵台帳に残っています。recipient変更手順を確認してください。"
-                .to_string(),
-        );
-    }
-
-    let generated_at = generated_at.to_rfc3339_opts(SecondsFormat::Secs, true);
-    let age_version = input.age_version.trim().to_string();
-    settings.public_key_ledger.push(PublicKeyLedgerEntry {
-        key_id: key_id.clone(),
-        public_recipient: recipient.to_string(),
-        fingerprint: fingerprint.clone(),
-        generated_at: generated_at.clone(),
-        age_version: age_version.clone(),
-        purpose: PRODUCTION_KEY_PURPOSE.to_string(),
-        status: PublicKeyStatus::Active,
-        retired_at: None,
-    });
-    settings.production_key_ceremony = Some(ProductionKeyCeremonyMetadata {
-        key_id,
-        public_recipient: recipient.to_string(),
-        recipient_fingerprint: fingerprint,
-        generated_at,
-        age_version,
-        google_drive_stored_at: google_drive_stored_at.to_rfc3339_opts(SecondsFormat::Secs, true),
-        external_media_stored_at: external_media_stored_at
-            .to_rfc3339_opts(SecondsFormat::Secs, true),
-        google_drive_verified_at: google_drive_verified_at
-            .to_rfc3339_opts(SecondsFormat::Secs, true),
-        external_media_verified_at: external_media_verified_at
-            .to_rfc3339_opts(SecondsFormat::Secs, true),
-        completed_at: completed_at.to_rfc3339_opts(SecondsFormat::Secs, true),
-        recorded_by_app_version: env!("CARGO_PKG_VERSION").to_string(),
-    });
-    Ok(())
-}
-
-fn validate_key_id(value: &str) -> Result<String, String> {
-    let value = value.trim();
-    let valid = (3..=64).contains(&value.len())
-        && value.chars().all(|character| {
-            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
-        })
-        && value
-            .chars()
-            .next()
-            .is_some_and(|character| character.is_ascii_lowercase())
-        && value
-            .chars()
-            .last()
-            .is_some_and(|character| character.is_ascii_alphanumeric());
-    if !valid {
-        return Err(
-            "key IDは英小文字で始まる3〜64文字の英小文字・数字・ハイフンで指定してください。"
-                .to_string(),
-        );
-    }
-    Ok(value.to_string())
-}
-
-fn validate_ceremony_timestamp(label: &str, value: &str) -> Result<DateTime<Utc>, String> {
-    DateTime::parse_from_rfc3339(value.trim())
-        .map(|value| value.with_timezone(&Utc))
-        .map_err(|_| format!("{label}はRFC 3339形式で入力してください。"))
-}
-
-fn recipient_registration_exists_and_matches(
-    settings: &BackupToolSettings,
-    recipient: &x25519::Recipient,
-    endpoint_id: &str,
-) -> Result<bool, String> {
-    let Some(existing) = settings.encryption_recipient.as_deref() else {
-        return Ok(false);
-    };
-    let existing = parse_encryption_recipient(existing).map_err(|_| {
-        "登録済み公開鍵が破損しています。自動上書きせず保守担当へ連絡してください。".to_string()
-    })?;
-    if existing != *recipient || settings.endpoint_id.as_deref() != Some(endpoint_id) {
-        return Err("異なる公開鍵またはendpointIdは通常登録では上書きできません。保守操作を使用してください。".to_string());
-    }
-    Ok(true)
-}
-
-fn read_recovery_identity_file(path: &Path) -> Result<x25519::Identity, String> {
-    if !path.is_file() {
-        return Err("復旧鍵ファイルを読み込めませんでした。".to_string());
-    }
-    let metadata =
-        fs::metadata(path).map_err(|_| "復旧鍵ファイルを読み込めませんでした。".to_string())?;
-    if metadata.len() == 0 || metadata.len() > MAX_RECOVERY_KEY_FILE_SIZE {
-        return Err("復旧鍵ファイルの形式が正しくありません。".to_string());
-    }
-    let content = Zeroizing::new(
-        fs::read_to_string(path)
-            .map_err(|_| "復旧鍵ファイルを読み込めませんでした。".to_string())?,
-    );
-    parse_recovery_identity(&content)
-}
-
-fn parse_recovery_identity(content: &str) -> Result<x25519::Identity, String> {
-    let mut identities = content
-        .lines()
-        .map(str::trim)
-        .filter(|line| line.starts_with("AGE-SECRET-KEY-"));
-    let encoded = identities
-        .next()
-        .ok_or_else(|| "有効なage X25519復旧鍵ではありません。".to_string())?;
-    if identities.next().is_some() {
-        return Err("復旧鍵ファイルに複数の秘密鍵が含まれています。".to_string());
-    }
-    x25519::Identity::from_str(encoded)
-        .map_err(|_| "有効なage X25519復旧鍵ではありません。".to_string())
 }
 
 fn validate_backup_prerequisites(
     app: &AppHandle,
     settings: &BackupToolSettings,
+    recovery_password: &str,
 ) -> Result<ValidatedEncryptionContext, String> {
     super::validate_settings(settings)?;
     if !settings.setup_complete {
         return Err("初回セットアップを完了してください。".to_string());
     }
-    let encryption = validate_backup_encryption_authorization(settings)?;
+    let encryption = validate_backup_encryption_authorization(settings, recovery_password)?;
     let _db_password = Zeroizing::new(read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?);
     let _storage_auth_password = Zeroizing::new(read_secret(
         ACCOUNT_STORAGE_AUTH_PASSWORD,
@@ -1105,88 +656,35 @@ fn validate_backup_prerequisites(
 
 fn validate_backup_encryption_authorization(
     settings: &BackupToolSettings,
+    recovery_password: &str,
 ) -> Result<ValidatedEncryptionContext, String> {
-    let recipient = validate_registered_recipient(settings)?;
-    let fingerprint = recipient_fingerprint(&recipient);
-    let ceremony = settings
-        .production_key_ceremony
-        .as_ref()
-        .ok_or_else(|| "本番鍵式の完了記録がないためバックアップを開始できません。".to_string())?;
-    if ceremony.public_recipient != recipient.to_string()
-        || ceremony.recipient_fingerprint != fingerprint
-    {
-        return Err(
-            "本番鍵式のfingerprintが現在のage公開鍵と一致しないためバックアップを開始できません。"
-                .to_string(),
-        );
+    if settings.encryption_algorithm.as_deref() != Some(ENCRYPTION_ALGORITHM) {
+        return Err("暗号化方式はage passphrase方式で設定してください。".to_string());
     }
-    let ledger = settings
-        .public_key_ledger
-        .iter()
-        .find(|entry| entry.key_id == ceremony.key_id)
-        .ok_or_else(|| "本番鍵式に対応する公開鍵台帳エントリがありません。".to_string())?;
-    if ledger.status != PublicKeyStatus::Active || ledger.retired_at.is_some() {
-        return Err("retired鍵では新しいバックアップを作成できません。".to_string());
-    }
-    if ledger.public_recipient != recipient.to_string()
-        || ledger.fingerprint != fingerprint
-        || ledger.generated_at != ceremony.generated_at
-        || ledger.age_version != ceremony.age_version
-        || ledger.age_version != APPROVED_PRODUCTION_AGE_VERSION
-        || ledger.purpose != PRODUCTION_KEY_PURPOSE
-    {
-        return Err("本番鍵式metadata、公開鍵台帳、現在のage公開鍵が一致しません。".to_string());
-    }
-    for (label, value) in [
-        ("鍵生成日時", ceremony.generated_at.as_str()),
-        (
-            "Google Drive保管確認日時",
-            ceremony.google_drive_stored_at.as_str(),
-        ),
-        (
-            "外部媒体保管確認日時",
-            ceremony.external_media_stored_at.as_str(),
-        ),
-        (
-            "Google Drive復旧鍵検証日時",
-            ceremony.google_drive_verified_at.as_str(),
-        ),
-        (
-            "外部媒体復旧鍵検証日時",
-            ceremony.external_media_verified_at.as_str(),
-        ),
-        ("鍵式完了日時", ceremony.completed_at.as_str()),
-    ] {
-        validate_ceremony_timestamp(label, value)?;
-    }
-    Ok(ValidatedEncryptionContext {
-        recipient,
-        recipient_fingerprint: fingerprint,
-        key_id: ledger.key_id.clone(),
-    })
+    validate_recovery_password(recovery_password)
+        .map(|passphrase| ValidatedEncryptionContext { passphrase })
 }
 
-pub(crate) fn validate_registered_recipient(
-    settings: &BackupToolSettings,
-) -> Result<x25519::Recipient, String> {
-    let recipient = parse_encryption_recipient(
-        settings
-            .encryption_recipient
-            .as_deref()
-            .ok_or_else(|| "age公開鍵が未設定です。".to_string())?,
-    )?;
-    let fingerprint = recipient_fingerprint(&recipient);
-    if settings.encryption_recipient_fingerprint.as_deref() != Some(fingerprint.as_str()) {
+fn validate_recovery_password(recovery_password: &str) -> Result<SecretString, String> {
+    let trimmed = recovery_password.trim();
+    if trimmed.is_empty() {
+        return Err("復旧パスワードを入力してください。".to_string());
+    }
+    if trimmed.chars().count() < MIN_RECOVERY_PASSWORD_CHARS {
+        return Err(format!(
+            "復旧パスワードは{MIN_RECOVERY_PASSWORD_CHARS}文字以上を使用してください。"
+        ));
+    }
+    if trimmed
+        .chars()
+        .all(|character| character == trimmed.chars().next().unwrap_or_default())
+    {
         return Err(
-            "age公開鍵fingerprintが設定と一致しません。自動修復せず保守担当へ連絡してください。"
+            "復旧パスワードが単純すぎます。Apple Passwordsで生成した強い値を使用してください。"
                 .to_string(),
         );
     }
-    validate_endpoint_id(settings.endpoint_id.as_deref().unwrap_or_default())?;
-    if settings.encryption_algorithm.as_deref() != Some(ENCRYPTION_ALGORITHM) {
-        return Err("暗号化方式の設定が一致しません。".to_string());
-    }
-    Ok(recipient)
+    Ok(SecretString::from(trimmed.to_string()))
 }
 
 fn archive_file_name(endpoint_id: &str, backup_id: &str) -> String {
@@ -1456,9 +954,8 @@ fn create_tar_archive(source_root: &Path, destination: &Path) -> Result<(), Stri
     builder.finish().map_err(|error| sanitized_error(error))
 }
 
-fn encrypt_file(input: &Path, output: &Path, recipient: &x25519::Recipient) -> Result<(), String> {
-    let encryptor = Encryptor::with_recipients(std::iter::once(recipient as &dyn age::Recipient))
-        .map_err(|error| sanitized_error(error))?;
+fn encrypt_file(input: &Path, output: &Path, passphrase: &SecretString) -> Result<(), String> {
+    let encryptor = Encryptor::with_user_passphrase(passphrase.clone());
     let source = File::open(input).map_err(|error| sanitized_error(error))?;
     let destination = BufWriter::new(File::create(output).map_err(|error| sanitized_error(error))?);
     let mut writer = encryptor
@@ -1477,10 +974,9 @@ fn validate_encrypted_envelope(encrypted: &Path) -> Result<(), String> {
         .map_err(|_| "age暗号化ファイルの形式を確認できませんでした。".to_string())
 }
 
-fn verify_backup_file_with_identity(
+fn verify_backup_file_with_passphrase(
     encrypted: &Path,
-    identity: &x25519::Identity,
-    source_label: &str,
+    passphrase: &SecretString,
     pg_restore: &Path,
 ) -> Result<BackupVerificationResult, String> {
     if !encrypted.is_file() {
@@ -1488,8 +984,7 @@ fn verify_backup_file_with_identity(
     }
     let temp = file_security::PrivateTempDir::new("kawashima-backup-verify-")?;
     let temp_path = temp.path().to_path_buf();
-    let verification = verify_encrypted_backup(encrypted, identity, temp.path(), pg_restore);
-    let fingerprint = identity_fingerprint(identity);
+    let verification = verify_encrypted_backup(encrypted, passphrase, temp.path(), pg_restore);
     temp.close()?;
     if temp_path.exists() {
         return Err("復号確認用の一時ファイルを削除できませんでした。".to_string());
@@ -1497,8 +992,6 @@ fn verify_backup_file_with_identity(
     let structure = verification?;
     Ok(BackupVerificationResult {
         ok: true,
-        key_source: source_label.to_string(),
-        key_fingerprint: fingerprint,
         database_dump_present: structure.database_dump_present,
         manifests_present: structure.manifests_present,
         storage_present: structure.storage_present,
@@ -1511,18 +1004,22 @@ fn verify_backup_file_with_identity(
 
 fn verify_encrypted_backup(
     encrypted: &Path,
-    identity: &x25519::Identity,
+    passphrase: &SecretString,
     temp_root: &Path,
     pg_restore: &Path,
 ) -> Result<VerifiedBackupStructure, String> {
+    fs::create_dir_all(temp_root).map_err(|error| sanitized_error(error))?;
     let decrypted_tar = temp_root.join("verification.tar");
     let encrypted_reader =
         BufReader::new(File::open(encrypted).map_err(|error| sanitized_error(error))?);
     let decryptor =
         Decryptor::new_buffered(encrypted_reader).map_err(|error| sanitized_error(error))?;
+    let identity = age::scrypt::Identity::new(passphrase.clone());
     let mut reader = decryptor
-        .decrypt(std::iter::once(identity as &dyn age::Identity))
-        .map_err(|error| sanitized_error(error))?;
+        .decrypt(std::iter::once(&identity as &dyn age::Identity))
+        .map_err(|_| {
+            "復旧パスワードが正しくないか、バックアップファイルを復号できませんでした。".to_string()
+        })?;
     let mut output =
         BufWriter::new(File::create(&decrypted_tar).map_err(|error| sanitized_error(error))?);
     std::io::copy(&mut reader, &mut output).map_err(|error| sanitized_error(error))?;
@@ -1571,6 +1068,28 @@ fn verify_encrypted_backup(
         database_structure_valid: true,
         plaintext_archive_sha256,
     })
+}
+
+#[cfg(test)]
+fn decrypt_file_to_path(
+    encrypted: &Path,
+    output: &Path,
+    passphrase: &SecretString,
+) -> Result<(), String> {
+    let encrypted_reader =
+        BufReader::new(File::open(encrypted).map_err(|error| sanitized_error(error))?);
+    let decryptor =
+        Decryptor::new_buffered(encrypted_reader).map_err(|error| sanitized_error(error))?;
+    let identity = age::scrypt::Identity::new(passphrase.clone());
+    let mut reader = decryptor
+        .decrypt(std::iter::once(&identity as &dyn age::Identity))
+        .map_err(|_| {
+            "復旧パスワードが正しくないか、バックアップファイルを復号できませんでした。".to_string()
+        })?;
+    let mut destination =
+        BufWriter::new(File::create(output).map_err(|error| sanitized_error(error))?);
+    std::io::copy(&mut reader, &mut destination).map_err(|error| sanitized_error(error))?;
+    destination.flush().map_err(|error| sanitized_error(error))
 }
 
 fn verify_checksum_manifest(root: &Path, manifest: &Path) -> Result<(), String> {
@@ -1760,8 +1279,11 @@ mod tests {
     use age::secrecy::ExposeSecret;
     use tempfile::TempDir;
 
+    fn test_passphrase() -> SecretString {
+        SecretString::from("correct horse battery staple 2026".to_string())
+    }
+
     fn test_settings(root: &Path) -> BackupToolSettings {
-        let recipient = x25519::Identity::generate().to_public();
         BackupToolSettings {
             supabase_project_url: "https://example.supabase.co".to_string(),
             supabase_publishable_key: "publishable-test".to_string(),
@@ -1773,39 +1295,16 @@ mod tests {
             connection_mode: super::super::ConnectionMode::Session,
             local_backup_path: root.join("local").to_string_lossy().to_string(),
             google_drive_path: root.join("drive").to_string_lossy().to_string(),
-            encryption_recipient: Some(recipient.to_string()),
-            encryption_recipient_fingerprint: Some(recipient_fingerprint(&recipient)),
-            encryption_recipient_registered_at: Some("2026-08-28T00:00:00Z".to_string()),
-            encryption_recipient_registered_by_app_version: Some("0.3.0".to_string()),
             endpoint_id: Some("test-endpoint".to_string()),
             encryption_algorithm: Some(ENCRYPTION_ALGORITHM.to_string()),
-            public_key_ledger: Vec::new(),
-            production_key_ceremony: None,
             setup_complete: true,
             setup_step: 6,
             setup_completed_at: Some("2026-08-28T00:00:00Z".to_string()),
         }
     }
 
-    fn complete_test_ceremony(settings: &mut BackupToolSettings, key_id: &str) {
-        let input = CompleteProductionKeyCeremonyInput {
-            key_id: key_id.to_string(),
-            generated_at: "2026-08-28T00:00:00Z".to_string(),
-            age_version: APPROVED_PRODUCTION_AGE_VERSION.to_string(),
-            google_drive_stored_at: "2026-08-28T00:05:00Z".to_string(),
-            external_media_stored_at: "2026-08-28T00:06:00Z".to_string(),
-            google_drive_verified_at: "2026-08-28T00:10:00Z".to_string(),
-            external_media_verified_at: "2026-08-28T00:11:00Z".to_string(),
-            confirmation: CEREMONY_COMPLETION_CONFIRMATION.to_string(),
-        };
-        let completed_at = DateTime::parse_from_rfc3339("2026-08-28T00:15:00Z")
-            .unwrap()
-            .with_timezone(&Utc);
-        record_completed_ceremony(settings, input, completed_at).unwrap();
-    }
-
     #[cfg(unix)]
-    fn create_test_backup(root: &Path, recipient: &x25519::Recipient) -> PathBuf {
+    fn create_test_backup(root: &Path, passphrase: &SecretString) -> PathBuf {
         let source = root.join("source").join(ARCHIVE_ROOT);
         fs::create_dir_all(source.join("database")).unwrap();
         fs::create_dir_all(source.join("manifests")).unwrap();
@@ -1820,7 +1319,7 @@ mod tests {
         let archive = root.join("test.tar");
         create_tar_archive(&source, &archive).unwrap();
         let encrypted = root.join("test.tar.age");
-        encrypt_file(&archive, &encrypted, recipient).unwrap();
+        encrypt_file(&archive, &encrypted, passphrase).unwrap();
         encrypted
     }
 
@@ -1834,194 +1333,64 @@ mod tests {
     }
 
     #[test]
-    fn age_round_trip_and_wrong_key_failure() {
+    fn age_passphrase_round_trip_and_wrong_password_failure() {
         let temp = TempDir::new().unwrap();
         let input = temp.path().join("input.tar");
         let encrypted = temp.path().join("input.tar.age");
         fs::write(&input, b"backup contents").unwrap();
-        let identity = x25519::Identity::generate();
-        encrypt_file(&input, &encrypted, &identity.to_public()).unwrap();
-        let ciphertext = fs::read(&encrypted).unwrap();
-        assert_eq!(
-            age::decrypt(&identity, &ciphertext).unwrap(),
-            b"backup contents"
-        );
-        assert!(age::decrypt(&x25519::Identity::generate(), &ciphertext).is_err());
+        let passphrase = test_passphrase();
+        encrypt_file(&input, &encrypted, &passphrase).unwrap();
+        let temp_root = temp.path().join("decrypt-ok");
+        fs::create_dir_all(&temp_root).unwrap();
+        let output = temp_root.join("out.tar");
+        decrypt_file_to_path(&encrypted, &output, &passphrase).unwrap();
+        assert_eq!(fs::read(output).unwrap(), b"backup contents");
+
+        let wrong = SecretString::from("wrong horse battery staple 2026".to_string());
+        assert!(decrypt_file_to_path(&encrypted, &temp.path().join("wrong.tar"), &wrong).is_err());
     }
 
     #[test]
-    fn valid_recovery_key_imports_and_invalid_key_is_rejected() {
-        let identity = x25519::Identity::generate();
-        let recovery = format!("# recovery key\n{}\n", identity.to_string().expose_secret());
-        let imported = parse_recovery_identity(&recovery).unwrap();
-        assert_eq!(
-            identity_fingerprint(&imported),
-            identity_fingerprint(&identity)
-        );
-        assert!(parse_recovery_identity("not-a-recovery-key").is_err());
-        assert!(parse_recovery_identity("AGE-SECRET-KEY-INVALID").is_err());
-    }
-
-    #[test]
-    fn recovery_key_fingerprint_detects_match_and_mismatch() {
-        let first = x25519::Identity::generate();
-        let same = x25519::Identity::from_str(first.to_string().expose_secret()).unwrap();
-        let other = x25519::Identity::generate();
-        assert_eq!(identity_fingerprint(&first), identity_fingerprint(&same));
-        assert_ne!(identity_fingerprint(&first), identity_fingerprint(&other));
-    }
-
-    #[test]
-    fn recipient_parser_accepts_one_x25519_public_key_only() {
-        let recipient = x25519::Identity::generate().to_public().to_string();
-        assert!(parse_encryption_recipient(&recipient).is_ok());
-        assert!(parse_encryption_recipient(&format!("{recipient}\n{recipient}")).is_err());
-        assert!(parse_encryption_recipient("AGE-SECRET-KEY-INVALID").is_err());
-        assert!(parse_encryption_recipient("not-an-age-recipient").is_err());
-    }
-
-    #[test]
-    fn recipient_registration_metadata_tracks_fingerprint_endpoint_and_version() {
+    fn backup_guard_requires_passphrase_scheme_and_usable_password() {
         let temp = TempDir::new().unwrap();
         let mut settings = test_settings(temp.path());
-        let recipient = x25519::Identity::generate().to_public();
-        apply_recipient_registration(&mut settings, &recipient, "mac-secondary".to_string());
-        assert_eq!(
-            settings.encryption_recipient.as_deref(),
-            Some(recipient.to_string().as_str())
+        let password = "correct horse battery staple 2026";
+        let validated = validate_backup_encryption_authorization(&settings, password).unwrap();
+        assert_eq!(validated.passphrase.expose_secret(), password);
+
+        settings.encryption_algorithm = Some("age X25519".to_string());
+        assert!(
+            validate_backup_encryption_authorization(&settings, password)
+                .unwrap_err()
+                .contains("age passphrase")
         );
-        assert_eq!(
-            settings.encryption_recipient_fingerprint.as_deref(),
-            Some(recipient_fingerprint(&recipient).as_str())
+
+        settings.encryption_algorithm = Some(ENCRYPTION_ALGORITHM.to_string());
+        assert!(validate_backup_encryption_authorization(&settings, "")
+            .unwrap_err()
+            .contains("復旧パスワード"));
+        assert!(validate_backup_encryption_authorization(&settings, "short")
+            .unwrap_err()
+            .contains("16文字以上"));
+        assert!(
+            validate_backup_encryption_authorization(&settings, "aaaaaaaaaaaaaaaa")
+                .unwrap_err()
+                .contains("単純すぎ")
         );
-        assert_eq!(settings.endpoint_id.as_deref(), Some("mac-secondary"));
-        assert_eq!(
-            settings.encryption_algorithm.as_deref(),
-            Some(ENCRYPTION_ALGORITHM)
-        );
-        assert_eq!(
-            settings
-                .encryption_recipient_registered_by_app_version
-                .as_deref(),
-            Some(env!("CARGO_PKG_VERSION"))
-        );
-        assert!(settings.encryption_recipient_registered_at.is_some());
     }
 
     #[test]
-    fn normal_registration_refuses_a_different_recipient_or_endpoint() {
+    fn settings_and_backup_manifest_contain_passphrase_scheme_without_secrets() {
         let temp = TempDir::new().unwrap();
         let settings = test_settings(temp.path());
-        let existing =
-            parse_encryption_recipient(settings.encryption_recipient.as_deref().unwrap()).unwrap();
-        assert!(
-            recipient_registration_exists_and_matches(&settings, &existing, "test-endpoint")
-                .unwrap()
-        );
-        assert!(recipient_registration_exists_and_matches(
-            &settings,
-            &x25519::Identity::generate().to_public(),
-            "test-endpoint",
-        )
-        .is_err());
-        assert!(
-            recipient_registration_exists_and_matches(&settings, &existing, "other-endpoint")
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn production_backup_guard_requires_registered_recipient_and_completed_ceremony() {
-        let temp = TempDir::new().unwrap();
-        let mut settings = test_settings(temp.path());
-        settings.encryption_recipient = None;
-        settings.encryption_recipient_fingerprint = None;
-        assert!(validate_backup_encryption_authorization(&settings)
-            .unwrap_err()
-            .contains("age公開鍵が未設定"));
-
-        let recipient = x25519::Identity::generate().to_public();
-        apply_recipient_registration(&mut settings, &recipient, "test-endpoint".to_string());
-        assert!(validate_backup_encryption_authorization(&settings)
-            .unwrap_err()
-            .contains("本番鍵式の完了記録がない"));
-
-        complete_test_ceremony(&mut settings, "kawashima-prod-2026-01");
-        let validated = validate_backup_encryption_authorization(&settings).unwrap();
-        assert_eq!(validated.key_id, "kawashima-prod-2026-01");
-        assert_eq!(
-            settings
-                .production_key_ceremony
-                .as_ref()
-                .unwrap()
-                .public_recipient,
-            settings.encryption_recipient.clone().unwrap()
-        );
-        assert_eq!(
-            validated.recipient_fingerprint,
-            recipient_fingerprint(&recipient)
-        );
-    }
-
-    #[test]
-    fn recipient_change_retires_old_key_and_requires_a_new_ceremony() {
-        let temp = TempDir::new().unwrap();
-        let mut settings = test_settings(temp.path());
-        complete_test_ceremony(&mut settings, "kawashima-prod-2026-01");
-        let old_fingerprint = settings.encryption_recipient_fingerprint.clone().unwrap();
-
-        let replacement = x25519::Identity::generate().to_public();
-        apply_recipient_registration(&mut settings, &replacement, "test-endpoint".to_string());
-
-        assert!(settings.production_key_ceremony.is_none());
-        let old_entry = settings
-            .public_key_ledger
-            .iter()
-            .find(|entry| entry.fingerprint == old_fingerprint)
-            .unwrap();
-        assert_eq!(old_entry.status, PublicKeyStatus::Retired);
-        assert!(old_entry.retired_at.is_some());
-        assert!(validate_backup_encryption_authorization(&settings).is_err());
-    }
-
-    #[test]
-    fn mismatched_fingerprint_and_retired_key_block_new_backups() {
-        let temp = TempDir::new().unwrap();
-        let mut settings = test_settings(temp.path());
-        complete_test_ceremony(&mut settings, "kawashima-prod-2026-01");
-
-        settings
-            .production_key_ceremony
-            .as_mut()
-            .unwrap()
-            .recipient_fingerprint = "0".repeat(64);
-        assert!(validate_backup_encryption_authorization(&settings)
-            .unwrap_err()
-            .contains("fingerprint"));
-
-        settings
-            .production_key_ceremony
-            .as_mut()
-            .unwrap()
-            .recipient_fingerprint = settings.encryption_recipient_fingerprint.clone().unwrap();
-        settings.public_key_ledger[0].status = PublicKeyStatus::Retired;
-        settings.public_key_ledger[0].retired_at = Some("2026-08-29T00:00:00Z".to_string());
-        assert!(validate_backup_encryption_authorization(&settings)
-            .unwrap_err()
-            .contains("retired"));
-    }
-
-    #[test]
-    fn public_settings_and_backup_manifest_contain_key_tracking_without_secrets() {
-        let temp = TempDir::new().unwrap();
-        let mut settings = test_settings(temp.path());
-        complete_test_ceremony(&mut settings, "kawashima-prod-2026-01");
         let settings_json = serde_json::to_string(&settings).unwrap();
+        assert!(settings_json.contains(ENCRYPTION_ALGORITHM));
         assert!(!settings_json.contains("AGE-SECRET-KEY-"));
-        assert!(!settings_json.to_lowercase().contains("passphrase"));
+        assert!(!settings_json.to_lowercase().contains("recoverypassword"));
+        assert!(!settings_json.to_lowercase().contains("password"));
         assert!(!settings_json.to_lowercase().contains("privatekey"));
+        assert!(!settings_json.to_lowercase().contains("publickeyledger"));
 
-        let fingerprint = settings.encryption_recipient_fingerprint.clone().unwrap();
         let manifest = BackupManifest {
             format_version: 2,
             backup_id: "fixture".to_string(),
@@ -2032,15 +1401,19 @@ mod tests {
             database_manifest: "manifests/database.json".to_string(),
             storage_manifest: "manifests/storage.json".to_string(),
             checksum_manifest: "verification/sha256sums.txt".to_string(),
-            encryption: ENCRYPTION_ALGORITHM.to_string(),
-            encryption_key_id: "kawashima-prod-2026-01".to_string(),
-            encryption_recipient_fingerprint: fingerprint.clone(),
+            encryption: EncryptionManifest {
+                scheme: ENCRYPTION_ALGORITHM.to_string(),
+                format: ENCRYPTION_FORMAT.to_string(),
+                version: ENCRYPTION_FORMAT_VERSION,
+            },
         };
         let manifest_json = serde_json::to_string(&manifest).unwrap();
-        assert!(manifest_json.contains("kawashima-prod-2026-01"));
-        assert!(manifest_json.contains(&fingerprint));
+        assert!(manifest_json.contains(ENCRYPTION_ALGORITHM));
+        assert!(manifest_json.contains(ENCRYPTION_FORMAT));
         assert!(!manifest_json.contains("AGE-SECRET-KEY-"));
-        assert!(!manifest_json.to_lowercase().contains("passphrase"));
+        assert!(!manifest_json.to_lowercase().contains("recoverypassword"));
+        assert!(!manifest_json.to_lowercase().contains("password"));
+        assert!(!manifest_json.to_lowercase().contains("fingerprint"));
     }
 
     #[test]
@@ -2055,15 +1428,14 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn public_recipient_encrypts_and_matching_recovery_key_verifies_backup() {
+    fn passphrase_encrypted_backup_verifies_with_password() {
         let temp = TempDir::new().unwrap();
-        let identity = x25519::Identity::generate();
-        let recovery = x25519::Identity::from_str(identity.to_string().expose_secret()).unwrap();
-        let encrypted = create_test_backup(temp.path(), &identity.to_public());
+        let passphrase = test_passphrase();
+        let encrypted = create_test_backup(temp.path(), &passphrase);
         let pg_restore = fake_pg_restore(temp.path());
 
         let recovery_result =
-            verify_backup_file_with_identity(&encrypted, &recovery, "復旧鍵", &pg_restore).unwrap();
+            verify_backup_file_with_passphrase(&encrypted, &passphrase, &pg_restore).unwrap();
         assert!(recovery_result.ok);
         assert!(recovery_result.temporary_files_removed);
         assert!(recovery_result.database_dump_present);
@@ -2072,10 +1444,9 @@ mod tests {
         assert!(recovery_result.verification_present);
         assert!(recovery_result.database_structure_valid);
         assert_eq!(recovery_result.plaintext_archive_sha256.len(), 64);
-        assert!(verify_backup_file_with_identity(
+        assert!(verify_backup_file_with_passphrase(
             &encrypted,
-            &x25519::Identity::generate(),
-            "復旧鍵",
+            &SecretString::from("wrong horse battery staple 2026".to_string()),
             &pg_restore,
         )
         .is_err());
@@ -2257,7 +1628,7 @@ mod tests {
         }"#;
         let entry: BackupHistoryEntry = serde_json::from_str(legacy).unwrap();
         assert!(entry.endpoint_id.is_empty());
-        assert!(entry.recipient_fingerprint.is_empty());
+        assert_eq!(entry.encryption_scheme, ENCRYPTION_ALGORITHM);
         assert!(entry.plaintext_archive_sha256.is_empty());
         assert!(entry.application_version.is_empty());
     }
