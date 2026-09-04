@@ -2376,7 +2376,7 @@ dependencies = [
 
 [[package]]
 name = "kawashima-backup-tool"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "age",
  "argon2",

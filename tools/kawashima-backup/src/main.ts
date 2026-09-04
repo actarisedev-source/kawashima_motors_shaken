@@ -110,7 +110,7 @@ const app: HTMLDivElement = appRoot;
 
 const emptySetup: SetupStatus = {
   complete: false, currentStep: 1, totalSteps: 6,
-  maintenanceConfigured: false, platform: "", applicationVersion: "0.4.0",
+  maintenanceConfigured: false, platform: "", applicationVersion: "0.5.0",
 };
 const emptyMaintenance: MaintenanceStatus = { configured: false, state: "missing", unlocked: false };
 const emptyEncryption: EncryptionStatus = {
