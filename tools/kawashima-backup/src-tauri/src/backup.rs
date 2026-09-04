@@ -7,7 +7,7 @@ use std::{
 
 use age::{secrecy::SecretString, Decryptor, Encryptor};
 use chrono::{Local, SecondsFormat, Utc};
-use reqwest::header::HeaderMap;
+use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -15,16 +15,19 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use zeroize::Zeroizing;
 
 use super::{
-    build_database_tls_connector, build_db_config, connection_mode_label, normalize_project_url,
-    read_secret, sanitized_error, storage_auth, BackupToolSettings, ACCOUNT_DB_PASSWORD,
-    ACCOUNT_STORAGE_AUTH_PASSWORD, SUPABASE_ROOT_CA_PEM,
+    build_database_tls_connector, build_db_config, build_db_config_for_user, connection_mode_label,
+    normalize_project_url, read_secret, restore_db_credentials, sanitized_error, storage_auth,
+    BackupToolSettings, ACCOUNT_DB_PASSWORD, ACCOUNT_STORAGE_AUTH_PASSWORD,
+    ACCOUNT_STORAGE_RESTORE_AUTH_PASSWORD, SUPABASE_ROOT_CA_PEM,
 };
 use super::{file_security, postgres_runtime};
 
 const HISTORY_FILE_NAME: &str = "backup-history.json";
+const RESTORE_JOURNAL_FILE_NAME: &str = "restore-journal.json";
 const STORAGE_BUCKET: &str = "line-message-images";
 const STORAGE_PAGE_SIZE: usize = 100;
 const STORAGE_DOWNLOAD_ATTEMPTS: usize = 3;
+const STORAGE_UPLOAD_ATTEMPTS: usize = 3;
 const PROGRESS_EVENT: &str = "backup-progress";
 const ARCHIVE_ROOT: &str = "kawashima-backup";
 const DUMP_FILE_NAME: &str = "public.dump";
@@ -34,6 +37,7 @@ const ENCRYPTION_FORMAT_VERSION: u32 = 1;
 const MIN_RECOVERY_PASSWORD_CHARS: usize = 16;
 
 static BACKUP_RUNNING: AtomicBool = AtomicBool::new(false);
+static RESTORE_RUNNING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -71,6 +75,21 @@ struct VerifiedBackupStructure {
     verification_present: bool,
     database_structure_valid: bool,
     plaintext_archive_sha256: String,
+}
+
+#[derive(Debug, Clone)]
+struct VerifiedExtractedBackup {
+    structure: VerifiedBackupStructure,
+    root: PathBuf,
+    backup_manifest: BackupManifest,
+    database_manifest: DatabaseManifest,
+    storage_manifest: StorageManifest,
+}
+
+#[derive(Debug, Clone)]
+struct BasicExtractedBackup {
+    structure: VerifiedBackupStructure,
+    root: PathBuf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,6 +130,33 @@ pub(crate) struct BackupResult {
     google_drive_path: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RestoreJournalEntry {
+    restore_id: String,
+    started_at: String,
+    completed_at: Option<String>,
+    target_backup: String,
+    backup_sha256: String,
+    pre_restore_backup_id: Option<String>,
+    db_restore_status: String,
+    storage_restore_status: String,
+    verification_status: String,
+    error_summary: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RestoreResult {
+    restore_id: String,
+    pre_restore_backup_id: String,
+    db_restored: bool,
+    storage_restored: bool,
+    verification_ok: bool,
+    restored_storage_objects: usize,
+    checked_table_count: usize,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BackupProgress {
@@ -133,8 +179,17 @@ struct DatabaseManifest {
     dump_size: u64,
     dump_sha256: String,
     public_table_count: i64,
+    #[serde(default)]
+    table_counts: Vec<TableCountManifest>,
     pg_dump_version: String,
     pg_restore_version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TableCountManifest {
+    table: String,
+    rows: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,12 +246,20 @@ struct BackupReport {
 }
 
 #[derive(Debug, Clone)]
+struct DatabaseMetadata {
+    postgres_version: String,
+    public_table_count: i64,
+    table_counts: Vec<TableCountManifest>,
+}
+
+#[derive(Debug, Clone)]
 struct StorageObjectRef {
     path: String,
     content_type: Option<String>,
 }
 
 struct BackupRunGuard;
+struct RestoreRunGuard;
 
 fn default_google_drive_sync_status() -> String {
     "notVerified".to_string()
@@ -208,6 +271,9 @@ fn default_encryption_scheme() -> String {
 
 impl BackupRunGuard {
     fn acquire() -> Result<Self, String> {
+        if RESTORE_RUNNING.load(Ordering::SeqCst) {
+            return Err("復旧実行中はバックアップできません。".to_string());
+        }
         BACKUP_RUNNING
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .map_err(|_| "バックアップはすでに実行中です。".to_string())?;
@@ -221,9 +287,32 @@ impl Drop for BackupRunGuard {
     }
 }
 
+impl RestoreRunGuard {
+    fn acquire() -> Result<Self, String> {
+        if BACKUP_RUNNING.load(Ordering::SeqCst) {
+            return Err("バックアップ実行中は復旧できません。".to_string());
+        }
+        RESTORE_RUNNING
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .map_err(|_| "復旧はすでに実行中です。".to_string())?;
+        Ok(Self)
+    }
+}
+
+impl Drop for RestoreRunGuard {
+    fn drop(&mut self) {
+        RESTORE_RUNNING.store(false, Ordering::SeqCst);
+    }
+}
+
 #[tauri::command]
 pub(crate) fn backup_is_running() -> bool {
     BACKUP_RUNNING.load(Ordering::SeqCst)
+}
+
+#[tauri::command]
+pub(crate) fn restore_is_running() -> bool {
+    RESTORE_RUNNING.load(Ordering::SeqCst)
 }
 
 #[tauri::command]
@@ -298,13 +387,258 @@ pub(crate) async fn run_backup(
     result
 }
 
+#[tauri::command]
+pub(crate) async fn run_restore(
+    app: AppHandle,
+    backup_path: String,
+    recovery_password: String,
+) -> Result<RestoreResult, String> {
+    let _guard = RestoreRunGuard::acquire()?;
+    if BACKUP_RUNNING.load(Ordering::SeqCst) {
+        return Err("バックアップ実行中は復旧できません。".to_string());
+    }
+    let settings = super::load_settings_from_disk(&app)?;
+    let recovery_password = Zeroizing::new(recovery_password);
+    let started_at = Utc::now();
+    let restore_id = Local::now().format("restore-%Y%m%d-%H%M%S-JST").to_string();
+    let target_backup_path = PathBuf::from(backup_path.trim());
+    let target_backup = target_backup_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("selected-backup.tar.age")
+        .to_string();
+    let backup_sha256 = if target_backup_path.is_file() {
+        sha256_file(&target_backup_path).unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let mut journal = RestoreJournalEntry {
+        restore_id: restore_id.clone(),
+        started_at: started_at.to_rfc3339_opts(SecondsFormat::Secs, true),
+        completed_at: None,
+        target_backup,
+        backup_sha256,
+        pre_restore_backup_id: None,
+        db_restore_status: "notStarted".to_string(),
+        storage_restore_status: "notStarted".to_string(),
+        verification_status: "notStarted".to_string(),
+        error_summary: None,
+    };
+
+    let result = execute_restore(
+        app.clone(),
+        settings,
+        &target_backup_path,
+        &recovery_password,
+        &restore_id,
+        &mut journal,
+    )
+    .await;
+    journal.completed_at = Some(Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true));
+    if let Err(error) = &result {
+        journal.error_summary = Some(safe_restore_error_summary(error));
+        emit_progress(
+            &app,
+            "failed",
+            "failed",
+            "復旧に失敗しました。データは一部復旧されている可能性があります。ACTARISE保守画面で詳細を確認してください。",
+            None,
+            None,
+        );
+    }
+    let _ = append_restore_journal(&app, journal);
+    result
+}
+
+async fn execute_restore(
+    app: AppHandle,
+    settings: BackupToolSettings,
+    encrypted_backup: &Path,
+    recovery_password: &str,
+    restore_id: &str,
+    journal: &mut RestoreJournalEntry,
+) -> Result<RestoreResult, String> {
+    validate_restore_prerequisites(&app, &settings, encrypted_backup, recovery_password)?;
+    let passphrase =
+        validate_backup_encryption_authorization(&settings, recovery_password)?.passphrase;
+    let postgres_runtime = postgres_runtime::PostgresRuntime::resolve(&app)?;
+    let temp = file_security::PrivateTempDir::new("kawashima-backup-restore-")?;
+
+    emit_progress(
+        &app,
+        "restoreVerify",
+        "running",
+        "復旧ファイルを復号し、manifestとSHA-256を確認しています。",
+        None,
+        None,
+    );
+    let package = decrypt_extract_verify_backup(
+        encrypted_backup,
+        &passphrase,
+        temp.path(),
+        &postgres_runtime.pg_restore,
+    )?;
+    validate_restore_compatibility(&package)?;
+    journal.verification_status = "complete".to_string();
+    emit_progress(
+        &app,
+        "restoreVerify",
+        "complete",
+        "復旧ファイルの検証が完了しました。",
+        None,
+        None,
+    );
+
+    let (db_restore_user, db_restore_password) = restore_db_credentials(&settings)?;
+    let storage_restore_password = Zeroizing::new(read_secret(
+        ACCOUNT_STORAGE_RESTORE_AUTH_PASSWORD,
+        "Storage復旧用パスワード",
+    )?);
+    if settings.storage_restore_auth_email.trim().is_empty() {
+        return Err("Storage復旧用ユーザーをACTARISE保守画面で設定してください。".to_string());
+    }
+
+    emit_progress(
+        &app,
+        "safetyBackup",
+        "running",
+        "復旧前の現在状態を安全バックアップしています。",
+        None,
+        None,
+    );
+    let safety_backup =
+        execute_backup_authorized(app.clone(), settings.clone(), passphrase.clone()).await?;
+    journal.pre_restore_backup_id = Some(safety_backup.history.backup_id.clone());
+    emit_progress(
+        &app,
+        "safetyBackup",
+        "complete",
+        "復旧前安全バックアップが完了しました。",
+        None,
+        None,
+    );
+
+    emit_progress(
+        &app,
+        "storageRestore",
+        "running",
+        "画像Storageを復旧しています。",
+        None,
+        None,
+    );
+    let storage_token = storage_auth::authenticate_with_email(
+        &settings,
+        settings.storage_restore_auth_email.trim(),
+        &storage_restore_password,
+        "Storage復旧用",
+    )
+    .await?;
+    let storage_headers = storage_token.headers(&settings.supabase_publishable_key)?;
+    let storage_count = restore_storage_objects(
+        &app,
+        &settings,
+        &storage_headers,
+        &package.root.join("storage").join(STORAGE_BUCKET),
+        &package.storage_manifest,
+    )
+    .await?;
+    journal.storage_restore_status = "complete".to_string();
+    emit_progress(
+        &app,
+        "storageRestore",
+        "complete",
+        "画像Storageの復旧と検証が完了しました。",
+        Some(storage_count),
+        Some(storage_count),
+    );
+
+    emit_progress(
+        &app,
+        "dbRestore",
+        "running",
+        "データベースをバックアップ時点へ復旧しています。",
+        None,
+        None,
+    );
+    let ca_path = temp.path().join("supabase-root-2021.crt");
+    fs::write(&ca_path, SUPABASE_ROOT_CA_PEM).map_err(sanitized_error)?;
+    postgres_runtime::run_pg_restore(
+        &postgres_runtime.pg_restore,
+        &settings,
+        &db_restore_user,
+        &db_restore_password,
+        &ca_path,
+        &package.root.join("database").join(DUMP_FILE_NAME),
+    )?;
+    journal.db_restore_status = "complete".to_string();
+    emit_progress(
+        &app,
+        "dbRestore",
+        "complete",
+        "データベース復旧が完了しました。",
+        None,
+        None,
+    );
+
+    emit_progress(
+        &app,
+        "postVerify",
+        "running",
+        "復旧後のデータベースと画像Storageを確認しています。",
+        None,
+        None,
+    );
+    let checked_table_count = verify_database_after_restore(
+        &settings,
+        &db_restore_user,
+        &db_restore_password,
+        &package.database_manifest,
+    )
+    .await?;
+    verify_restored_storage_objects(
+        &app,
+        &settings,
+        &storage_headers,
+        &package.root.join("storage").join(STORAGE_BUCKET),
+        &package.storage_manifest,
+    )
+    .await?;
+    journal.verification_status = "postRestoreComplete".to_string();
+    emit_progress(
+        &app,
+        "complete",
+        "complete",
+        "復旧が完了しました。",
+        None,
+        None,
+    );
+    temp.close()?;
+
+    Ok(RestoreResult {
+        restore_id: restore_id.to_string(),
+        pre_restore_backup_id: safety_backup.history.backup_id,
+        db_restored: true,
+        storage_restored: true,
+        verification_ok: true,
+        restored_storage_objects: storage_count,
+        checked_table_count,
+    })
+}
+
 async fn execute_backup(
     app: AppHandle,
     settings: BackupToolSettings,
     recovery_password: Zeroizing<String>,
 ) -> Result<BackupResult, String> {
     let encryption = validate_backup_prerequisites(&app, &settings, &recovery_password)?;
-    let passphrase = encryption.passphrase;
+    execute_backup_authorized(app, settings, encryption.passphrase).await
+}
+
+async fn execute_backup_authorized(
+    app: AppHandle,
+    settings: BackupToolSettings,
+    passphrase: SecretString,
+) -> Result<BackupResult, String> {
     let endpoint_id = settings
         .endpoint_id
         .clone()
@@ -334,7 +668,7 @@ async fn execute_backup(
         &manifests_dir,
         &verification_dir,
     ] {
-        fs::create_dir_all(directory).map_err(|error| sanitized_error(error))?;
+        fs::create_dir_all(directory).map_err(sanitized_error)?;
     }
 
     let db_password = Zeroizing::new(read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?);
@@ -355,7 +689,7 @@ async fn execute_backup(
     );
     let dump_path = database_dir.join(DUMP_FILE_NAME);
     let ca_path = temp.path().join("supabase-root-2021.crt");
-    fs::write(&ca_path, SUPABASE_ROOT_CA_PEM).map_err(|error| sanitized_error(error))?;
+    fs::write(&ca_path, SUPABASE_ROOT_CA_PEM).map_err(sanitized_error)?;
     postgres_runtime::run_pg_dump(
         &postgres_runtime.pg_dump,
         &settings,
@@ -424,14 +758,15 @@ async fn execute_backup(
     let created_at = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let database_manifest = DatabaseManifest {
         created_at: created_at.clone(),
-        postgres_version: db_info.0,
+        postgres_version: db_info.postgres_version,
         connection_mode: connection_mode_label(&settings.connection_mode).to_string(),
         schema: "public".to_string(),
         dump_file: format!("database/{DUMP_FILE_NAME}"),
         dump_format: "PostgreSQL custom".to_string(),
         dump_size,
         dump_sha256,
-        public_table_count: db_info.1,
+        public_table_count: db_info.public_table_count,
+        table_counts: db_info.table_counts,
         pg_dump_version: postgres_runtime.pg_dump_version,
         pg_restore_version: postgres_runtime.pg_restore_version,
     };
@@ -654,6 +989,31 @@ fn validate_backup_prerequisites(
     Ok(encryption)
 }
 
+fn validate_restore_prerequisites(
+    app: &AppHandle,
+    settings: &BackupToolSettings,
+    encrypted_backup: &Path,
+    recovery_password: &str,
+) -> Result<(), String> {
+    super::validate_settings(settings)?;
+    if !settings.setup_complete {
+        return Err("初回セットアップを完了してください。".to_string());
+    }
+    if !encrypted_backup.is_file() {
+        return Err("復旧する暗号化バックアップファイルを選択してください。".to_string());
+    }
+    if encrypted_backup
+        .extension()
+        .and_then(|value| value.to_str())
+        != Some("age")
+    {
+        return Err("復旧には.tar.ageバックアップファイルを選択してください。".to_string());
+    }
+    validate_backup_encryption_authorization(settings, recovery_password)?;
+    postgres_runtime::PostgresRuntime::resolve(app)?;
+    Ok(())
+}
+
 fn validate_backup_encryption_authorization(
     settings: &BackupToolSettings,
     recovery_password: &str,
@@ -694,19 +1054,19 @@ fn archive_file_name(endpoint_id: &str, backup_id: &str) -> String {
 async fn query_database_metadata(
     settings: &BackupToolSettings,
     password: &str,
-) -> Result<(String, i64), String> {
+) -> Result<DatabaseMetadata, String> {
     let config = build_db_config(settings, password)?;
     let (client, connection) = config
         .connect(build_database_tls_connector()?)
         .await
-        .map_err(|error| sanitized_error(error))?;
+        .map_err(sanitized_error)?;
     tauri::async_runtime::spawn(async move {
         let _ = connection.await;
     });
     let version: String = client
         .query_one("select version()", &[])
         .await
-        .map_err(|error| sanitized_error(error))?
+        .map_err(sanitized_error)?
         .get(0);
     let table_count: i64 = client
         .query_one(
@@ -714,16 +1074,39 @@ async fn query_database_metadata(
             &[],
         )
         .await
-        .map_err(|error| sanitized_error(error))?
+        .map_err(sanitized_error)?
         .get(0);
-    Ok((
-        version
+    let table_rows = client
+        .query(
+            "select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE' order by table_name",
+            &[],
+        )
+        .await
+        .map_err(sanitized_error)?;
+    let mut table_counts = Vec::with_capacity(table_rows.len());
+    for row in table_rows {
+        let table: String = row.get(0);
+        let count_sql = format!("select count(*) from public.{}", quote_identifier(&table));
+        let rows: i64 = client
+            .query_one(&count_sql, &[])
+            .await
+            .map_err(sanitized_error)?
+            .get(0);
+        table_counts.push(TableCountManifest { table, rows });
+    }
+    Ok(DatabaseMetadata {
+        postgres_version: version
             .split_whitespace()
             .take(2)
             .collect::<Vec<_>>()
             .join(" "),
-        table_count,
-    ))
+        public_table_count: table_count,
+        table_counts,
+    })
+}
+
+fn quote_identifier(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\"\""))
 }
 
 async fn list_storage_objects(
@@ -750,17 +1133,14 @@ async fn list_storage_objects(
                 }))
                 .send()
                 .await
-                .map_err(|error| sanitized_error(error))?;
+                .map_err(sanitized_error)?;
             if !response.status().is_success() {
                 return Err(format!(
                     "Storage一覧の取得に失敗しました: {}",
                     response.status()
                 ));
             }
-            let entries: Vec<Value> = response
-                .json()
-                .await
-                .map_err(|error| sanitized_error(error))?;
+            let entries: Vec<Value> = response.json().await.map_err(sanitized_error)?;
             if entries.is_empty() {
                 break;
             }
@@ -822,11 +1202,11 @@ async fn download_storage_objects(
         );
         let destination = storage_root.join(&object.path);
         if let Some(parent) = destination.parent() {
-            fs::create_dir_all(parent).map_err(|error| sanitized_error(error))?;
+            fs::create_dir_all(parent).map_err(sanitized_error)?;
         }
         let bytes =
             download_storage_object_with_retry(&client, headers, &base, &object.path).await?;
-        fs::write(&destination, &bytes).map_err(|error| sanitized_error(error))?;
+        fs::write(&destination, &bytes).map_err(sanitized_error)?;
         manifest.push(StorageObjectManifest {
             path: object.path.clone(),
             size: bytes.len() as u64,
@@ -857,7 +1237,7 @@ async fn download_storage_object_with_retry(
                     .bytes()
                     .await
                     .map(|bytes| bytes.to_vec())
-                    .map_err(|error| sanitized_error(error));
+                    .map_err(sanitized_error);
             }
             Ok(response) => last_status = Some(response.status().to_string()),
             Err(_) => last_status = Some("network error".to_string()),
@@ -901,8 +1281,8 @@ fn validate_object_path(path: &str) -> Result<(), String> {
 }
 
 fn write_json(path: &Path, value: &impl Serialize) -> Result<(), String> {
-    let bytes = serde_json::to_vec_pretty(value).map_err(|error| sanitized_error(error))?;
-    fs::write(path, bytes).map_err(|error| sanitized_error(error))
+    let bytes = serde_json::to_vec_pretty(value).map_err(sanitized_error)?;
+    fs::write(path, bytes).map_err(sanitized_error)
 }
 
 fn write_checksum_manifest(root: &Path, destination: &Path) -> Result<(), String> {
@@ -910,8 +1290,7 @@ fn write_checksum_manifest(root: &Path, destination: &Path) -> Result<(), String
     collect_files(root, root, &mut files)?;
     files.retain(|(relative, _)| relative != Path::new("verification/sha256sums.txt"));
     files.sort_by(|left, right| left.0.cmp(&right.0));
-    let mut output =
-        BufWriter::new(File::create(destination).map_err(|error| sanitized_error(error))?);
+    let mut output = BufWriter::new(File::create(destination).map_err(sanitized_error)?);
     for (relative, absolute) in files {
         writeln!(
             output,
@@ -919,9 +1298,9 @@ fn write_checksum_manifest(root: &Path, destination: &Path) -> Result<(), String
             sha256_file(&absolute)?,
             relative.to_string_lossy()
         )
-        .map_err(|error| sanitized_error(error))?;
+        .map_err(sanitized_error)?;
     }
-    output.flush().map_err(|error| sanitized_error(error))
+    output.flush().map_err(sanitized_error)
 }
 
 fn collect_files(
@@ -929,15 +1308,15 @@ fn collect_files(
     current: &Path,
     files: &mut Vec<(PathBuf, PathBuf)>,
 ) -> Result<(), String> {
-    for entry in fs::read_dir(current).map_err(|error| sanitized_error(error))? {
-        let entry = entry.map_err(|error| sanitized_error(error))?;
+    for entry in fs::read_dir(current).map_err(sanitized_error)? {
+        let entry = entry.map_err(sanitized_error)?;
         let path = entry.path();
         if path.is_dir() {
             collect_files(root, &path, files)?;
         } else if path.is_file() {
             let relative = path
                 .strip_prefix(root)
-                .map_err(|error| sanitized_error(error))?
+                .map_err(sanitized_error)?
                 .to_path_buf();
             files.push((relative, path));
         }
@@ -946,29 +1325,28 @@ fn collect_files(
 }
 
 fn create_tar_archive(source_root: &Path, destination: &Path) -> Result<(), String> {
-    let file = File::create(destination).map_err(|error| sanitized_error(error))?;
+    let file = File::create(destination).map_err(sanitized_error)?;
     let mut builder = tar::Builder::new(BufWriter::new(file));
     builder
         .append_dir_all(ARCHIVE_ROOT, source_root)
-        .map_err(|error| sanitized_error(error))?;
-    builder.finish().map_err(|error| sanitized_error(error))
+        .map_err(sanitized_error)?;
+    builder.finish().map_err(sanitized_error)
 }
 
 fn encrypt_file(input: &Path, output: &Path, passphrase: &SecretString) -> Result<(), String> {
     let encryptor = Encryptor::with_user_passphrase(passphrase.clone());
-    let source = File::open(input).map_err(|error| sanitized_error(error))?;
-    let destination = BufWriter::new(File::create(output).map_err(|error| sanitized_error(error))?);
+    let source = File::open(input).map_err(sanitized_error)?;
+    let destination = BufWriter::new(File::create(output).map_err(sanitized_error)?);
     let mut writer = encryptor
         .wrap_output(destination)
-        .map_err(|error| sanitized_error(error))?;
-    std::io::copy(&mut BufReader::new(source), &mut writer)
-        .map_err(|error| sanitized_error(error))?;
-    writer.finish().map_err(|error| sanitized_error(error))?;
+        .map_err(sanitized_error)?;
+    std::io::copy(&mut BufReader::new(source), &mut writer).map_err(sanitized_error)?;
+    writer.finish().map_err(sanitized_error)?;
     Ok(())
 }
 
 fn validate_encrypted_envelope(encrypted: &Path) -> Result<(), String> {
-    let reader = BufReader::new(File::open(encrypted).map_err(|error| sanitized_error(error))?);
+    let reader = BufReader::new(File::open(encrypted).map_err(sanitized_error)?);
     Decryptor::new_buffered(reader)
         .map(|_| ())
         .map_err(|_| "age暗号化ファイルの形式を確認できませんでした。".to_string())
@@ -1008,33 +1386,55 @@ fn verify_encrypted_backup(
     temp_root: &Path,
     pg_restore: &Path,
 ) -> Result<VerifiedBackupStructure, String> {
-    fs::create_dir_all(temp_root).map_err(|error| sanitized_error(error))?;
+    decrypt_extract_verify_backup(encrypted, passphrase, temp_root, pg_restore)
+        .map(|package| package.structure)
+}
+
+fn decrypt_extract_verify_backup(
+    encrypted: &Path,
+    passphrase: &SecretString,
+    temp_root: &Path,
+    pg_restore: &Path,
+) -> Result<VerifiedExtractedBackup, String> {
+    let basic = decrypt_extract_verify_structure(encrypted, passphrase, temp_root, pg_restore)?;
+    let backup_manifest: BackupManifest = read_json(&basic.root.join("manifests/backup.json"))?;
+    let database_manifest: DatabaseManifest =
+        read_json(&basic.root.join("manifests/database.json"))?;
+    let storage_manifest: StorageManifest = read_json(&basic.root.join("manifests/storage.json"))?;
+    Ok(VerifiedExtractedBackup {
+        structure: basic.structure,
+        root: basic.root,
+        backup_manifest,
+        database_manifest,
+        storage_manifest,
+    })
+}
+
+fn decrypt_extract_verify_structure(
+    encrypted: &Path,
+    passphrase: &SecretString,
+    temp_root: &Path,
+    pg_restore: &Path,
+) -> Result<BasicExtractedBackup, String> {
+    fs::create_dir_all(temp_root).map_err(sanitized_error)?;
     let decrypted_tar = temp_root.join("verification.tar");
-    let encrypted_reader =
-        BufReader::new(File::open(encrypted).map_err(|error| sanitized_error(error))?);
-    let decryptor =
-        Decryptor::new_buffered(encrypted_reader).map_err(|error| sanitized_error(error))?;
+    let encrypted_reader = BufReader::new(File::open(encrypted).map_err(sanitized_error)?);
+    let decryptor = Decryptor::new_buffered(encrypted_reader).map_err(sanitized_error)?;
     let identity = age::scrypt::Identity::new(passphrase.clone());
     let mut reader = decryptor
         .decrypt(std::iter::once(&identity as &dyn age::Identity))
         .map_err(|_| {
             "復旧パスワードが正しくないか、バックアップファイルを復号できませんでした。".to_string()
         })?;
-    let mut output =
-        BufWriter::new(File::create(&decrypted_tar).map_err(|error| sanitized_error(error))?);
-    std::io::copy(&mut reader, &mut output).map_err(|error| sanitized_error(error))?;
-    output.flush().map_err(|error| sanitized_error(error))?;
+    let mut output = BufWriter::new(File::create(&decrypted_tar).map_err(sanitized_error)?);
+    std::io::copy(&mut reader, &mut output).map_err(sanitized_error)?;
+    output.flush().map_err(sanitized_error)?;
     drop(output);
     let plaintext_archive_sha256 = sha256_file(&decrypted_tar)?;
 
     let extract_dir = temp_root.join("verification-extracted");
-    fs::create_dir_all(&extract_dir).map_err(|error| sanitized_error(error))?;
-    let mut archive = tar::Archive::new(BufReader::new(
-        File::open(&decrypted_tar).map_err(|error| sanitized_error(error))?,
-    ));
-    archive
-        .unpack(&extract_dir)
-        .map_err(|error| sanitized_error(error))?;
+    fs::create_dir_all(&extract_dir).map_err(sanitized_error)?;
+    unpack_archive_safely(&decrypted_tar, &extract_dir)?;
     let root = extract_dir.join(ARCHIVE_ROOT);
     let database_dump_present = root.join("database").join(DUMP_FILE_NAME).is_file();
     let manifests_present = [
@@ -1060,14 +1460,311 @@ fn verify_encrypted_backup(
     }
     verify_checksum_manifest(&root, &root.join("verification/sha256sums.txt"))?;
     postgres_runtime::inspect_custom_dump(pg_restore, &root.join("database").join(DUMP_FILE_NAME))?;
-    Ok(VerifiedBackupStructure {
-        database_dump_present,
-        manifests_present,
-        storage_present,
-        verification_present,
-        database_structure_valid: true,
-        plaintext_archive_sha256,
+    Ok(BasicExtractedBackup {
+        structure: VerifiedBackupStructure {
+            database_dump_present,
+            manifests_present,
+            storage_present,
+            verification_present,
+            database_structure_valid: true,
+            plaintext_archive_sha256,
+        },
+        root,
     })
+}
+
+fn unpack_archive_safely(archive_path: &Path, destination: &Path) -> Result<(), String> {
+    let mut archive = tar::Archive::new(BufReader::new(
+        File::open(archive_path).map_err(sanitized_error)?,
+    ));
+    let entries = archive.entries().map_err(sanitized_error)?;
+    for entry in entries {
+        let mut entry = entry.map_err(sanitized_error)?;
+        let entry_type = entry.header().entry_type();
+        if !(entry_type.is_file() || entry_type.is_dir()) {
+            return Err("バックアップarchiveに許可されない種類のentryがあります。".to_string());
+        }
+        let relative = entry.path().map_err(sanitized_error)?;
+        validate_archive_entry_path(&relative)?;
+        let output_path = destination.join(relative.as_ref());
+        if let Some(parent) = output_path.parent() {
+            fs::create_dir_all(parent).map_err(sanitized_error)?;
+        }
+        entry.unpack(&output_path).map_err(sanitized_error)?;
+    }
+    Ok(())
+}
+
+fn validate_archive_entry_path(path: &Path) -> Result<(), String> {
+    let mut components = path.components();
+    match components.next() {
+        Some(Component::Normal(root)) if root == ARCHIVE_ROOT => {}
+        _ => return Err("バックアップarchiveの構造が正しくありません。".to_string()),
+    }
+    if components.any(|component| !matches!(component, Component::Normal(_))) {
+        return Err("バックアップarchiveのpathが安全ではありません。".to_string());
+    }
+    Ok(())
+}
+
+fn validate_restore_compatibility(package: &VerifiedExtractedBackup) -> Result<(), String> {
+    if package.backup_manifest.format_version > 2 {
+        return Err("このバージョンのバックアップ形式には対応していません。".to_string());
+    }
+    if package.backup_manifest.encryption.scheme != ENCRYPTION_ALGORITHM
+        || package.backup_manifest.encryption.format != ENCRYPTION_FORMAT
+        || package.backup_manifest.encryption.version != ENCRYPTION_FORMAT_VERSION
+    {
+        return Err("バックアップの暗号化方式が現在の復旧機能と一致しません。".to_string());
+    }
+    if package.database_manifest.schema != "public"
+        || package.database_manifest.dump_file != format!("database/{DUMP_FILE_NAME}")
+        || package.database_manifest.dump_format != "PostgreSQL custom"
+    {
+        return Err("データベースmanifestが復旧対象形式と一致しません。".to_string());
+    }
+    let dump_path = package.root.join("database").join(DUMP_FILE_NAME);
+    if file_size(&dump_path)? != package.database_manifest.dump_size
+        || sha256_file(&dump_path)? != package.database_manifest.dump_sha256
+    {
+        return Err("データベースdumpのSHA-256確認に失敗しました。".to_string());
+    }
+    if package.storage_manifest.bucket != STORAGE_BUCKET {
+        return Err("Storage manifestのbucketが復旧対象と一致しません。".to_string());
+    }
+    if package.storage_manifest.object_count != package.storage_manifest.objects.len() {
+        return Err("Storage manifestのobject件数が一致しません。".to_string());
+    }
+    for object in &package.storage_manifest.objects {
+        validate_object_path(&object.path)?;
+        let object_path = package
+            .root
+            .join("storage")
+            .join(STORAGE_BUCKET)
+            .join(&object.path);
+        if !object_path.is_file()
+            || file_size(&object_path)? != object.size
+            || sha256_file(&object_path)? != object.sha256
+        {
+            return Err("Storage objectのmanifest確認に失敗しました。".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
+    let bytes = fs::read(path).map_err(sanitized_error)?;
+    serde_json::from_slice(&bytes).map_err(sanitized_error)
+}
+
+async fn restore_storage_objects(
+    app: &AppHandle,
+    settings: &BackupToolSettings,
+    headers: &HeaderMap,
+    storage_root: &Path,
+    manifest: &StorageManifest,
+) -> Result<usize, String> {
+    storage_auth::verify_bucket_access(
+        &reqwest::Client::new(),
+        &normalize_project_url(&settings.supabase_project_url)?,
+        STORAGE_BUCKET,
+        headers,
+    )
+    .await?;
+    for (index, object) in manifest.objects.iter().enumerate() {
+        emit_progress(
+            app,
+            "storageRestore",
+            "running",
+            "画像ファイルを復旧しています。",
+            Some(index + 1),
+            Some(manifest.objects.len()),
+        );
+        upload_storage_object_with_retry(settings, headers, storage_root, object).await?;
+    }
+    verify_restored_storage_objects(app, settings, headers, storage_root, manifest).await?;
+    Ok(manifest.objects.len())
+}
+
+async fn upload_storage_object_with_retry(
+    settings: &BackupToolSettings,
+    headers: &HeaderMap,
+    storage_root: &Path,
+    object: &StorageObjectManifest,
+) -> Result<(), String> {
+    validate_object_path(&object.path)?;
+    let source = storage_root.join(&object.path);
+    if !source.is_file()
+        || file_size(&source)? != object.size
+        || sha256_file(&source)? != object.sha256
+    {
+        return Err("復旧元Storageファイルの整合性確認に失敗しました。".to_string());
+    }
+    let bytes = fs::read(&source).map_err(sanitized_error)?;
+    let client = reqwest::Client::new();
+    let url = storage_upload_url(
+        &normalize_project_url(&settings.supabase_project_url)?,
+        &object.path,
+    )?;
+    let mut last_status = None;
+    for attempt in 1..=STORAGE_UPLOAD_ATTEMPTS {
+        let mut upload_headers = headers.clone();
+        upload_headers.insert("x-upsert", HeaderValue::from_static("true"));
+        upload_headers.insert(
+            CONTENT_TYPE,
+            HeaderValue::from_str(
+                object
+                    .content_type
+                    .as_deref()
+                    .unwrap_or("application/octet-stream"),
+            )
+            .map_err(|_| "Storage content_typeの形式を確認してください。".to_string())?,
+        );
+        match client
+            .post(url.clone())
+            .headers(upload_headers)
+            .body(bytes.clone())
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => return Ok(()),
+            Ok(response) => last_status = Some(response.status().to_string()),
+            Err(_) => last_status = Some("network error".to_string()),
+        }
+        if attempt < STORAGE_UPLOAD_ATTEMPTS {
+            tokio::time::sleep(std::time::Duration::from_millis(250 * attempt as u64)).await;
+        }
+    }
+    let status = last_status.unwrap_or_else(|| "unknown".to_string());
+    Err(format!(
+        "Storage復旧uploadに失敗しました（HTTP {status}）。"
+    ))
+}
+
+async fn verify_restored_storage_objects(
+    app: &AppHandle,
+    settings: &BackupToolSettings,
+    headers: &HeaderMap,
+    storage_root: &Path,
+    manifest: &StorageManifest,
+) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let base = normalize_project_url(&settings.supabase_project_url)?;
+    for (index, object) in manifest.objects.iter().enumerate() {
+        emit_progress(
+            app,
+            "postVerify",
+            "running",
+            "復旧済み画像ファイルを検証しています。",
+            Some(index + 1),
+            Some(manifest.objects.len()),
+        );
+        let expected_path = storage_root.join(&object.path);
+        let expected_hash = sha256_file(&expected_path)?;
+        let response = client
+            .get(storage_download_url(&base, &object.path)?)
+            .headers(headers.clone())
+            .send()
+            .await
+            .map_err(sanitized_error)?;
+        if !response.status().is_success() {
+            return Err(format!(
+                "復旧済みStorage objectを確認できません（HTTP {}）。",
+                response.status().as_u16()
+            ));
+        }
+        let actual_content_type = response
+            .headers()
+            .get(CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(|value| value.split(';').next().unwrap_or(value).trim().to_string());
+        let bytes = response.bytes().await.map_err(sanitized_error)?;
+        if bytes.len() as u64 != object.size || sha256_bytes(&bytes) != expected_hash {
+            return Err("復旧済みStorage objectのSHA-256確認に失敗しました。".to_string());
+        }
+        if let Some(expected) = &object.content_type {
+            if actual_content_type.as_deref() != Some(expected.as_str()) {
+                return Err("復旧済みStorage objectのcontent_type確認に失敗しました。".to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn storage_upload_url(project_url: &str, object_path: &str) -> Result<reqwest::Url, String> {
+    validate_object_path(object_path)?;
+    let mut url = reqwest::Url::parse(project_url)
+        .map_err(|_| "Supabase Project URLを確認してください。".to_string())?;
+    {
+        let mut segments = url
+            .path_segments_mut()
+            .map_err(|_| "Supabase Project URLを確認してください。".to_string())?;
+        segments
+            .clear()
+            .extend(["storage", "v1", "object", STORAGE_BUCKET]);
+        for segment in object_path.split('/') {
+            segments.push(segment);
+        }
+    }
+    Ok(url)
+}
+
+async fn verify_database_after_restore(
+    settings: &BackupToolSettings,
+    user: &str,
+    password: &str,
+    manifest: &DatabaseManifest,
+) -> Result<usize, String> {
+    let config = build_db_config_for_user(settings, user, password)?;
+    let (client, connection) = config
+        .connect(build_database_tls_connector()?)
+        .await
+        .map_err(sanitized_error)?;
+    tauri::async_runtime::spawn(async move {
+        let _ = connection.await;
+    });
+    let public_schema_exists: bool = client
+        .query_one(
+            "select exists (select 1 from information_schema.schemata where schema_name = 'public')",
+            &[],
+        )
+        .await
+        .map_err(sanitized_error)?
+        .get(0);
+    if !public_schema_exists {
+        return Err("復旧後のpublic schemaを確認できません。".to_string());
+    }
+    let actual_tables = client
+        .query(
+            "select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE' order by table_name",
+            &[],
+        )
+        .await
+        .map_err(sanitized_error)?;
+    if manifest.table_counts.is_empty() {
+        if actual_tables.len() as i64 != manifest.public_table_count {
+            return Err("復旧後のpublic table数がmanifestと一致しません。".to_string());
+        }
+        return Ok(actual_tables.len());
+    }
+    if actual_tables.len() != manifest.table_counts.len() {
+        return Err("復旧後のpublic table一覧がmanifestと一致しません。".to_string());
+    }
+    for expected in &manifest.table_counts {
+        let count_sql = format!(
+            "select count(*) from public.{}",
+            quote_identifier(&expected.table)
+        );
+        let actual_rows: i64 = client
+            .query_one(&count_sql, &[])
+            .await
+            .map_err(sanitized_error)?
+            .get(0);
+        if actual_rows != expected.rows {
+            return Err("復旧後のtable row countがmanifestと一致しません。".to_string());
+        }
+    }
+    Ok(manifest.table_counts.len())
 }
 
 #[cfg(test)]
@@ -1076,26 +1773,23 @@ fn decrypt_file_to_path(
     output: &Path,
     passphrase: &SecretString,
 ) -> Result<(), String> {
-    let encrypted_reader =
-        BufReader::new(File::open(encrypted).map_err(|error| sanitized_error(error))?);
-    let decryptor =
-        Decryptor::new_buffered(encrypted_reader).map_err(|error| sanitized_error(error))?;
+    let encrypted_reader = BufReader::new(File::open(encrypted).map_err(sanitized_error)?);
+    let decryptor = Decryptor::new_buffered(encrypted_reader).map_err(sanitized_error)?;
     let identity = age::scrypt::Identity::new(passphrase.clone());
     let mut reader = decryptor
         .decrypt(std::iter::once(&identity as &dyn age::Identity))
         .map_err(|_| {
             "復旧パスワードが正しくないか、バックアップファイルを復号できませんでした。".to_string()
         })?;
-    let mut destination =
-        BufWriter::new(File::create(output).map_err(|error| sanitized_error(error))?);
-    std::io::copy(&mut reader, &mut destination).map_err(|error| sanitized_error(error))?;
-    destination.flush().map_err(|error| sanitized_error(error))
+    let mut destination = BufWriter::new(File::create(output).map_err(sanitized_error)?);
+    std::io::copy(&mut reader, &mut destination).map_err(sanitized_error)?;
+    destination.flush().map_err(sanitized_error)
 }
 
 fn verify_checksum_manifest(root: &Path, manifest: &Path) -> Result<(), String> {
-    let reader = BufReader::new(File::open(manifest).map_err(|error| sanitized_error(error))?);
+    let reader = BufReader::new(File::open(manifest).map_err(sanitized_error)?);
     for line in reader.lines() {
-        let line = line.map_err(|error| sanitized_error(error))?;
+        let line = line.map_err(sanitized_error)?;
         let (expected, relative) = line
             .split_once("  ")
             .ok_or_else(|| "checksum manifestの形式が正しくありません。".to_string())?;
@@ -1162,10 +1856,10 @@ fn copy_atomic_verified(
     }
     let partial = destination.with_extension("age.partial");
     if partial.exists() {
-        file_security::remove_file_with_retry(&partial).map_err(|error| sanitized_error(error))?;
+        file_security::remove_file_with_retry(&partial).map_err(sanitized_error)?;
     }
     let result = (|| {
-        fs::copy(source, &partial).map_err(|error| sanitized_error(error))?;
+        fs::copy(source, &partial).map_err(sanitized_error)?;
         if file_size(source)? != file_size(&partial)? || sha256_file(&partial)? != expected_hash {
             return Err("保存先コピーの整合性確認に失敗しました。".to_string());
         }
@@ -1173,7 +1867,7 @@ fn copy_atomic_verified(
             .write(true)
             .open(&partial)
             .and_then(|file| file.sync_all())
-            .map_err(|error| sanitized_error(error))?;
+            .map_err(sanitized_error)?;
         file_security::publish_new_file(&partial, destination).map_err(sanitized_error)?;
         Ok(())
     })();
@@ -1187,7 +1881,7 @@ fn history_path(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_config_dir()
         .map(|path| path.join(HISTORY_FILE_NAME))
-        .map_err(|error| sanitized_error(error))
+        .map_err(sanitized_error)
 }
 
 fn read_history(app: &AppHandle) -> Result<Vec<BackupHistoryEntry>, String> {
@@ -1195,8 +1889,8 @@ fn read_history(app: &AppHandle) -> Result<Vec<BackupHistoryEntry>, String> {
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let content = fs::read_to_string(path).map_err(|error| sanitized_error(error))?;
-    serde_json::from_str(&content).map_err(|error| sanitized_error(error))
+    let content = fs::read_to_string(path).map_err(sanitized_error)?;
+    serde_json::from_str(&content).map_err(sanitized_error)
 }
 
 fn append_history(app: &AppHandle, entry: BackupHistoryEntry) -> Result<(), String> {
@@ -1204,10 +1898,38 @@ fn append_history(app: &AppHandle, entry: BackupHistoryEntry) -> Result<(), Stri
     history.insert(0, entry);
     let path = history_path(app)?;
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| sanitized_error(error))?;
+        fs::create_dir_all(parent).map_err(sanitized_error)?;
     }
     let temp = path.with_extension("json.tmp");
     write_json(&temp, &history)?;
+    file_security::replace_file(&temp, &path).map_err(sanitized_error)
+}
+
+fn restore_journal_path(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_config_dir()
+        .map(|path| path.join(RESTORE_JOURNAL_FILE_NAME))
+        .map_err(sanitized_error)
+}
+
+fn read_restore_journal(app: &AppHandle) -> Result<Vec<RestoreJournalEntry>, String> {
+    let path = restore_journal_path(app)?;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let content = fs::read_to_string(path).map_err(sanitized_error)?;
+    serde_json::from_str(&content).map_err(sanitized_error)
+}
+
+fn append_restore_journal(app: &AppHandle, entry: RestoreJournalEntry) -> Result<(), String> {
+    let mut journal = read_restore_journal(app)?;
+    journal.insert(0, entry);
+    let path = restore_journal_path(app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(sanitized_error)?;
+    }
+    let temp = path.with_extension("json.tmp");
+    write_json(&temp, &journal)?;
     file_security::replace_file(&temp, &path).map_err(sanitized_error)
 }
 
@@ -1234,17 +1956,15 @@ fn emit_progress(
 fn file_size(path: &Path) -> Result<u64, String> {
     fs::metadata(path)
         .map(|metadata| metadata.len())
-        .map_err(|error| sanitized_error(error))
+        .map_err(sanitized_error)
 }
 
 fn sha256_file(path: &Path) -> Result<String, String> {
-    let mut file = BufReader::new(File::open(path).map_err(|error| sanitized_error(error))?);
+    let mut file = BufReader::new(File::open(path).map_err(sanitized_error)?);
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; 64 * 1024];
     loop {
-        let count = file
-            .read(&mut buffer)
-            .map_err(|error| sanitized_error(error))?;
+        let count = file.read(&mut buffer).map_err(sanitized_error)?;
         if count == 0 {
             break;
         }
@@ -1273,6 +1993,25 @@ fn safe_backup_error_summary(error: &str) -> String {
     }
 }
 
+fn safe_restore_error_summary(error: &str) -> String {
+    let sanitized = sanitized_error(error);
+    if sanitized.contains("Storage") {
+        "Storage復旧または検証に失敗しました。".to_string()
+    } else if sanitized.contains("pg_restore")
+        || sanitized.contains("データベース")
+        || sanitized.contains("DB")
+    {
+        "データベース復旧または検証に失敗しました。".to_string()
+    } else if sanitized.contains("復号")
+        || sanitized.contains("manifest")
+        || sanitized.contains("SHA-256")
+    {
+        "復旧ファイルの事前検証に失敗しました。".to_string()
+    } else {
+        "復旧処理に失敗しました。".to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1292,9 +2031,11 @@ mod tests {
             db_port: "5432".to_string(),
             db_name: "postgres".to_string(),
             db_user: "postgres.example".to_string(),
+            db_restore_user: "postgres.restore".to_string(),
             connection_mode: super::super::ConnectionMode::Session,
             local_backup_path: root.join("local").to_string_lossy().to_string(),
             google_drive_path: root.join("drive").to_string_lossy().to_string(),
+            storage_restore_auth_email: "restore@nonprod.invalid".to_string(),
             endpoint_id: Some("test-endpoint".to_string()),
             encryption_algorithm: Some(ENCRYPTION_ALGORITHM.to_string()),
             setup_complete: true,
@@ -1310,10 +2051,47 @@ mod tests {
         fs::create_dir_all(source.join("manifests")).unwrap();
         fs::create_dir_all(source.join("storage").join(STORAGE_BUCKET)).unwrap();
         fs::create_dir_all(source.join("verification")).unwrap();
-        fs::write(source.join("database").join(DUMP_FILE_NAME), b"test dump").unwrap();
-        for name in ["backup.json", "database.json", "storage.json"] {
-            fs::write(source.join("manifests").join(name), b"{}").unwrap();
-        }
+        let dump = source.join("database").join(DUMP_FILE_NAME);
+        fs::write(&dump, b"test dump").unwrap();
+        let backup_manifest = BackupManifest {
+            format_version: 2,
+            backup_id: "test".to_string(),
+            created_at: "2026-09-04T00:00:00Z".to_string(),
+            application: "Kawashima Motors Backup Tool".to_string(),
+            application_version: "0.4.0".to_string(),
+            endpoint_id: "test-endpoint".to_string(),
+            database_manifest: "manifests/database.json".to_string(),
+            storage_manifest: "manifests/storage.json".to_string(),
+            checksum_manifest: "verification/sha256sums.txt".to_string(),
+            encryption: EncryptionManifest {
+                scheme: ENCRYPTION_ALGORITHM.to_string(),
+                format: ENCRYPTION_FORMAT.to_string(),
+                version: ENCRYPTION_FORMAT_VERSION,
+            },
+        };
+        let database_manifest = DatabaseManifest {
+            created_at: "2026-09-04T00:00:00Z".to_string(),
+            postgres_version: "PostgreSQL 17".to_string(),
+            connection_mode: "Session pooler".to_string(),
+            schema: "public".to_string(),
+            dump_file: format!("database/{DUMP_FILE_NAME}"),
+            dump_format: "PostgreSQL custom".to_string(),
+            dump_size: file_size(&dump).unwrap(),
+            dump_sha256: sha256_file(&dump).unwrap(),
+            public_table_count: 0,
+            table_counts: vec![],
+            pg_dump_version: "pg_dump 17".to_string(),
+            pg_restore_version: "pg_restore 17".to_string(),
+        };
+        let storage_manifest = StorageManifest {
+            created_at: "2026-09-04T00:00:00Z".to_string(),
+            bucket: STORAGE_BUCKET.to_string(),
+            object_count: 0,
+            objects: vec![],
+        };
+        write_json(&source.join("manifests/backup.json"), &backup_manifest).unwrap();
+        write_json(&source.join("manifests/database.json"), &database_manifest).unwrap();
+        write_json(&source.join("manifests/storage.json"), &storage_manifest).unwrap();
         fs::write(source.join("verification/backup-report.json"), b"{}").unwrap();
         write_checksum_manifest(&source, &source.join("verification/sha256sums.txt")).unwrap();
         let archive = root.join("test.tar");
@@ -1330,6 +2108,75 @@ mod tests {
         fs::write(&path, "#!/bin/sh\nprintf 'archive list\\n'\n").unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
         path
+    }
+
+    fn restore_package_fixture(root: &Path) -> VerifiedExtractedBackup {
+        let package_root = root.join(ARCHIVE_ROOT);
+        fs::create_dir_all(package_root.join("database")).unwrap();
+        fs::create_dir_all(package_root.join("storage").join(STORAGE_BUCKET)).unwrap();
+        let dump = package_root.join("database").join(DUMP_FILE_NAME);
+        fs::write(&dump, b"custom dump").unwrap();
+        let object_path = package_root
+            .join("storage")
+            .join(STORAGE_BUCKET)
+            .join("line/one.png");
+        fs::create_dir_all(object_path.parent().unwrap()).unwrap();
+        fs::write(&object_path, b"image").unwrap();
+        VerifiedExtractedBackup {
+            structure: VerifiedBackupStructure {
+                database_dump_present: true,
+                manifests_present: true,
+                storage_present: true,
+                verification_present: true,
+                database_structure_valid: true,
+                plaintext_archive_sha256: "0".repeat(64),
+            },
+            root: package_root,
+            backup_manifest: BackupManifest {
+                format_version: 2,
+                backup_id: "fixture".to_string(),
+                created_at: "2026-09-04T00:00:00Z".to_string(),
+                application: "Kawashima Motors Backup Tool".to_string(),
+                application_version: "0.4.0".to_string(),
+                endpoint_id: "test-endpoint".to_string(),
+                database_manifest: "manifests/database.json".to_string(),
+                storage_manifest: "manifests/storage.json".to_string(),
+                checksum_manifest: "verification/sha256sums.txt".to_string(),
+                encryption: EncryptionManifest {
+                    scheme: ENCRYPTION_ALGORITHM.to_string(),
+                    format: ENCRYPTION_FORMAT.to_string(),
+                    version: ENCRYPTION_FORMAT_VERSION,
+                },
+            },
+            database_manifest: DatabaseManifest {
+                created_at: "2026-09-04T00:00:00Z".to_string(),
+                postgres_version: "PostgreSQL 17".to_string(),
+                connection_mode: "Session pooler".to_string(),
+                schema: "public".to_string(),
+                dump_file: format!("database/{DUMP_FILE_NAME}"),
+                dump_format: "PostgreSQL custom".to_string(),
+                dump_size: file_size(&dump).unwrap(),
+                dump_sha256: sha256_file(&dump).unwrap(),
+                public_table_count: 1,
+                table_counts: vec![TableCountManifest {
+                    table: "customers".to_string(),
+                    rows: 3,
+                }],
+                pg_dump_version: "pg_dump 17".to_string(),
+                pg_restore_version: "pg_restore 17".to_string(),
+            },
+            storage_manifest: StorageManifest {
+                created_at: "2026-09-04T00:00:00Z".to_string(),
+                bucket: STORAGE_BUCKET.to_string(),
+                object_count: 1,
+                objects: vec![StorageObjectManifest {
+                    path: "line/one.png".to_string(),
+                    size: file_size(&object_path).unwrap(),
+                    sha256: sha256_file(&object_path).unwrap(),
+                    content_type: Some("image/png".to_string()),
+                }],
+            },
+        }
     }
 
     #[test]
@@ -1590,9 +2437,61 @@ mod tests {
         BACKUP_RUNNING.store(false, Ordering::SeqCst);
         let first = BackupRunGuard::acquire().unwrap();
         assert!(BackupRunGuard::acquire().is_err());
+        assert!(RestoreRunGuard::acquire().is_err());
         drop(first);
         assert!(BackupRunGuard::acquire().is_ok());
         BACKUP_RUNNING.store(false, Ordering::SeqCst);
+    }
+
+    #[test]
+    fn restore_compatibility_allows_only_current_passphrase_public_and_line_bucket() {
+        let temp = TempDir::new().unwrap();
+        let mut package = restore_package_fixture(temp.path());
+        assert!(validate_restore_compatibility(&package).is_ok());
+
+        package.storage_manifest.bucket = "other-bucket".to_string();
+        assert!(validate_restore_compatibility(&package)
+            .unwrap_err()
+            .contains("bucket"));
+    }
+
+    #[test]
+    fn restore_manifest_rejects_object_path_traversal() {
+        let temp = TempDir::new().unwrap();
+        let mut package = restore_package_fixture(temp.path());
+        package.storage_manifest.objects[0].path = "../secret".to_string();
+        assert!(validate_restore_compatibility(&package).is_err());
+    }
+
+    #[test]
+    fn storage_upload_url_is_fixed_to_line_message_images() {
+        let url = storage_upload_url("https://example.supabase.co", "line/one.png").unwrap();
+        assert_eq!(
+            url.as_str(),
+            "https://example.supabase.co/storage/v1/object/line-message-images/line/one.png"
+        );
+        assert!(storage_upload_url("https://example.supabase.co", "../secret").is_err());
+    }
+
+    #[test]
+    fn restore_journal_serialization_contains_no_secrets() {
+        let entry = RestoreJournalEntry {
+            restore_id: "restore-20260904-120000-JST".to_string(),
+            started_at: "2026-09-04T03:00:00Z".to_string(),
+            completed_at: Some("2026-09-04T03:01:00Z".to_string()),
+            target_backup: "backup.tar.age".to_string(),
+            backup_sha256: "a".repeat(64),
+            pre_restore_backup_id: Some("20260904-115900-JST".to_string()),
+            db_restore_status: "complete".to_string(),
+            storage_restore_status: "complete".to_string(),
+            verification_status: "postRestoreComplete".to_string(),
+            error_summary: None,
+        };
+        let serialized = serde_json::to_string(&entry).unwrap();
+        assert!(!serialized.to_lowercase().contains("password"));
+        assert!(!serialized.to_lowercase().contains("passphrase"));
+        assert!(!serialized.contains("AGE-SECRET-KEY-"));
+        assert!(!serialized.to_lowercase().contains("service_role"));
     }
 
     #[test]
@@ -1607,6 +2506,7 @@ mod tests {
             dump_size: 1,
             dump_sha256: "abc".to_string(),
             public_table_count: 10,
+            table_counts: vec![],
             pg_dump_version: "pg_dump 17".to_string(),
             pg_restore_version: "pg_restore 17".to_string(),
         };

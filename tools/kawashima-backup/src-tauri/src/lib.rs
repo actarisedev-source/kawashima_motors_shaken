@@ -25,7 +25,10 @@ mod maintenance;
 mod postgres_runtime;
 mod storage_auth;
 
-pub(crate) use credential_store::{ACCOUNT_DB_PASSWORD, ACCOUNT_STORAGE_AUTH_PASSWORD};
+pub(crate) use credential_store::{
+    ACCOUNT_DB_PASSWORD, ACCOUNT_DB_RESTORE_PASSWORD, ACCOUNT_STORAGE_AUTH_PASSWORD,
+    ACCOUNT_STORAGE_RESTORE_AUTH_PASSWORD,
+};
 const SETTINGS_FILE_NAME: &str = "settings.json";
 const MAX_STORAGE_OBJECTS_TO_SCAN: usize = 10_000;
 const STORAGE_BUCKET_NAME: &str = "line-message-images";
@@ -44,9 +47,13 @@ pub(crate) struct BackupToolSettings {
     pub(crate) db_port: String,
     pub(crate) db_name: String,
     pub(crate) db_user: String,
+    #[serde(default)]
+    pub(crate) db_restore_user: String,
     pub(crate) connection_mode: ConnectionMode,
     pub(crate) local_backup_path: String,
     pub(crate) google_drive_path: String,
+    #[serde(default)]
+    pub(crate) storage_restore_auth_email: String,
     #[serde(default)]
     pub(crate) endpoint_id: Option<String>,
     #[serde(default)]
@@ -71,9 +78,13 @@ pub(crate) enum ConnectionMode {
 struct SecretStatus {
     db_password: bool,
     storage_auth_password: bool,
+    db_restore_password: bool,
+    storage_restore_auth_password: bool,
     legacy_service_role_key: bool,
     db_password_state: String,
     storage_auth_password_state: String,
+    db_restore_password_state: String,
+    storage_restore_auth_password_state: String,
     legacy_service_role_key_state: String,
 }
 
@@ -162,9 +173,11 @@ impl Default for BackupToolSettings {
             db_port: "5432".to_string(),
             db_name: "postgres".to_string(),
             db_user: "postgres".to_string(),
+            db_restore_user: String::new(),
             connection_mode: ConnectionMode::Direct,
             local_backup_path: String::new(),
             google_drive_path: String::new(),
+            storage_restore_auth_email: String::new(),
             endpoint_id: None,
             encryption_algorithm: Some("age-passphrase".to_string()),
             setup_complete: false,
@@ -192,12 +205,15 @@ pub fn run() {
             delete_legacy_service_role_key,
             check_database,
             check_storage,
+            check_restore_readiness,
             check_folder,
             backup::backup_is_running,
             backup::get_encryption_status,
             backup::verify_backup_file,
             backup::load_backup_history,
             backup::run_backup,
+            backup::restore_is_running,
+            backup::run_restore,
             maintenance::get_maintenance_status,
             maintenance::configure_maintenance_passcode,
             maintenance::unlock_maintenance,
@@ -207,7 +223,7 @@ pub fn run() {
         .expect("error while running Kawashima backup tool");
     app.run(|_, event| {
         if let tauri::RunEvent::ExitRequested { api, .. } = event {
-            if backup::backup_is_running() {
+            if backup::backup_is_running() || backup::restore_is_running() {
                 api.prevent_exit();
             }
         }
@@ -220,13 +236,13 @@ fn load_settings(app: AppHandle) -> Result<BackupToolSettings, String> {
 }
 
 pub(crate) fn load_settings_from_disk(app: &AppHandle) -> Result<BackupToolSettings, String> {
-    let path = settings_path(&app)?;
+    let path = settings_path(app)?;
     if !path.exists() {
         return Ok(BackupToolSettings::default());
     }
-    let content = fs::read_to_string(path).map_err(|error| sanitized_error(error))?;
+    let content = fs::read_to_string(path).map_err(sanitized_error)?;
     let mut settings: BackupToolSettings =
-        serde_json::from_str(&content).map_err(|error| sanitized_error(error))?;
+        serde_json::from_str(&content).map_err(sanitized_error)?;
     settings.encryption_algorithm = Some("age-passphrase".to_string());
     Ok(settings)
 }
@@ -252,6 +268,8 @@ fn normalize_persisted_settings(
     mut incoming: BackupToolSettings,
 ) -> BackupToolSettings {
     incoming.encryption_algorithm = Some("age-passphrase".to_string());
+    incoming.db_restore_user = incoming.db_restore_user.trim().to_string();
+    incoming.storage_restore_auth_email = incoming.storage_restore_auth_email.trim().to_string();
     incoming.setup_complete = existing.setup_complete;
     incoming.setup_step = existing.setup_step;
     incoming.setup_completed_at = existing.setup_completed_at;
@@ -262,16 +280,16 @@ pub(crate) fn save_settings_to_disk(
     app: &AppHandle,
     settings: &BackupToolSettings,
 ) -> Result<(), String> {
-    let path = settings_path(&app)?;
+    let path = settings_path(app)?;
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| sanitized_error(error))?;
+        fs::create_dir_all(parent).map_err(sanitized_error)?;
     }
-    let content = serde_json::to_string_pretty(settings).map_err(|error| sanitized_error(error))?;
+    let content = serde_json::to_string_pretty(settings).map_err(sanitized_error)?;
     let partial = path.with_extension("json.partial");
-    fs::write(&partial, content).map_err(|error| sanitized_error(error))?;
+    fs::write(&partial, content).map_err(sanitized_error)?;
     File::open(&partial)
         .and_then(|file| file.sync_all())
-        .map_err(|error| sanitized_error(error))?;
+        .map_err(sanitized_error)?;
     file_security::replace_file(&partial, &path).map_err(sanitized_error)
 }
 
@@ -407,6 +425,8 @@ fn get_secret_status() -> SecretStatus {
 fn save_secret_values(
     db_password: String,
     storage_auth_password: String,
+    db_restore_password: String,
+    storage_restore_auth_password: String,
     maintenance_token: Option<String>,
     app: AppHandle,
     maintenance_state: tauri::State<'_, maintenance::MaintenanceState>,
@@ -416,9 +436,18 @@ fn save_secret_values(
     }
     let db_password = Zeroizing::new(db_password);
     let storage_auth_password = Zeroizing::new(storage_auth_password);
+    let db_restore_password = Zeroizing::new(db_restore_password);
+    let storage_restore_auth_password = Zeroizing::new(storage_restore_auth_password);
     let should_save_db_password = !db_password.trim().is_empty();
     let should_save_storage_auth_password = !storage_auth_password.trim().is_empty();
-    if !should_save_db_password && !should_save_storage_auth_password {
+    let should_save_db_restore_password = !db_restore_password.trim().is_empty();
+    let should_save_storage_restore_auth_password =
+        !storage_restore_auth_password.trim().is_empty();
+    if !should_save_db_password
+        && !should_save_storage_auth_password
+        && !should_save_db_restore_password
+        && !should_save_storage_restore_auth_password
+    {
         return Err("保存する秘密情報を入力してください。".to_string());
     }
 
@@ -433,6 +462,20 @@ fn save_secret_values(
         )
         .map_err(|error| error.user_message("Storage読み取り用パスワード"))?;
     }
+    if !db_restore_password.trim().is_empty() {
+        credential_store::write_secret_explicit(
+            ACCOUNT_DB_RESTORE_PASSWORD,
+            db_restore_password.trim(),
+        )
+        .map_err(|error| error.user_message("DB復旧用パスワード"))?;
+    }
+    if !storage_restore_auth_password.trim().is_empty() {
+        credential_store::write_secret_explicit(
+            ACCOUNT_STORAGE_RESTORE_AUTH_PASSWORD,
+            storage_restore_auth_password.trim(),
+        )
+        .map_err(|error| error.user_message("Storage復旧用パスワード"))?;
+    }
 
     let status = get_secret_status_from_keyring();
     if should_save_db_password && !status.db_password {
@@ -444,7 +487,56 @@ fn save_secret_values(
                 .to_string(),
         );
     }
+    if should_save_db_restore_password && !status.db_restore_password {
+        return Err(
+            "DB復旧用パスワードをOS資格情報ストアへ保存後に確認できませんでした。".to_string(),
+        );
+    }
+    if should_save_storage_restore_auth_password && !status.storage_restore_auth_password {
+        return Err(
+            "Storage復旧用パスワードをOS資格情報ストアへ保存後に確認できませんでした。".to_string(),
+        );
+    }
     Ok(status)
+}
+
+#[tauri::command]
+async fn check_restore_readiness(
+    app: AppHandle,
+    maintenance_token: Option<String>,
+    maintenance_state: tauri::State<'_, maintenance::MaintenanceState>,
+) -> Result<DbCheckResult, String> {
+    let settings = settings_for_protected_check(&app, maintenance_token, &maintenance_state)?;
+    validate_settings(&settings)?;
+    let (user, password) = restore_db_credentials(&settings)?;
+    let db_config = build_db_config_for_user(&settings, &user, &password)?;
+    let tls = build_database_tls_connector()?;
+    let (client, connection_task) = db_config
+        .connect(tls)
+        .await
+        .map_err(|error| db_error_message(&error.to_string(), &settings.connection_mode))?;
+
+    tauri::async_runtime::spawn(async move {
+        let _ = connection_task.await;
+    });
+
+    let schema_row = client
+        .query_one(
+            "select exists (select 1 from information_schema.schemata where schema_name = 'public')",
+            &[],
+        )
+        .await
+        .map_err(|error| db_error_message(&error.to_string(), &settings.connection_mode))?;
+    let public_schema_readable: bool = schema_row.get(0);
+    Ok(DbCheckResult {
+        ok: public_schema_readable,
+        connection_mode: connection_mode_label(&settings.connection_mode).to_string(),
+        ssl: true,
+        postgres_version: None,
+        public_schema_readable,
+        message: "復旧用DB接続を確認しました。実際の書き込み権限確認は本番Policy追加後の復旧テストで行います。"
+            .to_string(),
+    })
 }
 
 #[tauri::command]
@@ -678,7 +770,7 @@ fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_config_dir()
         .map(|path| path.join(SETTINGS_FILE_NAME))
-        .map_err(|error| sanitized_error(error))
+        .map_err(sanitized_error)
 }
 
 pub(crate) fn validate_settings(settings: &BackupToolSettings) -> Result<(), String> {
@@ -694,6 +786,11 @@ pub(crate) fn validate_settings(settings: &BackupToolSettings) -> Result<(), Str
     if !settings.storage_auth_email.contains('@') {
         return Err("Storage読み取り用ユーザーのメールアドレスを確認してください。".to_string());
     }
+    if !settings.storage_restore_auth_email.trim().is_empty()
+        && !settings.storage_restore_auth_email.contains('@')
+    {
+        return Err("Storage復旧用ユーザーのメールアドレスを確認してください。".to_string());
+    }
     Ok(())
 }
 
@@ -701,8 +798,16 @@ pub(crate) fn build_db_config(
     settings: &BackupToolSettings,
     password: &str,
 ) -> Result<tokio_postgres::Config, String> {
+    build_db_config_for_user(settings, settings.db_user.trim(), password)
+}
+
+pub(crate) fn build_db_config_for_user(
+    settings: &BackupToolSettings,
+    user: &str,
+    password: &str,
+) -> Result<tokio_postgres::Config, String> {
     if settings.db_host.trim().is_empty()
-        || settings.db_user.trim().is_empty()
+        || user.trim().is_empty()
         || settings.db_name.trim().is_empty()
     {
         return Err("DB接続情報を入力してください。".to_string());
@@ -718,11 +823,30 @@ pub(crate) fn build_db_config(
                 .map_err(|_| "DB portは数値で入力してください。".to_string())?,
         )
         .dbname(settings.db_name.trim())
-        .user(settings.db_user.trim())
+        .user(user.trim())
         .password(password)
         .ssl_mode(SslMode::Require)
         .application_name("kawashima_backup_tool_phase1");
     Ok(config)
+}
+
+pub(crate) fn restore_db_credentials(
+    settings: &BackupToolSettings,
+) -> Result<(String, Zeroizing<String>), String> {
+    if settings.db_restore_user.trim().is_empty() {
+        Ok((
+            settings.db_user.trim().to_string(),
+            Zeroizing::new(read_secret(ACCOUNT_DB_PASSWORD, "DBパスワード")?),
+        ))
+    } else {
+        Ok((
+            settings.db_restore_user.trim().to_string(),
+            Zeroizing::new(read_secret(
+                ACCOUNT_DB_RESTORE_PASSWORD,
+                "DB復旧用パスワード",
+            )?),
+        ))
+    }
 }
 
 pub(crate) fn build_database_tls_connector() -> Result<MakeRustlsConnect, String> {
@@ -756,16 +880,26 @@ fn get_secret_status_from_keyring() -> SecretStatus {
     let db_password_state = credential_store::credential_state(ACCOUNT_DB_PASSWORD);
     let storage_auth_password_state =
         credential_store::credential_state(ACCOUNT_STORAGE_AUTH_PASSWORD);
+    let db_restore_password_state = credential_store::credential_state(ACCOUNT_DB_RESTORE_PASSWORD);
+    let storage_restore_auth_password_state =
+        credential_store::credential_state(ACCOUNT_STORAGE_RESTORE_AUTH_PASSWORD);
     let legacy_service_role_key_state =
         credential_store::credential_state(credential_store::ACCOUNT_SERVICE_ROLE_KEY);
     SecretStatus {
         db_password: db_password_state == credential_store::CredentialState::Stored,
         storage_auth_password: storage_auth_password_state
             == credential_store::CredentialState::Stored,
+        db_restore_password: db_restore_password_state == credential_store::CredentialState::Stored,
+        storage_restore_auth_password: storage_restore_auth_password_state
+            == credential_store::CredentialState::Stored,
         legacy_service_role_key: legacy_service_role_key_state
             == credential_store::CredentialState::Stored,
         db_password_state: db_password_state.label().to_string(),
         storage_auth_password_state: storage_auth_password_state.label().to_string(),
+        db_restore_password_state: db_restore_password_state.label().to_string(),
+        storage_restore_auth_password_state: storage_restore_auth_password_state
+            .label()
+            .to_string(),
         legacy_service_role_key_state: legacy_service_role_key_state.label().to_string(),
     }
 }

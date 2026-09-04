@@ -4,8 +4,11 @@ use zeroize::Zeroize;
 
 pub(crate) const SERVICE_NAME: &str = "jp.actarise.kawashima.backup";
 pub(crate) const ACCOUNT_DB_PASSWORD: &str = "db-password";
+pub(crate) const ACCOUNT_DB_RESTORE_PASSWORD: &str = "db-restore-password";
 pub(crate) const ACCOUNT_SERVICE_ROLE_KEY: &str = "supabase-service-role-key";
 pub(crate) const ACCOUNT_STORAGE_AUTH_PASSWORD: &str = "supabase-storage-auth-password";
+pub(crate) const ACCOUNT_STORAGE_RESTORE_AUTH_PASSWORD: &str =
+    "supabase-storage-restore-auth-password";
 pub(crate) const ACCOUNT_MAINTENANCE_VERIFIER: &str = "maintenance-verifier";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

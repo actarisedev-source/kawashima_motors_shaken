@@ -346,6 +346,42 @@ dd {
   gap: 6px;
 }
 
+.operation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.operation-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.operation-panel button {
+  min-height: 48px;
+}
+
+.selected-file {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.selected-file span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.selected-file strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
 .verification-tools {
   grid-template-columns: minmax(0, 1fr) auto;
 }
@@ -361,6 +397,10 @@ dd {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.restore-progress-list {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .progress-list li {
@@ -680,6 +720,7 @@ dd {
   .results,
   .encryption-actions,
   .recovery-tools,
+  .operation-grid,
   .last-backup-band {
     grid-template-columns: 1fr;
   }

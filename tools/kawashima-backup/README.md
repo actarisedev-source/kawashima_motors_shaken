@@ -34,11 +34,37 @@ ACTARISE operators store it as a human-managed Apple Passwords item named
 
 1. バックアップファイルを選ぶ。
 2. Apple Passwordsから復旧パスワードを確認して入力する。
-3. 復号・manifest・hash・PostgreSQL dump structureを検証する。
-4. バックアップ内容を確認する。
+3. 「復旧開始」を押す。
+4. 確認ダイアログで開始する。
+5. アプリが復号、manifest、hash、PostgreSQL dump structureを検証する。
+6. 現在の本番状態を復旧前安全バックアップとして暗号化保存する。
+7. `public` schemaと`line-message-images`を復旧する。
+8. 復旧後のDB table countとStorage object SHA-256を確認する。
 
 If the application is unavailable, the `.tar.age` backup can still be decrypted with
 the 標準age CLI passphrase mode and the recovery password from Apple Passwords.
+
+The restore feature is intentionally scoped to the business data already captured by
+the backup artifact: PostgreSQL `public` schema and Supabase Storage
+`line-message-images`. Supabase Auth users, Storage policies, API keys, project
+settings, Edge Functions, and environment variables are operational prerequisites and
+are not reconstructed from the backup file.
+
+Before any restore write, the app must successfully decrypt the selected `.tar.age`
+file, verify the manifest files, verify every SHA-256 entry, inspect the custom dump
+with bundled PostgreSQL 17 `pg_restore --list`, and confirm the backup format version.
+If any check fails, the app stops before writing to production DB or Storage.
+
+Database restore is a full replacement restore for the dump's `public` schema content,
+not a merge. The app uses bundled `pg_restore` with `--clean`, `--if-exists`,
+`--no-owner`, `--no-acl`, `--single-transaction`, `--exit-on-error`, and
+`--schema=public`. This targets `public` only and does not restore `auth`, `storage`,
+or other Supabase-managed schemas.
+
+Storage restore uploads/upserts only manifest-listed objects into
+`line-message-images`. Objects that currently exist but are not listed in the selected
+backup manifest are not deleted in this first restore version, and no DELETE permission
+is required.
 
 ## Backup format
 
@@ -53,6 +79,10 @@ The encrypted tar contains:
   read-only Storage policy
 - `manifests/backup.json`, `database.json`, and `storage.json`
 - `verification/sha256sums.txt`
+
+New backups also record per-table row counts in `manifests/database.json` as
+`tableCounts`. Restore verification uses them when present and falls back to the legacy
+`publicTableCount` for older compatible backups.
 
 Before encryption, the app verifies the PostgreSQL custom dump with PostgreSQL 17
 `pg_restore --list`, records the plaintext archive SHA-256, and writes the configured
@@ -179,6 +209,22 @@ table/sequence SELECT, and `default_transaction_read_only=on`. They are not supe
 receive no mutation, DDL, or function-execution grant. The reproducible local-only role,
 Storage policy, revocation, privilege-audit, and logical dump comparison assets are under
 `nonprod/`; the runner refuses non-loopback database endpoints.
+
+Production restore requires separately provisioned restore credentials. The read-only
+backup Storage Auth user must not be reused for restore. The restore Storage Auth user
+needs only `storage.buckets` SELECT and `storage.objects` SELECT/INSERT/UPDATE for
+`line-message-images`; it does not need DELETE and must not receive access to any other
+bucket. A review template for those policies lives at
+`operations/storage-restore-policies.sql` and is not applied by the application.
+
+DB restore can use the configured DB user only when ACTARISE has confirmed it can restore
+`public` safely. Otherwise configure a dedicated restore DB user and store its password
+only in the OS credential store. Restore passwords and the recovery password are not
+stored in settings, manifests, reports, logs, Git, Google Drive, or console output.
+
+Each restore writes a local `restore-journal.json` entry with non-secret metadata:
+restore ID, selected backup file name, encrypted backup SHA-256, pre-restore safety
+backup ID, DB/Storage/verification status, timestamps, and sanitized error summary.
 
 `line-message-images` remains a public bucket for existing LINE delivery URLs. RLS controls
 object discovery by the backup tool, but cannot revoke access to an already-known public

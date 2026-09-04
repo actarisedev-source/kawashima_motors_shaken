@@ -7,10 +7,12 @@ export type BackupToolSettings = {
   supabaseProjectUrl: string;
   supabasePublishableKey: string;
   storageAuthEmail: string;
+  storageRestoreAuthEmail: string;
   dbHost: string;
   dbPort: string;
   dbName: string;
   dbUser: string;
+  dbRestoreUser: string;
   connectionMode: ConnectionMode;
   localBackupPath: string;
   googleDrivePath: string;
@@ -25,10 +27,12 @@ export const emptySettings: BackupToolSettings = {
   supabaseProjectUrl: "",
   supabasePublishableKey: "",
   storageAuthEmail: "",
+  storageRestoreAuthEmail: "",
   dbHost: "",
   dbPort: "5432",
   dbName: "postgres",
   dbUser: "postgres",
+  dbRestoreUser: "",
   connectionMode: "direct",
   localBackupPath: "",
   googleDrivePath: "",
@@ -39,7 +43,13 @@ export const emptySettings: BackupToolSettings = {
   setupCompletedAt: null,
 };
 
-export const secretFieldNames = ["dbPassword", "storageAuthPassword", "serviceRoleKey"] as const;
+export const secretFieldNames = [
+  "dbPassword",
+  "storageAuthPassword",
+  "dbRestorePassword",
+  "storageRestoreAuthPassword",
+  "serviceRoleKey",
+] as const;
 export type SecretFieldName = (typeof secretFieldNames)[number];
 
 const secretPatterns = [
@@ -50,6 +60,8 @@ const secretPatterns = [
   /(authorization:\s*bearer\s+)[^\s]+/gi,
   /(access[_-]?token["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
   /(storage[_-]?auth[_-]?password["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
+  /(storage[_-]?restore[_-]?auth[_-]?password["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
+  /(db[_-]?restore[_-]?password["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
   /(service[_-]?role[_-]?key["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
   /((?:recovery[_-]?)?passphrase["']?\s*[:=]\s*["']?)[^"',\s]+/gi,
 ];
@@ -70,10 +82,12 @@ export function sanitizeSettings(input: BackupToolSettings): BackupToolSettings 
     supabaseProjectUrl: input.supabaseProjectUrl.trim(),
     supabasePublishableKey: input.supabasePublishableKey?.trim() ?? "",
     storageAuthEmail: input.storageAuthEmail?.trim() ?? "",
+    storageRestoreAuthEmail: input.storageRestoreAuthEmail?.trim() ?? "",
     dbHost: input.dbHost.trim(),
     dbPort: input.dbPort.trim() || "5432",
     dbName: input.dbName.trim() || "postgres",
     dbUser: input.dbUser.trim(),
+    dbRestoreUser: input.dbRestoreUser?.trim() ?? "",
     connectionMode: validateConnectionMode(input.connectionMode),
     localBackupPath: input.localBackupPath.trim(),
     googleDrivePath: input.googleDrivePath.trim(),

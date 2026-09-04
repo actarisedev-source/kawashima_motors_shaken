@@ -29,11 +29,25 @@ pub(crate) async fn authenticate(
     settings: &BackupToolSettings,
     password: &str,
 ) -> Result<StorageAccessToken, String> {
+    authenticate_with_email(
+        settings,
+        settings.storage_auth_email.trim(),
+        password,
+        "Storage読み取り用",
+    )
+    .await
+}
+
+pub(crate) async fn authenticate_with_email(
+    settings: &BackupToolSettings,
+    email: &str,
+    password: &str,
+    label: &str,
+) -> Result<StorageAccessToken, String> {
     let project_url = normalize_project_url(&settings.supabase_project_url)?;
     let publishable_key = settings.supabase_publishable_key.trim();
-    let email = settings.storage_auth_email.trim();
     if publishable_key.is_empty() || email.is_empty() || password.is_empty() {
-        return Err("Storage読み取り用の接続情報を確認してください。".to_string());
+        return Err(format!("{label}の接続情報を確認してください。"));
     }
 
     let response = reqwest::Client::new()
@@ -42,20 +56,20 @@ pub(crate) async fn authenticate(
         .json(&PasswordGrantRequest { email, password })
         .send()
         .await
-        .map_err(|_| "Storage読み取り用の認証へ接続できません。".to_string())?;
+        .map_err(|_| format!("{label}の認証へ接続できません。"))?;
 
     if !response.status().is_success() {
         return Err(format!(
-            "Storage読み取り用の認証に失敗しました（HTTP {}）。",
+            "{label}の認証に失敗しました（HTTP {}）。",
             response.status().as_u16()
         ));
     }
     let body: PasswordGrantResponse = response
         .json()
         .await
-        .map_err(|_| "Storage読み取り用の認証応答を確認できません。".to_string())?;
+        .map_err(|_| format!("{label}の認証応答を確認できません。"))?;
     if body.access_token.trim().is_empty() {
-        return Err("Storage読み取り用の認証応答を確認できません。".to_string());
+        return Err(format!("{label}の認証応答を確認できません。"));
     }
     Ok(StorageAccessToken {
         value: Zeroizing::new(body.access_token),

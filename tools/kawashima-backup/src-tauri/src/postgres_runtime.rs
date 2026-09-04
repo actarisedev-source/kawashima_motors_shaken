@@ -134,6 +134,48 @@ pub(crate) fn run_pg_dump(
     Ok(())
 }
 
+pub(crate) fn run_pg_restore(
+    executable: &Path,
+    settings: &BackupToolSettings,
+    user: &str,
+    password: &str,
+    ca_path: &Path,
+    dump_path: &Path,
+) -> Result<(), String> {
+    let output = runtime_command(executable)
+        .args([
+            "--clean",
+            "--if-exists",
+            "--no-owner",
+            "--no-acl",
+            "--single-transaction",
+            "--exit-on-error",
+            "--schema=public",
+        ])
+        .env("PGHOST", settings.db_host.trim())
+        .env("PGPORT", settings.db_port.trim())
+        .env("PGDATABASE", settings.db_name.trim())
+        .env("PGUSER", user.trim())
+        .env("PGPASSWORD", password)
+        .env("PGSSLMODE", "verify-full")
+        .env("PGSSLROOTCERT", ca_path)
+        .env("PGAPPNAME", "kawashima_backup_tool_restore")
+        .env_remove("PGSERVICE")
+        .env_remove("PGPASSFILE")
+        .arg("--dbname")
+        .arg(settings.db_name.trim())
+        .arg(dump_path)
+        .output()
+        .map_err(|_| "pg_restoreを起動できませんでした。".to_string())?;
+    if !output.status.success() {
+        return Err(format!(
+            "データベース復旧に失敗しました。 {}",
+            sanitized_error(String::from_utf8_lossy(&output.stderr))
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn inspect_custom_dump(executable: &Path, dump: &Path) -> Result<(), String> {
     let output = runtime_command(executable)
         .arg("--list")
@@ -282,6 +324,58 @@ mod tests {
         fs::write(&failure, "#!/bin/sh\nexit 1\n").unwrap();
         fs::set_permissions(&failure, fs::Permissions::from_mode(0o755)).unwrap();
         assert!(inspect_custom_dump(&failure, &dump).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pg_restore_full_replacement_args_are_used_without_secret_arguments() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = TempDir::new().unwrap();
+        let dump = temp.path().join("public.dump");
+        let args_file = temp.path().join("args.txt");
+        let env_file = temp.path().join("env.txt");
+        fs::write(&dump, b"test").unwrap();
+        let script = temp.path().join("pg_restore");
+        fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' \"$PGUSER\" \"$PGPASSWORD\" > '{}'\n",
+                args_file.display(),
+                env_file.display()
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        let ca = temp.path().join("ca.crt");
+        fs::write(&ca, b"ca").unwrap();
+        let settings = BackupToolSettings {
+            db_host: "db.example.invalid".to_string(),
+            db_port: "5432".to_string(),
+            db_name: "postgres".to_string(),
+            db_user: "readonly".to_string(),
+            connection_mode: super::super::ConnectionMode::Session,
+            ..BackupToolSettings::default()
+        };
+
+        run_pg_restore(
+            &script,
+            &settings,
+            "restore-user",
+            "restore-secret",
+            &ca,
+            &dump,
+        )
+        .unwrap();
+        let args = fs::read_to_string(args_file).unwrap();
+        assert!(args.contains("--clean"));
+        assert!(args.contains("--if-exists"));
+        assert!(args.contains("--single-transaction"));
+        assert!(args.contains("--exit-on-error"));
+        assert!(args.contains("--schema=public"));
+        assert!(!args.contains("restore-secret"));
+        let env = fs::read_to_string(env_file).unwrap();
+        assert!(env.contains("restore-user"));
+        assert!(env.contains("restore-secret"));
     }
 
     #[test]
